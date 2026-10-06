@@ -1,0 +1,45 @@
+[project]
+name = "edgar-data-pipeline"
+version = "0.0.0.dev0"
+description = "A reproducible pipeline for SEC EDGAR filings: versioned feed snapshots, bulk import, and bitemporal queries over restated financial data."
+readme = "README.md"
+requires-python = ">=3.12"
+# The scripts use only the standard library, so a rerun needs no pinned
+# packages. The pipeline's own dependencies arrive with its specification.
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/nslaughter/edgar-data-pipeline"
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6",
+    "mypy>=1",
+    "pytest>=8",
+    "ruff>=0.16",
+]
+
+[tool.uv]
+# Nothing to build yet: the repository holds scripts, not a package.
+package = false
+
+[tool.ruff]
+line-length = 100
+# Ruff would also format the Python in Markdown code blocks.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "PT"]
+
+[tool.mypy]
+strict = true
+files = ["scripts", "tests"]
+mypy_path = "scripts"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["scripts"]
+addopts = ["-ra", "--strict-config", "--strict-markers", "--import-mode=importlib"]
+xfail_strict = true
+markers = ["spec(*ids): the spec/snapshots.md statements a test checks"]
+filterwarnings = ["error"]
