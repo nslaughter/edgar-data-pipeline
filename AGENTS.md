@@ -8,7 +8,7 @@ EDGAR's feeds and verify the stored versions.
 
 | Document | Governs |
 | --- | --- |
-| [`spec/snapshots.md`](spec/snapshots.md) | Everything under `data/`: the layout, records, versions, history, how fetches are made, and import manifests, as numbered statements with an index. `scripts/snapshot.py` implements its rules and `scripts/verify.py` checks its invariants. |
+| [`spec/snapshots.md`](spec/snapshots.md) | Everything under `data/`: the layout, records, versions, history, scope, how fetches are made, and import manifests, as numbered statements with an index. `scripts/snapshot.py` implements its rules and `scripts/verify.py` checks its invariants. |
 
 The pipeline's own specification follows the source investigation. The
 README describes the project for people; it is not a specification.
@@ -35,13 +35,18 @@ README describes the project for people; it is not a specification.
   Never put the `SEC_USER_AGENT` value in code, tests, records, commits, or
   pull requests. Don't run anything against the SEC unless the operator has
   set `SEC_USER_AGENT` or asked for the run.
+- **Keep the store's scope small.** `data/scope.json` lists the URLs the
+  store may hold, each with its reason
+  ([§9](spec/snapshots.md#9-scope)), and `snapshot.py` fetches nothing
+  else. Widen it only when the operator asks, in its own commit, before
+  fetching what it adds. Never remove an entry that covers a record.
 - **Never edit or delete stored data** ([§1](spec/snapshots.md#1-guarantees)).
   Logs are appended to, and objects and manifests are only added. A
   correction is a new record. Run `uv run scripts/verify.py` before
   committing anything under `data/`.
 - **Imports read stored versions, never the live source.** Each import
   writes its manifest before reading its inputs
-  ([§7](spec/snapshots.md#7-imports)).
+  ([§11](spec/snapshots.md#11-imports)).
 - **Cite the source.** Data here comes from the U.S. Securities and Exchange
   Commission's EDGAR system; say so wherever it is published or described.
 - **Tests never reach the network.** They use a local server or stored

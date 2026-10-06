@@ -13,7 +13,9 @@ content becomes a new version (VER-1). Nothing stored is overwritten.
 Each user supplies their own SEC_USER_AGENT, a name and a contact address;
 the script refuses to run without it and never records it (FETCH-2, ID-1).
 Requests start at least 0.2 s apart, temporary failures are retried, and a
-403 stops the run (FETCH-6, FETCH-8, FETCH-9).
+403 stops the run (FETCH-6, FETCH-8, FETCH-9). Only URLs the store's scope in
+data/scope.json covers are fetched, checked before the first request
+(SCOPE-3).
 
     SEC_USER_AGENT="Name contact@example.com" \\
         uv run scripts/snapshot.py FEED URL [URL ...]
@@ -43,6 +45,8 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Protocol, cast
 from urllib.parse import urlsplit
+
+import verify
 
 ROOT = Path(__file__).resolve().parent.parent
 FEED_NAME = re.compile(r"[a-z0-9][a-z0-9-]*")
@@ -372,6 +376,14 @@ def main(argv: list[str] | None = None) -> int:
         parts = urlsplit(url)
         if parts.scheme != "https" or parts.hostname not in SEC_HOSTS:
             print(f"{url} is not an https URL on an SEC host.", file=sys.stderr)
+            return 2
+    scope, problems = verify.read_scope(args.data)
+    if scope is None or problems:
+        print(f"{args.data / 'scope.json'} is malformed; run scripts/verify.py.", file=sys.stderr)
+        return 2
+    for url in args.urls:
+        if not verify.covers(scope, url):
+            print(f"{url} is outside the scope in {args.data / 'scope.json'}.", file=sys.stderr)
             return 2
 
     return run(Fetcher(user_agent), args.data, args.feed, args.urls, tool=tool_version())

@@ -5,11 +5,12 @@
 """Check the snapshot store's invariants (spec/snapshots.md).
 
 Checks every invariant in the specification's index that `verify` checks:
-the layout (LAY-1), the objects (OBJ-1, OBJ-3), every record in
-data/feeds/*/versions.jsonl (REC-1 to REC-8), and every import manifest
-(IMP-1, IMP-2). With --since REF it also checks that, since the commit REF,
-logs were only appended to (LOG-1) and objects and manifests only added
-(LOG-2). Each problem starts with the ID it breaks. Exits 1 on any problem.
+the layout (LAY-1), the scope in data/scope.json (SCOPE-1), the objects
+(OBJ-1, OBJ-3), every record in data/feeds/*/versions.jsonl (REC-1 to REC-8,
+SCOPE-2), and every import manifest (IMP-1, IMP-2). With --since REF it also
+checks that, since the commit REF, logs were only appended to (LOG-1) and
+objects and manifests only added (LOG-2). Each problem starts with the ID it
+breaks. Exits 1 on any problem.
 
     uv run scripts/verify.py                 # -v lists each URL's versions
     uv run scripts/verify.py --since origin/main
@@ -90,6 +91,31 @@ def digest(path: Path) -> tuple[str, int] | None:
     return sha256.hexdigest(), size
 
 
+def read_scope(data: Path) -> tuple[list[str] | None, list[str]]:
+    """The URLs data/scope.json lists, or None if it can't be read, and how it breaks SCOPE-1."""
+    try:
+        scope = json.loads((data / "scope.json").read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None, ["missing; the store declares its scope here"]
+    except json.JSONDecodeError as err:
+        return None, [f"not JSON ({err})"]
+    if not isinstance(scope, dict) or not isinstance(scope.get("urls"), list):
+        return None, ["not a JSON object with a list of urls"]
+    entries, problems = [], []
+    for number, entry in enumerate(scope["urls"], 1):
+        reason = entry.get("reason") if isinstance(entry, dict) else None
+        if isinstance(entry, dict) and is_str(entry.get("url")) and is_str(reason) and reason:
+            entries.append(entry["url"])
+        else:
+            problems.append(f"entry {number} needs a url and a reason")
+    return entries, problems
+
+
+def covers(scope: list[str], url: str) -> bool:
+    """An entry ending in / covers every URL that starts with it; any other covers only itself."""
+    return any(url == entry or (entry.endswith("/") and url.startswith(entry)) for entry in scope)
+
+
 def outcome_problems(record: dict[str, Any], latest: str | None) -> list[tuple[str, str]]:
     """REC-3 to REC-7 for one well-formed record; latest is the URL's latest earlier version."""
     problems = []
@@ -119,6 +145,7 @@ class Checker:
         self.digests: dict[Path, tuple[str, int] | None] = {}
         self.named: set[Path] = set()
         self.held: set[tuple[str, str, str]] = set()  # (feed, url, sha256), for IMP-2
+        self.scope: list[str] | None = None  # for SCOPE-2; None if scope.json can't be read
         self.versions: dict[str, dict[str, dict[str, list[str]]]] = {}  # for -v
 
     def report(self, id: str, where: str, message: str) -> None:
@@ -136,7 +163,7 @@ class Checker:
             if any(part.startswith(".") for part in relative.parts) or path.is_dir():
                 continue
             parts = relative.parts
-            if parts == ("README.md",):
+            if parts in (("README.md",), ("scope.json",)):
                 continue
             in_feeds = len(parts) == 3 and parts[0] == "feeds"
             if in_feeds and parts[2] == "versions.jsonl" and NAME.fullmatch(parts[1]):
@@ -152,6 +179,12 @@ class Checker:
             if in_imports and path.suffix == ".json" and NAME.fullmatch(path.stem):
                 continue
             self.report("LAY-1", str(relative), "not part of the store's layout")
+
+    def check_scope(self) -> None:
+        """SCOPE-1; check_record checks SCOPE-2 against the entries read here."""
+        self.scope, problems = read_scope(self.data)
+        for problem in problems:
+            self.report("SCOPE-1", "scope.json", problem)
 
     def check_logs(self) -> None:
         for log in sorted((self.data / "feeds").glob("*/versions.jsonl")):
@@ -190,6 +223,8 @@ class Checker:
         if record["feed"] != log.parent.name:
             self.report("REC-2", where, f"feed {record['feed']!r} is in the {log.parent.name} log")
         url = record["url"]
+        if self.scope is not None and not covers(self.scope, url):
+            self.report("SCOPE-2", where, f"{url} is outside the scope in scope.json")
         for id, message in outcome_problems(record, latest.get(url)):
             self.report(id, where, message)
         if not sha256:
@@ -292,6 +327,7 @@ class Checker:
 def verify(data: Path, *, since: str | None = None, verbose: bool = False) -> list[str]:
     checker = Checker(data)
     checker.check_layout()
+    checker.check_scope()
     checker.check_logs()
     checker.check_objects()
     checker.check_manifests()

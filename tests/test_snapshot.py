@@ -87,13 +87,27 @@ def fetcher(sleeps: list[float] | None = None) -> snapshot.Fetcher:
     return snapshot.Fetcher(UA, min_interval=0, sleep=sleep)
 
 
+def allow(data: Path, *urls: str) -> None:
+    """Declare the scope, as the operator does before fetching (SCOPE-1)."""
+    data.mkdir(parents=True, exist_ok=True)
+    entries = [{"url": url, "reason": "Tests."} for url in urls]
+    (data / "scope.json").write_text(json.dumps({"urls": entries}))
+
+
+def scoped(server: Server, data: Path) -> None:
+    if not (data / "scope.json").exists():
+        allow(data, server.url("/"))
+
+
 def fetch(
     server: Server, data: Path, sleeps: list[float] | None = None, path: str = "/feed.xml"
 ) -> dict[str, Any]:
+    scoped(server, data)
     return snapshot.snapshot(fetcher(sleeps), data, "notices", server.url(path), tool=TOOL)
 
 
 def run(server: Server, data: Path, *paths: str) -> int:
+    scoped(server, data)
     urls = [server.url(path) for path in paths]
     return snapshot.run(fetcher(), data, "notices", urls, tool=TOOL)
 
@@ -483,6 +497,38 @@ def test_the_command_fetches_only_from_sec_hosts(
     assert not (tmp_path / "feeds").exists()
 
 
+@pytest.mark.spec("SCOPE-3")
+def test_the_command_fetches_only_urls_in_the_scope(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("SEC_USER_AGENT", UA)
+    started: list[list[str]] = []
+
+    def starting_run(
+        fetcher: snapshot.Fetcher, data: Path, feed: str, urls: list[str], *, tool: str
+    ) -> int:
+        started.append(urls)
+        return 0
+
+    monkeypatch.setattr(snapshot, "run", starting_run)
+    filings = "https://www.sec.gov/Archives/edgar/data/320193/"
+    history = "https://data.sec.gov/submissions/CIK0000320193.json"
+    allow(tmp_path, filings, history)
+
+    def command(*urls: str) -> int:
+        return snapshot.main(["filings", *urls, "--data", str(tmp_path)])
+
+    assert command(filings + "index.json", history) == 0
+    assert command(history, "https://www.sec.gov/Archives/edgar/data/3201930/") == 2
+    assert command(history + "?page=2") == 2
+    malformed = [{"url": history, "reason": "Tests."}, {"url": filings}]
+    (tmp_path / "scope.json").write_text(json.dumps({"urls": malformed}))
+    assert command(history) == 2
+    (tmp_path / "scope.json").unlink()
+    assert command(history) == 2
+    assert started == [[filings + "index.json", history]]
+
+
 # Invariants that verify.py checks
 
 
@@ -492,6 +538,55 @@ def test_verify_finds_a_file_outside_the_layout(stored: Path) -> None:
     (stored / ".DS_Store").write_bytes(b"")
 
     assert ids(verify.verify(stored)) == ["LAY-1"]
+
+
+@pytest.mark.spec("SCOPE-1")
+@pytest.mark.parametrize("text", [None, "not json", '["https://www.sec.gov/"]'])
+def test_verify_finds_a_scope_it_cant_read(text: str | None, stored: Path) -> None:
+    path = stored / "scope.json"
+    if text is None:
+        path.unlink()
+    else:
+        path.write_text(text)
+
+    assert ids(verify.verify(stored)) == ["SCOPE-1"]
+
+
+@pytest.mark.spec("SCOPE-1")
+@pytest.mark.parametrize(
+    "entry",
+    [
+        {"url": "https://www.sec.gov/Archives/"},
+        {"url": "https://www.sec.gov/Archives/", "reason": ""},
+        "https://www.sec.gov/Archives/",
+    ],
+)
+def test_verify_finds_a_scope_entry_without_a_reason(entry: Any, stored: Path) -> None:
+    path = stored / "scope.json"
+    scope = json.loads(path.read_text())
+    scope["urls"].append(entry)
+    path.write_text(json.dumps(scope))
+
+    assert ids(verify.verify(stored)) == ["SCOPE-1"]
+
+
+@pytest.mark.spec("SCOPE-2")
+@pytest.mark.parametrize(
+    ("entry", "covered"),
+    [
+        ("/feed.xml", True),
+        ("/", True),
+        ("/feed", False),
+        ("/feed.xml/", False),
+        ("/other/", False),
+    ],
+)
+def test_verify_finds_a_record_the_scope_doesnt_cover(
+    entry: str, covered: bool, server: Server, stored: Path
+) -> None:
+    allow(stored, server.url(entry))
+
+    assert ids(verify.verify(stored)) == ([] if covered else ["SCOPE-2"])
 
 
 @pytest.mark.spec("OBJ-1")

@@ -46,13 +46,16 @@ record to `data/feeds/FEED/versions.jsonl`: the request time, the HTTP status
 and validators, and the SHA-256 and length of the body. The body is stored
 once, gzipped, under `data/objects/` by its SHA-256. A refetch sends the last
 version's validators, so an unchanged feed costs the SEC little and adds a
-record without a copy. Nothing stored is overwritten.
+record without a copy. Nothing stored is overwritten. The store is committed
+to this repository, so it holds a deliberately small scope, a few companies'
+filings and the feeds that announce them, listed in `data/scope.json`;
+`snapshot.py` fetches only URLs the scope covers.
 [`scripts/verify.py`](scripts/verify.py) checks the store's invariants:
 every object against its SHA-256, every record, and, with `--since`, that
 nothing committed was changed. `-v` lists each URL's versions.
 [`spec/snapshots.md`](spec/snapshots.md) specifies the store: the layout,
-each record's fields, what a version is, how fetches are made, and the
-manifest each import writes to pin its inputs.
+each record's fields, what a version is, the scope, how fetches are made,
+and the manifest each import writes to pin its inputs.
 
 Both scripts use only Python's standard library.
 
