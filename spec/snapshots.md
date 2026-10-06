@@ -26,25 +26,29 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
 4. **Nothing stored is changed or removed.** A correction is a new record.
    [LOG-1], [LOG-2], with the one exception in [OBJ-3].
 5. **No requester identity is stored.** [ID-1].
+6. **The store holds only its declared scope,** which is kept small enough
+   to commit to git with its history. [SCOPE-2], [SCOPE-3].
 
 ## 2. Terms
 
 - **Feed:** a named set of URLs fetched for one purpose. A name, of a feed or
   an import, matches `[a-z0-9][a-z0-9-]*`. Which feeds exist is for the
-  source investigation ([open question 1](#12-open-questions)).
+  source investigation ([open question 1](#13-open-questions)).
 - **Fetch:** one request for one URL as `snapshot.py` makes it, including any
   retries, ending in one record.
 - **Body:** a response's content after any `Content-Encoding` is removed.
 - **Object:** a stored body.
 - **Version:** a distinct body among one URL's records ([VER-1]).
+- **Scope:** the URLs the store may hold, declared in `scope.json`
+  ([§9](#9-scope)).
 - **Import:** a program run that reads stored bodies and produces output from
-  them ([§10](#10-imports)).
+  them ([§11](#11-imports)).
 
 ## 3. Statement IDs
 
 Every normative statement in this document has an ID, such as `REC-5`: an
 area and a number. An ID is assigned once and never reused or renumbered. A
-statement that is dropped stays in the [index](#11-index), marked retired.
+statement that is dropped stays in the [index](#12-index), marked retired.
 
 Each statement is one of two kinds:
 
@@ -65,9 +69,10 @@ test, `tests/test_spec_coverage.py`, enforces both.
 ```text
 data/
   README.md                     points here
+  scope.json                    the URLs the store may hold (§9)
   feeds/FEED/versions.jsonl     one record per fetch (§6)
   objects/AA/SHA256.gz          one object per distinct body (§5)
-  imports/IMPORT.json           one manifest per import run (§10)
+  imports/IMPORT.json           one manifest per import run (§11)
 ```
 
 - **LAY-1** (invariant) `data/` holds only the files above, with `FEED` and
@@ -102,7 +107,7 @@ object on one line, in UTF-8, with these fields:
 | `requested_at` | timestamp | When the final attempt was sent: UTC, RFC 3339 with milliseconds and `Z`, as `2026-10-06T18:04:12.345Z`, by the fetching machine's clock. |
 | `attempts` | integer ≥ 1 | Requests made for this fetch, retries included. |
 | `status` | integer or null | The final HTTP status; null if no response arrived. |
-| `error` | string or null | Why nothing was stored, when the status doesn't say: no response arrived, or the response couldn't be stored ([§9](#9-fetching)). Null otherwise. |
+| `error` | string or null | Why nothing was stored, when the status doesn't say: no response arrived, or the response couldn't be stored ([§10](#10-fetching)). Null otherwise. |
 | `final_url` | string or null | The URL after redirects, if it differs from `url`. |
 | `etag` | string or null | The response's `ETag`. |
 | `last_modified` | string or null | The response's `Last-Modified`. |
@@ -153,7 +158,43 @@ object on one line, in UTF-8, with these fields:
 - **LOG-2** (invariant) Objects and manifests are only added: each one at an
   earlier commit exists now with the same bytes.
 
-## 9. Fetching
+## 9. Scope
+
+Because the store is committed with its history, it holds a deliberately
+small scope: a few companies' filings and the feeds that announce them, not
+EDGAR as a whole. `scope.json` declares the scope, and each entry says why it
+was added:
+
+```json
+{
+  "urls": [
+    {
+      "url": "https://data.sec.gov/submissions/CIK0000320193.json",
+      "reason": "One company's filing history."
+    },
+    {
+      "url": "https://www.sec.gov/Archives/edgar/data/320193/",
+      "reason": "That company's filings."
+    }
+  ]
+}
+```
+
+An entry ending in `/` covers every URL that starts with it; any other entry
+covers only the URL equal to it. Widening the scope is a reviewed change made
+before anything it covers is fetched into the store. EDGAR's bulk archives of
+every company stay outside it ([open question 2](#13-open-questions)).
+
+- **SCOPE-1** (invariant) `scope.json` exists and is a JSON object whose
+  `urls` is a list. Each entry is an object with a `url`, a string, and a
+  `reason`, a non-empty string.
+- **SCOPE-2** (invariant) The scope covers every record's `url`, so an entry
+  stays once anything it covers is stored.
+- **SCOPE-3** (rule) `snapshot.py` checks every URL it is given against the
+  scope before its first request, and fetches nothing if the scope is
+  malformed or doesn't cover one of them.
+
+## 10. Fetching
 
 - **FETCH-1** (rule) Only `https` URLs on `www.sec.gov` and `data.sec.gov`
   are fetched.
@@ -199,7 +240,7 @@ object on one line, in UTF-8, with these fields:
   final attempt, after the object it names, if any, is in place
   ([OBJ-2]).
 
-## 10. Imports
+## 11. Imports
 
 An import writes a manifest, `imports/IMPORT.json`, before it reads its
 inputs:
@@ -224,9 +265,9 @@ inputs:
   and reads them only from `objects/`, never from the network. A rerun with
   the same inputs and the same `tool` commit therefore reads the same bytes.
   What its output is, and how two outputs are compared, is for the
-  pipeline's specification ([open question 3](#12-open-questions)).
+  pipeline's specification ([open question 3](#13-open-questions)).
 
-## 11. Index
+## 12. Index
 
 | ID | Kind | Checked by | Statement |
 | --- | --- | --- | --- |
@@ -246,6 +287,9 @@ inputs:
 | VER-1 | rule | tests | Versions are distinct bodies per URL, numbered by first appearance. |
 | LOG-1 | invariant | verify | Logs are only appended to. |
 | LOG-2 | invariant | verify | Objects and manifests are only added. |
+| SCOPE-1 | invariant | verify | `scope.json` lists URLs, each with a reason. |
+| SCOPE-2 | invariant | verify | The scope covers every record's URL. |
+| SCOPE-3 | rule | tests | Only URLs in the scope are fetched. |
 | FETCH-1 | rule | tests | Only `https` on `www.sec.gov` and `data.sec.gov`. |
 | FETCH-2 | rule | tests | The user's own `SEC_USER_AGENT` is required and sent. |
 | ID-1 | rule | tests | No request header is stored. |
@@ -265,20 +309,26 @@ inputs:
 | IMP-2 | invariant | verify | Every input is held by a record of its feed and URL. |
 | IMP-3 | rule | first import | An import writes its manifest first and reads only stored objects. |
 
-## 12. Open questions
+## 13. Open questions
 
-1. **Which feeds, and their names.** The source investigation decides, and
-   records each feed's URLs and how often they change.
-2. **How much data git can hold.** The investigation measures real sizes.
-   Past a budget the operator sets, objects move to Git LFS or release
-   assets, with records and manifests unchanged.
+1. **Which feeds and companies, and the feeds' names.** The source
+   investigation decides, records each feed's URLs and how often they change,
+   and adds them to the scope.
+2. **How large the scope may grow.** The investigation measures real sizes,
+   and the scope's budget is set from them. GitHub warns on files over
+   50 MiB, blocks files over 100 MiB, and recommends repositories stay under
+   1 GB
+   ([About large files on GitHub](https://docs.github.com/en/repositories/working-with-files/managing-large-files/about-large-files-on-github)),
+   so a body whose object is over 100 MiB can't be committed at all. If the
+   store outgrows git, objects move to Git LFS or release assets, with the
+   records, manifests, and scope unchanged.
 3. **What an import's output is and how reruns are compared.** The pipeline's
    specification defines the output and its identity, so that a rerun can be
    shown to match.
 4. **Whether the pace suits bulk backfills.** The investigation measures how
    long a backfill takes at 5 requests a second.
 
-## 13. Changes to this document
+## 14. Changes to this document
 
 Versions follow semantic versioning. Adding a statement, an optional field,
 or a check is a minor version. Changing the meaning of a statement or field,
@@ -294,11 +344,13 @@ statement stays in the index.
 [VER-1]: #7-versions
 [LOG-1]: #8-history
 [LOG-2]: #8-history
-[FETCH-4]: #9-fetching
-[FETCH-8]: #9-fetching
-[FETCH-13]: #9-fetching
-[FETCH-14]: #9-fetching
-[ID-1]: #9-fetching
-[IMP-1]: #10-imports
-[IMP-2]: #10-imports
-[IMP-3]: #10-imports
+[SCOPE-2]: #9-scope
+[SCOPE-3]: #9-scope
+[FETCH-4]: #10-fetching
+[FETCH-8]: #10-fetching
+[FETCH-13]: #10-fetching
+[FETCH-14]: #10-fetching
+[ID-1]: #10-fetching
+[IMP-1]: #11-imports
+[IMP-2]: #11-imports
+[IMP-3]: #11-imports
