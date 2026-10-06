@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # verify.py --since reads the history of data/ (LOG-1, LOG-2).
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+      - name: Install the development environment
+        run: uv sync --locked
+      - name: Check formatting
+        run: uv run ruff format --check .
+      - name: Lint
+        run: uv run ruff check .
+      - name: Type-check
+        run: uv run mypy
+      - name: Test
+        run: uv run pytest
+      - name: Verify the store, and its history since the base branch
+        if: github.event_name == 'pull_request'
+        run: uv run scripts/verify.py --since "origin/${{ github.base_ref }}"
+      - name: Verify the store, and its history since the previous commit
+        if: github.event_name == 'push'
+        run: uv run scripts/verify.py --since "${{ github.event.before }}"
