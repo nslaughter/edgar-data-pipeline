@@ -505,13 +505,17 @@ def agent_sent(monkeypatch: pytest.MonkeyPatch, data: Path) -> str | None:
 
 
 @pytest.mark.spec("FETCH-15")
+@pytest.mark.parametrize("environment", [None, "", "  "])
 def test_the_user_agent_is_read_from_env_dev_when_the_environment_has_none(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, env_file: Path
+    environment: str | None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, env_file: Path
 ) -> None:
-    monkeypatch.delenv("SEC_USER_AGENT", raising=False)
+    if environment is None:
+        monkeypatch.delenv("SEC_USER_AGENT", raising=False)
+    else:
+        monkeypatch.setenv("SEC_USER_AGENT", environment)
     env_file.write_text(
         f'\n# The SEC asks for a name and a contact address.\nOTHER=x\nSEC_USER_AGENT="{UA}"\n'
-        "# SEC_USER_AGENT=Commented Out out@example.com\n"
+        "# SEC_USER_AGENT=Commented Out out@example.com\nSEC_USER_AGENT\n"
     )
 
     assert agent_sent(monkeypatch, tmp_path) == UA
@@ -541,13 +545,17 @@ def test_the_command_needs_a_user_agent_in_the_environment_or_env_dev(
 
 
 @pytest.mark.spec("FETCH-15")
-def test_git_ignores_env_dev() -> None:
+def test_the_repositorys_gitignore_ignores_env_dev() -> None:
+    """The committed .gitignore, not only a clone's own .git/info/exclude."""
     root = Path(__file__).resolve().parent.parent
     ignored = subprocess.run(
-        ["git", "-C", str(root), "check-ignore", "-q", ".env.dev"], check=False
+        ["git", "-C", str(root), "check-ignore", "--verbose", ".env.dev"],
+        capture_output=True,
+        text=True,
+        check=False,
     )
 
-    assert ignored.returncode == 0
+    assert ignored.stdout.startswith(".gitignore:")
 
 
 @pytest.mark.spec("FETCH-1")

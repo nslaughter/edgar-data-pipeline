@@ -134,8 +134,9 @@ def user_agent() -> str:
         return ""
     value = ""
     for line in lines:
-        name, sep, rest = line.strip().partition("=")
-        if sep and not name.startswith("#") and name.strip() == "SEC_USER_AGENT":
+        # A blank or # line never names the variable, so it is skipped too.
+        name, sep, rest = line.partition("=")
+        if sep and name.strip() == "SEC_USER_AGENT":
             value = rest.strip()
             if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
                 value = value[1:-1].strip()
