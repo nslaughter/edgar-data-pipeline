@@ -79,6 +79,14 @@ def server() -> Iterator[Server]:
     httpd.server_close()
 
 
+@pytest.fixture(autouse=True)
+def env_file(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Where snapshot.py looks for .env.dev (FETCH-15): never the user's own."""
+    path = tmp_path_factory.mktemp("env") / ".env.dev"
+    monkeypatch.setattr(snapshot, "ENV_FILE", path)
+    return path
+
+
 def fetcher(sleeps: list[float] | None = None) -> snapshot.Fetcher:
     def sleep(seconds: float) -> None:
         if sleeps is not None:
@@ -477,6 +485,69 @@ def test_the_command_needs_a_user_agent(monkeypatch: pytest.MonkeyPatch, tmp_pat
 
     assert status == 2
     assert not (tmp_path / "feeds").exists()
+
+
+def agent_sent(monkeypatch: pytest.MonkeyPatch, data: Path) -> str | None:
+    """The user agent the command would fetch with, or None if it refuses to start."""
+    agents: list[str] = []
+
+    def starting_run(
+        fetcher: snapshot.Fetcher, data: Path, feed: str, urls: list[str], *, tool: str
+    ) -> int:
+        agents.append(fetcher.user_agent)
+        return 0
+
+    monkeypatch.setattr(snapshot, "run", starting_run)
+    url = "https://www.sec.gov/feed.xml"
+    allow(data, url)
+    status = snapshot.main(["notices", url, "--data", str(data)])
+    return agents[0] if status == 0 else None
+
+
+@pytest.mark.spec("FETCH-15")
+def test_the_user_agent_is_read_from_env_dev_when_the_environment_has_none(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, env_file: Path
+) -> None:
+    monkeypatch.delenv("SEC_USER_AGENT", raising=False)
+    env_file.write_text(
+        f'\n# The SEC asks for a name and a contact address.\nOTHER=x\nSEC_USER_AGENT="{UA}"\n'
+        "# SEC_USER_AGENT=Commented Out out@example.com\n"
+    )
+
+    assert agent_sent(monkeypatch, tmp_path) == UA
+
+
+@pytest.mark.spec("FETCH-15")
+@pytest.mark.parametrize("environment", [UA, f"  {UA}  "])
+def test_the_environments_user_agent_is_used_instead_of_env_dev(
+    environment: str, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, env_file: Path
+) -> None:
+    monkeypatch.setenv("SEC_USER_AGENT", environment)
+    env_file.write_text("SEC_USER_AGENT=From The File file@example.com\n")
+
+    assert agent_sent(monkeypatch, tmp_path) == UA
+
+
+@pytest.mark.spec("FETCH-2", "FETCH-15")
+@pytest.mark.parametrize("text", [None, "", "# SEC_USER_AGENT=Name name@example.com\n"])
+def test_the_command_needs_a_user_agent_in_the_environment_or_env_dev(
+    text: str | None, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, env_file: Path
+) -> None:
+    monkeypatch.setenv("SEC_USER_AGENT", "")
+    if text is not None:
+        env_file.write_text(text)
+
+    assert agent_sent(monkeypatch, tmp_path) is None
+
+
+@pytest.mark.spec("FETCH-15")
+def test_git_ignores_env_dev() -> None:
+    root = Path(__file__).resolve().parent.parent
+    ignored = subprocess.run(
+        ["git", "-C", str(root), "check-ignore", "-q", ".env.dev"], check=False
+    )
+
+    assert ignored.returncode == 0
 
 
 @pytest.mark.spec("FETCH-1")

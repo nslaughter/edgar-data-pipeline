@@ -10,15 +10,17 @@ at data/objects/AA/SHA256.gz, named by the SHA-256 of its decoded bytes
 (OBJ-1, OBJ-2), so an unchanged feed adds a record but no copy, and changed
 content becomes a new version (VER-1). Nothing stored is overwritten.
 
-Each user supplies their own SEC_USER_AGENT, a name and a contact address;
-the script refuses to run without it and never records it (FETCH-2, ID-1).
+Each user supplies their own SEC_USER_AGENT, a name and a contact address,
+in the environment or in .env.dev at the repository's root, which git
+ignores; the script refuses to run without it and never records it (FETCH-2,
+FETCH-15, ID-1).
 Requests start at least 0.2 s apart, temporary failures are retried, and a
 403 stops the run (FETCH-6, FETCH-8, FETCH-9). Only URLs the store's scope in
 data/scope.json covers are fetched, checked before the first request
 (SCOPE-3).
 
-    SEC_USER_AGENT="Name contact@example.com" \\
-        uv run scripts/snapshot.py FEED URL [URL ...]
+    echo 'SEC_USER_AGENT="Name contact@example.com"' > .env.dev
+    uv run scripts/snapshot.py FEED URL [URL ...]
 """
 
 from __future__ import annotations
@@ -49,6 +51,7 @@ from urllib.parse import urlsplit
 import verify
 
 ROOT = Path(__file__).resolve().parent.parent
+ENV_FILE = ROOT / ".env.dev"  # FETCH-15: git ignores it
 FEED_NAME = re.compile(r"[a-z0-9][a-z0-9-]*")
 SEC_HOSTS = frozenset({"www.sec.gov", "data.sec.gov"})
 MIN_INTERVAL = 0.2  # FETCH-6: 5 requests a second, half the SEC's maximum
@@ -119,6 +122,24 @@ class Fetcher:
             final_url=str(raw.geturl()),
             body=cast(Body, raw),
         )
+
+
+def user_agent() -> str:
+    """SEC_USER_AGENT from the environment, else from ENV_FILE (FETCH-2, FETCH-15)."""
+    if value := os.environ.get("SEC_USER_AGENT", "").strip():
+        return value
+    try:
+        lines = ENV_FILE.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return ""
+    value = ""
+    for line in lines:
+        name, sep, rest = line.strip().partition("=")
+        if sep and not name.startswith("#") and name.strip() == "SEC_USER_AGENT":
+            value = rest.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+                value = value[1:-1].strip()
+    return value
 
 
 def now() -> str:
@@ -361,11 +382,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--data", type=Path, default=ROOT / "data", help="data directory")
     args = parser.parse_args(argv)
 
-    user_agent = os.environ.get("SEC_USER_AGENT", "").strip()
-    if "@" not in user_agent:
+    agent = user_agent()
+    if "@" not in agent:
         print(
             "Set SEC_USER_AGENT to your name and a contact address, "
-            'such as "Name contact@example.com".',
+            f'such as "Name contact@example.com", in the environment or {ENV_FILE}.',
             file=sys.stderr,
         )
         return 2
@@ -386,7 +407,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{url} is outside the scope in {args.data / 'scope.json'}.", file=sys.stderr)
             return 2
 
-    return run(Fetcher(user_agent), args.data, args.feed, args.urls, tool=tool_version())
+    return run(Fetcher(agent), args.data, args.feed, args.urls, tool=tool_version())
 
 
 def run(fetcher: Fetcher, data: Path, feed: str, urls: list[str], *, tool: str) -> int:
