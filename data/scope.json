@@ -1,3 +1,44 @@
 {
-  "urls": []
+  "urls": [
+    {
+      "url": "https://data.sec.gov/submissions/CIK0000320193.json",
+      "reason": "Apple's filing history, with each filing's form, dates, and acceptance time. Apple, a Dow company, has a 52- or 53-week fiscal year ending on the last Saturday of September."
+    },
+    {
+      "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json",
+      "reason": "Apple's reported financial values, each with its fiscal period and the filing that reported it: the values the bitemporal model tracks."
+    },
+    {
+      "url": "https://www.sec.gov/Archives/edgar/data/320193/",
+      "reason": "Apple's filings, to check the two feeds above against the filings they describe."
+    },
+    {
+      "url": "https://data.sec.gov/submissions/CIK0000789019.json",
+      "reason": "Microsoft's filing history, with each filing's form, dates, and acceptance time. Microsoft, a Dow company, has a fiscal year ending June 30."
+    },
+    {
+      "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000789019.json",
+      "reason": "Microsoft's reported financial values, each with its fiscal period and the filing that reported it: the values the bitemporal model tracks."
+    },
+    {
+      "url": "https://www.sec.gov/Archives/edgar/data/789019/",
+      "reason": "Microsoft's filings, to check the two feeds above against the filings they describe."
+    },
+    {
+      "url": "https://data.sec.gov/submissions/CIK0000104169.json",
+      "reason": "Walmart's filing history, with each filing's form, dates, and acceptance time. Walmart, a Dow company, has a fiscal year ending January 31, named for the calendar year it ends in."
+    },
+    {
+      "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000104169.json",
+      "reason": "Walmart's reported financial values, each with its fiscal period and the filing that reported it: the values the bitemporal model tracks."
+    },
+    {
+      "url": "https://www.sec.gov/Archives/edgar/data/104169/",
+      "reason": "Walmart's filings, to check the two feeds above against the filings they describe."
+    },
+    {
+      "url": "https://www.sec.gov/Archives/edgar/daily-index/2026/QTR4/",
+      "reason": "EDGAR's daily indexes of every filing accepted this quarter: a candidate source of notices of new filings, and a check on whether a published day's index changes."
+    }
+  ]
 }
