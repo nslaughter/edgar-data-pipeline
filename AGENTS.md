@@ -34,9 +34,9 @@ README describes the project for people; it is not a specification.
   at most 5 requests a second, one process at a time, and a stop on a 403.
   Never put the `SEC_USER_AGENT` value in code, tests, records, commits, or
   pull requests; it lives in the environment or in `.env.dev`, which git
-  ignores ([FETCH-15](spec/snapshots.md#10-fetching)). Don't run anything
-  against the SEC unless the operator has set `SEC_USER_AGENT` or asked for
-  the run.
+  ignores ([FETCH-15](spec/snapshots.md#10-fetching)). Run anything against
+  the SEC only when the operator asks for that run; a `SEC_USER_AGENT` in the
+  environment or `.env.dev` is not a request.
 - **Keep the store's scope small.** `data/scope.json` lists the URLs the
   store may hold, each with its reason
   ([§9](spec/snapshots.md#9-scope)), and `snapshot.py` fetches nothing
