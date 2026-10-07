@@ -1,6 +1,6 @@
 # Specification: the snapshot store
 
-**Status:** Version 0.1.0, draft, October 6, 2026. This document governs
+**Status:** Version 0.2.0, draft, October 7, 2026. This document governs
 everything under `data/` and every program that reads or writes it:
 `scripts/snapshot.py`, `scripts/verify.py`, and any later import. Where code
 and this document disagree, the code is wrong or this document needs a new
@@ -204,6 +204,11 @@ every company stay outside it ([open question 2](#13-open-questions)).
   ([Accessing EDGAR data](https://www.sec.gov/search-filings/edgar-search-assistance/accessing-edgar-data)).
   Each user supplies their own; the repository ships none, and without it
   nothing is fetched.
+- **FETCH-15** (rule) If the environment has no `SEC_USER_AGENT`,
+  `snapshot.py` reads it from `.env.dev` at the repository's root, a file
+  git ignores, so each user's value stays out of the repository. A value in
+  the environment is used instead of the file's. The file holds lines of
+  `NAME=VALUE`, and blank lines and lines starting with `#` are ignored.
 - **ID-1** (rule) No file under `data/` contains the `User-Agent` or any
   other request header.
 - **FETCH-3** (rule) Each request sends `Accept-Encoding: gzip`.
@@ -292,6 +297,7 @@ inputs:
 | SCOPE-3 | rule | tests | Only URLs in the scope are fetched. |
 | FETCH-1 | rule | tests | Only `https` on `www.sec.gov` and `data.sec.gov`. |
 | FETCH-2 | rule | tests | The user's own `SEC_USER_AGENT` is required and sent. |
+| FETCH-15 | rule | tests | Without one in the environment, the user agent is read from the ignored `.env.dev`. |
 | ID-1 | rule | tests | No request header is stored. |
 | FETCH-3 | rule | tests | `Accept-Encoding: gzip` is sent. |
 | FETCH-4 | rule | tests | The latest version's validators are sent. |
