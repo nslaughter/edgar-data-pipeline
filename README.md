@@ -11,8 +11,9 @@ inspect, query, and reprocess. This project applies that to public financial
 filings, where when a number was published matters as much as what it says.
 
 **Status:** Early. The repository holds the scripts that snapshot EDGAR's
-feeds and verify the stored versions. An investigation of the source comes
-next, then the pipeline's specification; nothing else is implemented yet. The
+feeds and verify the stored versions. The investigation of the source has
+begun ([`investigation/edgar.md`](investigation/edgar.md)), and the
+pipeline's specification follows it; nothing else is implemented yet. The
 data comes from the SEC's EDGAR system. This is an independent demonstration,
 not client work, and it is not affiliated with or endorsed by the SEC.
 

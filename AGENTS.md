@@ -9,6 +9,7 @@ EDGAR's feeds and verify the stored versions.
 | Document | Governs |
 | --- | --- |
 | [`spec/snapshots.md`](spec/snapshots.md) | Everything under `data/`: the layout, records, versions, history, scope, how fetches are made, and import manifests, as numbered statements with an index. `scripts/snapshot.py` implements its rules and `scripts/verify.py` checks its invariants. |
+| [`investigation/edgar.md`](investigation/edgar.md) | What EDGAR's feeds and filings do: the investigation's scope, method, and questions, and findings with IDs that cite the stored versions showing them. The pipeline's specification depends on EDGAR only through these findings. |
 
 The pipeline's own specification follows the source investigation. The
 README describes the project for people; it is not a specification.
@@ -26,8 +27,9 @@ README describes the project for people; it is not a specification.
   `tests/test_spec_coverage.py` fails if a statement checked by `verify` or
   `tests` has no test, or a marker names no statement.
 - **Investigate the source before specifying the pipeline.** Record how
-  EDGAR's feeds and filings behave, with the stored versions that show it,
-  before a specification depends on that behavior. Don't build undocumented
+  EDGAR's feeds and filings behave in
+  [`investigation/edgar.md`](investigation/edgar.md), with the stored
+  versions that show it, before a specification depends on that behavior. Don't build undocumented
   source behavior into code on your own; report it.
 - **Every request to the SEC goes through `scripts/snapshot.py`,** or later
   through a fetcher that keeps the same rules: a declared `SEC_USER_AGENT`,
