@@ -33,8 +33,10 @@ README describes the project for people; it is not a specification.
   through a fetcher that keeps the same rules: a declared `SEC_USER_AGENT`,
   at most 5 requests a second, one process at a time, and a stop on a 403.
   Never put the `SEC_USER_AGENT` value in code, tests, records, commits, or
-  pull requests. Don't run anything against the SEC unless the operator has
-  set `SEC_USER_AGENT` or asked for the run.
+  pull requests; it lives in the environment or in `.env.dev`, which git
+  ignores ([FETCH-15](spec/snapshots.md#10-fetching)). Run anything against
+  the SEC only when the operator asks for that run; a `SEC_USER_AGENT` in the
+  environment or `.env.dev` is not a request.
 - **Keep the store's scope small.** `data/scope.json` lists the URLs the
   store may hold, each with its reason
   ([§9](spec/snapshots.md#9-scope)), and `snapshot.py` fetches nothing
@@ -63,7 +65,7 @@ README describes the project for people; it is not a specification.
 | Lint | `uv run ruff check .` |
 | Type check | `uv run mypy` |
 | Tests | `uv run pytest` |
-| Snapshot a feed | `SEC_USER_AGENT=... uv run scripts/snapshot.py FEED URL ...` |
+| Snapshot a feed | `uv run scripts/snapshot.py FEED URL ...`, with `SEC_USER_AGENT` in the environment or `.env.dev` |
 | Verify the store | `uv run scripts/verify.py -v` |
 | Verify history since a commit | `uv run scripts/verify.py --since origin/main` |
 

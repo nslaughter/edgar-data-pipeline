@@ -36,8 +36,8 @@ not client work, and it is not affiliated with or endorsed by the SEC.
 ## Fetching and versioning a feed
 
 ```sh
-SEC_USER_AGENT="Name contact@example.com" \
-    uv run scripts/snapshot.py FEED URL [URL ...]
+echo 'SEC_USER_AGENT="Name contact@example.com"' > .env.dev
+uv run scripts/snapshot.py FEED URL [URL ...]
 uv run scripts/verify.py -v
 ```
 
@@ -72,7 +72,8 @@ The SEC's guidance on
 [accessing EDGAR data](https://www.sec.gov/search-filings/edgar-search-assistance/accessing-edgar-data)
 sets a maximum of 10 requests per second and asks automated tools to declare
 a user agent naming who runs them and a contact address. Supply your own in
-`SEC_USER_AGENT`; the repository ships none. `snapshot.py` refuses to run
+`SEC_USER_AGENT`, in the environment or in `.env.dev`, which git ignores;
+the repository ships none. `snapshot.py` refuses to run
 without it, never records it, sends at most 5 requests a second, and stops on
 a 403.
 

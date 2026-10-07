@@ -3,3 +3,5 @@ __pycache__/
 .mypy_cache/
 .pytest_cache/
 .ruff_cache/
+# Each user's SEC_USER_AGENT (FETCH-15); never committed.
+.env.dev
