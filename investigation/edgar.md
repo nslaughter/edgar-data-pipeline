@@ -1,7 +1,8 @@
 # Source investigation: EDGAR
 
-**Status:** Started October 7, 2026. No findings yet. Data here comes from
-the U.S. Securities and Exchange Commission's EDGAR system.
+**Status:** Started October 7, 2026. The baseline was fetched October 7;
+five findings so far. Data here comes from the U.S. Securities and Exchange
+Commission's EDGAR system.
 
 This document records how EDGAR's feeds and filings behave, each finding
 shown by versions in the snapshot store
@@ -95,7 +96,8 @@ specification can cite.
 
 A finding states one behavior, names the question it answers, and cites the
 records that show it: the feed, the URL, the first 12 hex digits of the
-`sha256` (as `snapshot.py` prints them), and `requested_at`.
+`sha256` (as `snapshot.py` prints them), and `requested_at`, either in the
+finding or through the [records cited](#records-cited) below.
 `uv run scripts/verify.py -v` lists each URL's versions. Findings have IDs,
 `SRC-1` onward, that are never reused. A finding that later versions
 contradict is marked superseded and stays; a new finding cites the new
@@ -107,4 +109,97 @@ versions.
   `0123456789ab` at 2026-10-07T22:00:00.000Z.
 ```
 
-None yet.
+### Records cited
+
+The baseline was fetched on October 7, 2026 by `scripts/snapshot.py` at
+commit `70ab28b`. Each entry is a record's `sha256` prefix and its
+`requested_at` on that day, in UTC.
+
+Each company's `submissions` and `companyfacts`, at
+`https://data.sec.gov/submissions/CIK##########.json` and
+`https://data.sec.gov/api/xbrl/companyfacts/CIK##########.json`, with the
+CIK padded to ten digits:
+
+| Company | CIK | `submissions` | `companyfacts` |
+| --- | --- | --- | --- |
+| Apple | 320193 | `e89635068cd4` 17:40:13.617Z | `73a86c6aedc3` 17:40:46.711Z |
+| Microsoft | 789019 | `2484a2a3b567` 17:40:13.829Z | `f8aae2965b20` 17:40:47.082Z |
+| Walmart | 104169 | `5cafa5114f8e` 17:40:13.971Z | `54ec3fbf36dc` 17:40:47.337Z |
+
+The eight filings in `filings`. Each one's directory is
+`https://www.sec.gov/Archives/edgar/data/CIK/ACCESSION/`, with the
+accession number's dashes removed; the header is
+`ACCESSION-index-headers.html` in that directory, and the listing is
+`index.json`:
+
+| Company | Form | Accession number | Header | Directory listing |
+| --- | --- | --- | --- | --- |
+| Apple | 10-K | 0000320193-25-000079 | `4b05064b7b26` 17:41:43.408Z | `d61dde83df2d` 17:41:08.170Z |
+| Apple | 10-Q | 0000320193-26-000020 | `a51cfcf32d03` 17:41:44.124Z | `3e5dde4c0403` 17:41:08.350Z |
+| Apple | 8-K/A | 0001140361-26-035325 | `59fe5a75478c` 17:41:45.120Z | `16e98f070459` 17:41:08.474Z |
+| Microsoft | 10-K | 0001193125-26-323660 | `a4677192c07a` 17:41:45.643Z | `bf17f342b5ff` 17:41:08.680Z |
+| Microsoft | 10-Q | 0001193125-26-191507 | `7b8036685442` 17:41:46.314Z | `10a9ce7f8519` 17:41:09.149Z |
+| Walmart | 10-K | 0000104169-26-000055 | `d310a19046ca` 17:41:47.079Z | `a576f2522e5b` 17:41:09.269Z |
+| Walmart | 10-Q | 0000104169-26-000154 | `0bc822d86b45` 17:41:47.626Z | `dd6bc42dc512` 17:41:09.456Z |
+| Walmart | 8-K/A | 0000104169-26-000028 | `91aa33498ef4` 17:41:48.242Z | `7408a912ac83` 17:41:09.665Z |
+
+The quarter's daily index listing, in `daily-index` at
+`https://www.sec.gov/Archives/edgar/daily-index/2026/QTR4/index.json`:
+`b2627c1a365d` 17:40:47.727Z.
+
+### Findings so far
+
+- **SRC-1** (Q2) A filing's header gives its acceptance time as
+  `ACCEPTANCE-DATETIME`, 14 digits `YYYYMMDDHHMMSS`, with no time zone. In
+  each of the eight filings, every file in the directory listing has that
+  time as its `last-modified`, and its date is the header's
+  `FILED AS OF DATE`.
+  Shown by the eight headers and directory listings in the records cited.
+- **SRC-2** (Q2) `submissions` gives `acceptanceDateTime` in RFC 3339 with a
+  `Z`, and in all 3,002 recent filings of the three companies its
+  milliseconds are `.000`. It is later than the header's time (SRC-1) by
+  4 hours for Microsoft's and Walmart's filings from March to August and
+  5 hours for Walmart's of January 30, as converting US Eastern time to UTC
+  would make it. For all three of Apple's, it is 8 hours later. That
+  includes the 8-K/A, whose accession number begins with another filer's
+  CIK, 0001140361, and whose acceptance this puts on the day after its
+  filing date. The baseline doesn't show which time is right for Apple, or
+  why Apple's differ.
+
+  | Filing | Header | `submissions` | Later by |
+  | --- | --- | --- | --- |
+  | Apple 10-K 0000320193-25-000079 | 20251031060126 | 2025-10-31T14:01:26.000Z | 8 h |
+  | Apple 10-Q 0000320193-26-000020 | 20260731060102 | 2026-07-31T14:01:02.000Z | 8 h |
+  | Apple 8-K/A 0001140361-26-035325 | 20260901163035 | 2026-09-02T00:30:35.000Z | 8 h |
+  | Microsoft 10-K 0001193125-26-323660 | 20260729160801 | 2026-07-29T20:08:01.000Z | 4 h |
+  | Microsoft 10-Q 0001193125-26-191507 | 20260429160624 | 2026-04-29T20:06:24.000Z | 4 h |
+  | Walmart 10-K 0000104169-26-000055 | 20260313160624 | 2026-03-13T20:06:24.000Z | 4 h |
+  | Walmart 10-Q 0000104169-26-000154 | 20260828161128 | 2026-08-28T20:11:28.000Z | 4 h |
+  | Walmart 8-K/A 0000104169-26-000028 | 20260130161002 | 2026-01-30T21:10:02.000Z | 5 h |
+
+  Shown by the three `submissions` records and the eight headers in the
+  records cited.
+- **SRC-3** (Q2) A company's fiscal year end can differ between its filings'
+  headers. Apple's header for the 10-K of the year ending 2025-09-27 gives
+  `FISCAL YEAR END` `0927`, while those of its 10-Q for the quarter ending
+  2026-06-27 and its 8-K/A give `0926`. `submissions` gives one
+  `fiscalYearEnd`, `0926`. Microsoft's headers all give `0630` and
+  Walmart's `0131`, as their `submissions` do.
+  Shown by the three `submissions` records and the eight headers in the
+  records cited.
+- **SRC-4** (Q1) Which validators a response carries depends on the kind of
+  URL. In the baseline's 200s, `submissions`, `companyfacts`, and filing
+  directory listings sent neither `ETag` nor `Last-Modified`. Filing
+  indexes and headers sent only `Last-Modified`. XBRL instances, the daily
+  index listing, and the daily master indexes sent both. A refetch of a URL
+  without validators can't be conditional
+  ([FETCH-4](../spec/snapshots.md#10-fetching)), so it receives the whole
+  body each time. Whether a conditional request gets a `304` is for the
+  first refetch to show.
+  Shown by all 43 of the baseline's records, requested from 17:40:13.617Z
+  to 17:41:48.887Z.
+- **SRC-5** (Q4) Each day's daily index files have a `last-modified`
+  between 10:01 and 10:04 PM on the date in their names, with no time zone
+  given. The quarter's listing, fetched at 17:40:47.727Z, 1:40 PM US
+  Eastern, held October 1, 2, 5, and 6, and not yet October 7.
+  Shown by the daily index listing in the records cited.
