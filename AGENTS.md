@@ -11,8 +11,55 @@ EDGAR's feeds and verify the stored versions.
 | [`spec/snapshots.md`](spec/snapshots.md) | Everything under `data/`: the layout, records, versions, history, scope, how fetches are made, and import manifests, as numbered statements with an index. `scripts/snapshot.py` implements its rules and `scripts/verify.py` checks its invariants. |
 | [`investigation/edgar.md`](investigation/edgar.md) | What EDGAR's feeds and filings do: the investigation's scope, method, and questions, and findings with IDs that cite the stored versions showing them. The pipeline's specification depends on EDGAR only through these findings. |
 
-The pipeline's own specification follows the source investigation. The
-README describes the project for people; it is not a specification.
+## Where documents go
+
+Each document makes one kind of claim, and its directory says which.
+
+```text
+spec/                    normative: numbered statements that code and tests cite
+  snapshots.md           the snapshot store
+  NAME.md                one per component, or boundary between components
+  schemas/               machine-readable contracts that statements name
+docs/
+  design.md              the architecture and the reasons for it; makes no rules
+  decisions/NNNN-*.md    one record per significant choice
+investigation/
+  edgar.md               what EDGAR does, as findings with their evidence
+```
+
+- **A rule the code or data must follow goes in `spec/`,** where a test or
+  `verify.py` checks it. An explanation of why goes in `docs/`. What EDGAR
+  does goes in `investigation/`. The README describes the project for people
+  and is none of these.
+- **One spec per component or boundary, not one per kind of content.** A
+  boundary's spec is its contract: what the producer guarantees and what the
+  consumer may rely on. A component's behavior and its interface change
+  together, so they share a document and a version. There is no separate
+  contracts document.
+- **A contract a machine can check is a schema** in `spec/schemas/`: JSON
+  Schema for messages and records, SQL for tables. A statement names it, such
+  as "a notice validates against `notice.schema.json`", and tests validate
+  against it. The schema is part of its spec, so changing it changes the
+  spec.
+- **Each spec has its own version,** as its document says, so the store's
+  contract stays put while the pipeline's specs change. Each ID area, such
+  as `REC` or `FETCH`, belongs to one spec, so an ID names one statement
+  across all of `spec/`.
+- **Specs depend on EDGAR only through findings.** A statement that relies
+  on how the source behaves cites the finding's `SRC` ID. Code and tests cite
+  spec IDs, not findings.
+- **The design document makes no rules.** It describes the components, the
+  boundaries between them, and the alternatives rejected, and cites spec IDs
+  for anything normative. A testable rule found there moves to a spec.
+- **A significant choice gets a decision record,** such as which queue or
+  database to use: `docs/decisions/NNNN-title.md`, numbered in order, with
+  the context, the options, the choice, and its consequences. A later record
+  supersedes an earlier one instead of editing it.
+- **Documents come in order:** the investigation, then the design, then a
+  spec per component or boundary, then code. Parts of the design that don't
+  depend on the source, such as deployment, can start sooner.
+- **Never move or rename a spec.** Commits and pull requests on `main` link
+  to its path, and that history can't be changed.
 
 ## Rules
 
@@ -25,12 +72,14 @@ README describes the project for people; it is not a specification.
   the IDs it checks, as `@pytest.mark.spec("REC-5")`. A new statement gets
   the next unused number in its area; IDs are never reused or renumbered.
   `tests/test_spec_coverage.py` fails if a statement checked by `verify` or
-  `tests` has no test, or a marker names no statement.
+  `tests` has no test, or a marker names no statement. It reads only
+  `spec/snapshots.md` so far; the pull request that adds a second spec
+  extends it to every `spec/*.md`.
 - **Investigate the source before specifying the pipeline.** Record how
   EDGAR's feeds and filings behave in
   [`investigation/edgar.md`](investigation/edgar.md), with the stored
-  versions that show it, before a specification depends on that behavior. Don't build undocumented
-  source behavior into code on your own; report it.
+  versions that show it, before a specification depends on that behavior.
+  Don't build undocumented source behavior into code on your own; report it.
 - **Every request to the SEC goes through `scripts/snapshot.py`,** or later
   through a fetcher that keeps the same rules: a declared `SEC_USER_AGENT`,
   at most 5 requests a second, one process at a time, and a stop on a 403.
