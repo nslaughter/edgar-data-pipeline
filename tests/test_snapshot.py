@@ -96,7 +96,7 @@ def fetcher(sleeps: list[float] | None = None) -> snapshot.Fetcher:
 
 
 def allow(data: Path, *urls: str) -> None:
-    """Declare the scope, as the operator does before fetching (SCOPE-1)."""
+    """Declare the scope, as the owner does before fetching (SCOPE-1)."""
     data.mkdir(parents=True, exist_ok=True)
     entries = [{"url": url, "reason": "Tests."} for url in urls]
     (data / "scope.json").write_text(json.dumps({"urls": entries}))

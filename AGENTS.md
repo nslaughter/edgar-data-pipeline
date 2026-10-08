@@ -87,12 +87,12 @@ investigation/
   Never put the `SEC_USER_AGENT` value in code, tests, records, commits, or
   pull requests; it lives in the environment or in `.env.dev`, which git
   ignores ([FETCH-15](spec/snapshots.md#10-fetching)). Run anything against
-  the SEC only when the operator asks for that run; a `SEC_USER_AGENT` in the
+  the SEC only when the owner asks for that run; a `SEC_USER_AGENT` in the
   environment or `.env.dev` is not a request.
 - **Keep the store's scope small.** `data/scope.json` lists the URLs the
   store may hold, each with its reason
   ([§9](spec/snapshots.md#9-scope)), and `snapshot.py` fetches nothing
-  else. Widen it only when the operator asks, in its own commit, before
+  else. Widen it only when the owner asks, in its own commit, before
   fetching what it adds. Never remove an entry that covers a record.
 - **Never edit or delete stored data** ([§1](spec/snapshots.md#1-guarantees)).
   Logs are appended to, and objects and manifests are only added. A
@@ -106,7 +106,7 @@ investigation/
 - **Tests never reach the network.** They use a local server or stored
   versions.
 - **Nothing outside this repository.** Do not open issues, post comments, or
-  send anything to other projects unless the operator asks.
+  send anything to other projects unless the owner asks.
 
 ## Commands
 
