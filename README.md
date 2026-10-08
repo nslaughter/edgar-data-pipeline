@@ -12,8 +12,9 @@ filings, where when a number was published matters as much as what it says.
 
 **Status:** Early. The repository holds the scripts that snapshot EDGAR's
 feeds and verify the stored versions. The investigation of the source has
-begun ([`investigation/edgar.md`](investigation/edgar.md)), and the
-pipeline's specification follows it; nothing else is implemented yet. The
+begun ([`investigation/edgar.md`](investigation/edgar.md)), and the design is
+drafted ([`docs/design.md`](docs/design.md)); the pipeline's specification
+follows them, and nothing else is implemented yet. The
 data comes from the SEC's EDGAR system. This is an independent demonstration,
 not client work, and it is not affiliated with or endorsed by the SEC.
 
@@ -31,8 +32,14 @@ not client work, and it is not affiliated with or endorsed by the SEC.
   became known. A query can then ask what was known on a past date, including
   values a later filing restated. The model is Martin Fowler's
   [Bitemporal History](https://martinfowler.com/articles/bitemporal-history.html).
-- **A pipeline on Kubernetes.** Notices of new filings flow through a queue to
-  workers that fetch and parse each filing, deployed on kind with Helm.
+- **A record that says where it wasn't looking.** Every poll is recorded, so
+  coverage and gaps are part of the data. A filing first seen after an outage
+  carries the outage's bounds, and its acceptance time still comes from the
+  filing itself.
+- **A pipeline on Kubernetes.** A scheduler queues work in NATS JetStream,
+  one fetcher sends every request to the SEC and stores each body in Garage,
+  and workers parse each filing's facts into PostgreSQL 18, all installed
+  with Helm on kind. The [design](docs/design.md) explains each part.
 
 ## Fetching and versioning a feed
 

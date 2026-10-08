@@ -41,17 +41,24 @@ expected to hold; findings say what it does hold.
    and, for each company, the latest 10-K, the latest 10-Q, and any recent
    amendment: its filing index, header, and XBRL instance. Only selected
    filings are fetched, not each company's whole directory.
-2. **Daily refetch.** Each business evening, refetch `submissions`,
-   `companyfacts`, and the daily index listing, and fetch the new day's
-   master index. A refetch sends the last version's validators, so an
-   unchanged URL adds a record without a copy. Continue through each
-   company's next periodic report: Microsoft's and Apple's are expected in
-   late October or early November, and Walmart's after its quarter ends
-   October 31.
-3. **New filings.** When a company files a 10-K, a 10-Q, or an amendment,
+2. **Daily refetch.** Each business evening, after the day's index is
+   published (SRC-5), refetch `submissions`, `companyfacts`, and the daily
+   index listing. Fetch each master index the listing shows that isn't
+   stored yet, and refetch the stored ones to see whether a published index
+   changes. An unchanged body adds a record without a copy, and a URL that
+   sends validators (SRC-4) is asked conditionally, so an unchanged master
+   index costs a `304`. Continue through each company's next periodic
+   report: Microsoft's and Apple's are expected in late October or early
+   November, and Walmart's after its quarter ends October 31.
+3. **Watch a filing arrive.** Around Microsoft's and Apple's next periodic
+   reports, poll that company's `submissions` and `companyfacts` every
+   minute, from before the time of day its earlier filings were accepted
+   (SRC-1) until both show the new filing. This measures how long after
+   acceptance each feed shows it, which a daily refetch can't.
+4. **New filings.** When a company files a 10-K, a 10-Q, or an amendment,
    fetch its filing index, header, and XBRL instance, and note when it first
    appears in each feed.
-4. **Findings.** Write each finding as the versions show it, and commit it
+5. **Findings.** Write each finding as the versions show it, and commit it
    with the store it cites, after `uv run scripts/verify.py`.
 
 SEC documentation can suggest what to look for, but a finding rests on
@@ -64,8 +71,10 @@ Each question says what the pipeline's specification needs from it.
 - **Q1. What each feed returns and how it changes.** Content type, encoding,
   and size; whether `ETag` and `Last-Modified` are sent and a conditional
   request gets a `304`; how often the content changes; and whether a URL
-  returns to an earlier body. Decides which feeds the pipeline reads and how
-  often.
+  returns to an earlier body. Also whether a filing's archived files ever
+  change after acceptance, which the pipeline's record assumes they don't
+  ([`docs/design.md`](../docs/design.md)). Decides which feeds the pipeline
+  reads and how often.
 - **Q2. Where each time comes from.** Which source gives a filing's
   acceptance time, at what precision and in which time zone, and whether
   `submissions` and the filing's header agree. Which source gives each
@@ -82,8 +91,10 @@ Each question says what the pipeline's specification needs from it.
   date returns.
 - **Q4. How new filings are announced.** How long after acceptance a filing
   appears in `submissions`, `companyfacts`, and the daily index; when a
-  day's index is published; and whether a published index changes. Decides
-  where the pipeline's notices of new filings come from.
+  day's index is published; and whether a published index changes. EDGAR's
+  latest-filings feed is a further candidate, once its URL is confirmed and
+  the scope widened to cover it. Decides where the pipeline's notices of new
+  filings come from, and how often it polls.
 - **Q5. Sizes and pace.** Bytes per URL and per filing, growth per refetch,
   and the requests and time a backfill of one company's filings takes at 5
   requests a second. Sets the store's budget and says whether the pace
