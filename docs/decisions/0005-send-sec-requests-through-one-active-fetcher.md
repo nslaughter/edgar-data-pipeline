@@ -1,6 +1,6 @@
 # 5. Send every SEC request through one active fetcher, held by a Lease
 
-**Status:** Proposed, October 8, 2026.
+**Status:** Accepted, October 8, 2026.
 
 ## Context
 

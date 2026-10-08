@@ -1,6 +1,6 @@
 # 3. Queue work in NATS JetStream
 
-**Status:** Proposed, October 8, 2026.
+**Status:** Accepted, October 8, 2026.
 
 ## Context
 
