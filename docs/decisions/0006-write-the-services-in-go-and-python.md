@@ -1,6 +1,6 @@
 # 6. Write the services in Go and Python, divided by whether they read EDGAR's content
 
-**Status:** Proposed, October 9, 2026.
+**Status:** Accepted, October 9, 2026.
 
 ## Context
 

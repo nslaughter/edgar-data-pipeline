@@ -1,6 +1,6 @@
 # 8. Monitor with Prometheus and Grafana, then Tempo and Loki
 
-**Status:** Proposed, October 9, 2026.
+**Status:** Accepted, October 9, 2026.
 
 ## Context
 

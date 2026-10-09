@@ -1,6 +1,6 @@
 # 7. Control the pipeline through custom resources, reconciled by the scheduler
 
-**Status:** Proposed, October 9, 2026.
+**Status:** Accepted, October 9, 2026.
 
 ## Context
 
