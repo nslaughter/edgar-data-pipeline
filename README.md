@@ -36,10 +36,16 @@ not client work, and it is not affiliated with or endorsed by the SEC.
   coverage and gaps are part of the data. A filing first seen after an outage
   carries the outage's bounds, and its acceptance time still comes from the
   filing itself.
-- **A pipeline on Kubernetes.** A scheduler queues work in NATS JetStream,
-  one fetcher sends every request to the SEC and stores each body in Garage,
-  and workers parse each filing's facts into PostgreSQL 18, all installed
-  with Helm on kind. The [design](docs/design.md) explains each part.
+- **A pipeline on Kubernetes.** A scheduler, written as a Kubernetes
+  controller, queues work in NATS JetStream; one fetcher sends every request
+  to the SEC and stores each body in Garage; and workers parse each filing's
+  facts into PostgreSQL 18. The services are written in Go and Python,
+  controlled through custom resources, and installed with Helm on kind. The
+  [design](docs/design.md) explains each part.
+- **A pipeline you can watch.** Grafana shows the pipeline's health beside
+  the record itself: coverage over time with its gaps, and each filing's
+  times. One trace follows a filing from the poll that first saw it to its
+  facts, across both languages.
 
 ## Fetching and versioning a feed
 

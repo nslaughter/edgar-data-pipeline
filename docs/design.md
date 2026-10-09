@@ -1,6 +1,6 @@
 # Design: the EDGAR data pipeline
 
-**Status:** Draft, October 8, 2026. This document explains the pipeline's
+**Status:** Draft, October 9, 2026. This document explains the pipeline's
 architecture and the reasons for it. It makes no rules: the specifications
 under [`spec/`](../spec/) govern, the records under
 [`docs/decisions/`](decisions/) record each significant choice, and
@@ -59,6 +59,9 @@ put in place of the SEC's.
 ## Components
 
 ```text
+Source, Backfill, SecAccess: custom resources
+    │ reconciled by
+    ▼
 scheduler ──jobs──▶ NATS JetStream ──▶ fetcher (one active, by Lease) ──▶ SEC
                          │                ├─ bodies by SHA-256 ──▶ Garage
                          │                └─ a record per fetch ──▶ PostgreSQL
@@ -68,25 +71,30 @@ scheduler ──jobs──▶ NATS JetStream ──▶ fetcher (one active, by L
 exporter: facts ──▶ Parquet in Garage      query API: "as of T" ──▶ PostgreSQL
 ```
 
-| Component | Role | On the cluster |
-| --- | --- | --- |
-| Scheduler | Queues fetches of the notice sources at a cadence | A Deployment in continuous mode, a CronJob in daily mode; the same image |
-| Fetcher | The only component that talks to the SEC: the user agent, the rate limit, retries, and the stop on a `403`; stores each body and appends each record | A Deployment of two, one active through a Lease ([0005](decisions/0005-send-sec-requests-through-one-active-fetcher.md)); the only pod with the `SEC_USER_AGENT` Secret |
-| Discoverer | Compares each new version of a notice source with the last; records each new filing with its first-seen time and any gap's bounds, and queues fetches of its header, index, and XBRL instance | A Deployment |
-| Parse workers | Read a stored XBRL instance and write its facts with the filing's acceptance time, under an import manifest ([§11](../spec/snapshots.md#11-imports)) | A Deployment, scaled by queue depth |
-| Exporter | Writes the facts to Parquet in Garage, deterministically, and records each file's SHA-256 | A CronJob |
-| Query API | Answers "as of T" | A stateless Deployment |
-| NATS JetStream | Durable queues and events ([0003](decisions/0003-queue-work-in-nats-jetstream.md)) | A StatefulSet of three |
-| Garage | Bodies by SHA-256, exports, and database backups ([0002](decisions/0002-store-bodies-in-garage.md)) | A StatefulSet of three, with a post-install Job that sets its layout |
-| PostgreSQL 18 | Records, filings, coverage and gaps, and facts ([0004](decisions/0004-keep-the-record-in-postgresql-18.md)) | A CloudNativePG cluster of three, pinned to 18 |
-| Monitoring | Metrics, dashboards, and alerts | A decision to come |
+| Component | Role | Language | On the cluster |
+| --- | --- | --- | --- |
+| Scheduler | A controller: queues each `Source`'s polls at its cadence and each `Backfill`'s fetches, and keeps their status ([0007](decisions/0007-control-the-pipeline-through-custom-resources.md)) | Go | A Deployment of two, one active through leader election |
+| Fetcher | The only component that talks to the SEC: the user agent, the rate limit, retries, and the stop on a `403`, kept in `SecAccess`; stores each body and appends each record | Go | A Deployment of two, one active through a Lease ([0005](decisions/0005-send-sec-requests-through-one-active-fetcher.md)); the only pod with the `SEC_USER_AGENT` Secret |
+| Discoverer | Compares each new version of a notice source with the last; records each new filing with its first-seen time and any gap's bounds, and queues fetches of its header, index, and XBRL instance | Python | A Deployment |
+| Parse workers | Read a stored XBRL instance and write its facts with the filing's acceptance time, under an import manifest ([§11](../spec/snapshots.md#11-imports)) | Python | A Deployment, scaled by queue depth |
+| Exporter | Writes the facts to Parquet in Garage, deterministically, and records each file's SHA-256 | Python | A CronJob |
+| Query API | Answers "as of T" | Go | A stateless Deployment |
+| NATS JetStream | Durable queues and events ([0003](decisions/0003-queue-work-in-nats-jetstream.md)) | — | A StatefulSet of three |
+| Garage | Bodies by SHA-256, exports, and database backups ([0002](decisions/0002-store-bodies-in-garage.md)) | — | A StatefulSet of three, with a post-install Job that sets its layout |
+| PostgreSQL 18 | Records, filings, coverage and gaps, and facts ([0004](decisions/0004-keep-the-record-in-postgresql-18.md)) | — | A CloudNativePG cluster of three, pinned to 18 |
+| Monitoring | Metrics, dashboards, and alerts, then traces and logs ([0008](decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md)) | — | kube-prometheus-stack, then Tempo, then Loki with Alloy |
+
+Services that read what EDGAR publishes are written in Python, and services
+that move bytes or keep the rules for talking to the SEC in Go
+([0006](decisions/0006-write-the-services-in-go-and-python.md)).
 
 Everything is installed by one umbrella Helm chart on kind
 ([0001](decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md)).
 
 ## One filing, end to end
 
-1. The scheduler queues a fetch of each company's `submissions`.
+1. The scheduler queues a fetch of each company's `submissions`, at its
+   `Source`'s cadence.
 2. The fetcher holding the Lease sends the request within the rate limit,
    stores the body in Garage if it is new, and appends the fetch's record.
 3. The discoverer finds a new accession number in the new version. It
@@ -103,19 +111,43 @@ Everything is installed by one umbrella Helm chart on kind
    facts.
 
 A message delivered twice repeats its step harmlessly: bodies are named by
-their SHA-256 and filings by their accession numbers.
+their SHA-256 and filings by their accession numbers. One trace follows the
+filing through every step, across both languages
+([0008](decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md)).
 
 ## Two modes, one pipeline
 
-- **Continuous.** The scheduler is a Deployment that polls at a cadence the
-  investigation will set (Q4). Polling three companies every minute is 3
-  requests a minute against a limit of 5 a second, but each poll downloads
-  the whole body, since `submissions` sends no validators (SRC-4).
-- **Daily.** The scheduler is a CronJob that queues one round, and the same
-  workers drain it.
+A mode is a cadence on each `Source`, not a different deployment
+([0007](decisions/0007-control-the-pipeline-through-custom-resources.md)).
+
+- **Continuous.** Sources are polled at a cadence the investigation will
+  set (Q4). Polling three companies every minute is 3 requests a minute
+  against a limit of 5 a second, but each poll downloads the whole body,
+  since `submissions` sends no validators (SRC-4).
+- **Daily.** Sources are polled once a day, and the same workers drain each
+  round.
 
 Both write the same records, so a day in daily mode reads as continuous
 operation with a long gap, which is what it is.
+
+## Controls
+
+The pipeline is controlled through custom resources, never through the
+dashboard
+([0007](decisions/0007-control-the-pipeline-through-custom-resources.md)):
+
+- **`Source`:** pause one feed or change its cadence. A new `Source` widens
+  the scope.
+- **`Backfill`:** fetch a company's past filings over a date range, with
+  progress in its status.
+- **`SecAccess`:** pause every request to the SEC. After a `403`, the
+  fetcher records the stop here, and fetching resumes only when the owner
+  acknowledges it.
+
+RBAC lets the owner change the resources and the services change only their
+status, so each control is kept by the API server, survives restarts, and
+shows in `kubectl get` and in Grafana. While fetching is paused or stopped,
+nothing is queued, and the time is recorded as a gap.
 
 ## Outages and recovery
 
@@ -125,15 +157,20 @@ operation with a long gap, which is what it is.
   about 1,000 recent filings, and published daily indexes stay in EDGAR's
   archive, so after an outage the pipeline catches up from them. Each
   filing first seen after the outage carries the gap's bounds.
-- A fetcher handover is a short gap. A database failover pauses parsing,
+- A fetcher handover is a short gap, and a stop after a `403` carries over
+  to the standby through `SecAccess`. A database failover pauses parsing,
   not fetching ([0003](decisions/0003-queue-work-in-nats-jetstream.md)).
 - On kind, outages are caused on purpose: deleting pods, scaling the
-  scheduler to zero, blocking the SEC with a NetworkPolicy. Each drill shows
-  the pipeline recovering and the gaps it recorded.
+  scheduler to zero, pausing a `Source`, blocking the SEC with a
+  NetworkPolicy. Each drill shows the pipeline recovering and the gaps it
+  recorded.
 
 ## Monitoring
 
-Whichever stack is chosen, the pipeline reports:
+kube-prometheus-stack collects the pipeline's metrics, and Grafana shows
+them read-only
+([0008](decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md)).
+The pipeline reports:
 
 - for each source, polls that succeeded and failed, and the time since the
   last success;
@@ -143,16 +180,30 @@ Whichever stack is chosen, the pipeline reports:
 - the fetcher's request rate, retries, `403`s, and which pod holds the
   Lease;
 - the database's replication lag, failovers, and the age of its last
-  backup.
+  backup;
+- each `Source`'s status and each `Backfill`'s progress, through
+  kube-state-metrics.
 
-A dashboard shows coverage over time, with gaps as bands. Alerts fire on a
-`403`, on a gap longer than the cadence, and on a backup more than a day old.
+Grafana also reads the record from PostgreSQL, through views made for it:
+coverage over time with gaps as bands, and each filing's times from
+acceptance to facts available. Alerts fire on a `403`, on a gap longer than
+its source's cadence, and on a backup more than a day old, and `promtool`
+tests them in CI.
+
+Tempo comes next, with one trace per filing from the poll that first saw it
+to its facts, carried through NATS in message headers. Loki, fed by Alloy,
+follows, with logs that carry the accession number.
 
 ## Testing on kind
 
 - Unit tests still never reach the network.
 - A fake EDGAR in the cluster serves stored versions from the git store, so
   end-to-end tests install the whole chart on kind in CI without the SEC.
+  It records every request, so the same checks of the fetching rules run
+  against `snapshot.py` and the Go fetcher
+  ([0006](decisions/0006-write-the-services-in-go-and-python.md)).
+- The scheduler's controller is tested against a real API server with
+  envtest, and the alert rules with `promtool test rules`.
 - Drills delete the active fetcher, fail over the database, and block the
   SEC, then check that the record shows each gap and lost nothing.
 - A rebuild drops the facts and imports them again from stored bodies; the
@@ -165,13 +216,18 @@ The normative parts become specifications, one per component or boundary:
 
 - **`spec/snapshots.md`, a new major version:** the store's guarantees on
   Garage and PostgreSQL as well as git; the rate limit and the one-process
-  rule across the cluster, through the Lease (FETCH-6, FETCH-7); and the
-  user agent from a Secret (FETCH-2, ID-1).
+  rule across the cluster, through the Lease (FETCH-6, FETCH-7); the
+  user agent from a Secret (FETCH-2, ID-1); and how `data/scope.json`
+  relates to `Source` resources.
 - **Notices:** the discoverer's messages, filings' first-seen times,
   coverage, and gaps.
 - **Facts:** the fact table, its times, and what "as of T" returns.
 - **The export:** its format, its determinism, and its hashes, answering the
   store's open question 3.
+- **Controls:** the `Source`, `Backfill`, and `SecAccess` resources, their
+  schemas, and who may change what.
+- **Telemetry:** the metrics and traces each service emits, which the
+  dashboards and alerts rely on, and the alerts themselves.
 - **Deployment:** pinned versions, such as PostgreSQL's major version 18,
   checked by chart tests.
 
@@ -188,6 +244,5 @@ The normative parts become specifications, one per component or boundary:
 ## Decisions
 
 See [`docs/decisions/`](decisions/) for each record and its status.
-Decisions still to come: the monitoring stack, the language and libraries of
-the pipeline's services, scaling workers by queue depth, logs, and the
-notice source and its cadence.
+Decisions still to come: scaling workers by queue depth, the XBRL parser,
+and the notice source and its cadence.
