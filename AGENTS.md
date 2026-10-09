@@ -11,6 +11,7 @@ EDGAR's feeds and verify the stored versions.
 | [`spec/snapshots.md`](spec/snapshots.md) | Everything under `data/`: the layout, records, versions, history, scope, how fetches are made, and import manifests, as numbered statements with an index. `scripts/snapshot.py` implements its rules and `scripts/verify.py` checks its invariants. |
 | [`investigation/edgar.md`](investigation/edgar.md) | What EDGAR's feeds and filings do: the investigation's scope, method, and questions, and findings with IDs that cite the stored versions showing them. The pipeline's specification depends on EDGAR only through these findings. |
 | [`docs/design.md`](docs/design.md) | Nothing; it explains. The pipeline's architecture on Kubernetes, the record it keeps and its times, and what waits on the investigation. [`docs/decisions/`](docs/decisions/) records each significant choice and its status. |
+| [`docs/plan.md`](docs/plan.md) | Nothing; it orders the work. The tasks that build the pipeline, in order, what each depends on, and which are done. [Doing the next item](#doing-the-next-item) takes the next task from it. |
 
 ## Where documents go
 
