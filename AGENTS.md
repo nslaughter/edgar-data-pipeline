@@ -24,6 +24,7 @@ spec/                    normative: numbered statements that code and tests cite
 docs/
   design.md              the architecture and the reasons for it; makes no rules
   decisions/NNNN-*.md    one record per significant choice
+  plan.md                the tasks, in order, and which are done
 investigation/
   edgar.md               what EDGAR does, as findings with their evidence
 ```
@@ -130,3 +131,98 @@ and why. Commit each logical change separately.
 The repository allows squash merges only, so the pull request's description
 becomes the commit on `main`. Keep it current as commits are added. It lists
 what changed, the checks run with their results, and anything deferred.
+
+## Doing the next item
+
+When the owner asks for the next item, do the next task in the plan,
+`docs/plan.md`: one task, in one pull request. The request assigns that task
+and nothing beyond it.
+
+1. **Update `main`.** Fetch `origin`, and fast-forward the local `main` to
+   `origin/main`. Leave the main checkout on `main`, because other agents may
+   share it. If the update changed this file or the plan, read it again
+   before going on.
+2. **Find the task.** Go through the plan's tasks in order. The next item is
+   the first task that is:
+   - **not done:** its row in the plan on `main` doesn't mark it done. The
+     plan is the progress record, and each task's pull request updates it.
+   - **not taken:** no open pull request names its ID in the title
+     (`gh pr list --state open`), and no branch names it
+     (`git branch --all --list '*/<id>-*'`, with the ID in lowercase). A
+     task is taken from the moment step 4 makes its branch.
+   - **ready to start:** each task it depends on is done. Documents still
+     come in order ([where documents go](#where-documents-go)): a
+     specification that relies on the source needs the findings it cites,
+     and code needs its specification. A decision record it depends on must
+     be Accepted. An approval it needs, such as a run against the SEC or a
+     wider scope, is met only when the owner gives it in the current
+     conversation.
+
+   Never build on an unmerged branch. A task whose dependency is still in an
+   open pull request waits for it to merge.
+3. **Stop if nothing can start.** Make no branch and no change. Report why,
+   and what would unblock the next task: a pull request to merge, a decision
+   record to accept, an approval such as a run against the SEC, or a finding
+   the investigation still needs. When there is no plan, or every task in it
+   is done, the next step is for the owner to write or extend it. Stop too
+   when the documents contradict each other on the task ([rules](#rules)).
+4. **Make a worktree.** Create the branch `<area>/<id>-<short-name>` from
+   `origin/main` in a git worktree of its own, outside the main checkout,
+   and run `uv sync` in it. `<id>` is the task's ID in lowercase, so other
+   agents see that the task is taken (step 2). `<area>` is the directory the
+   task mainly changes, as earlier branches did, such as `investigation`,
+   `docs`, `spec`, or `scripts`, as in `spec/t4-notices`.
+5. **Read for the task.** Follow [read these first](#read-these-first), and
+   read closely what the task's row names: the statements and their tests,
+   the findings and the stored versions they cite, the decision records, and
+   the design's sections.
+6. **Do the task, and only the task.** Keep the [rules](#rules): a change to
+   a specification is its own pull request, versioned as the document says,
+   and a run against the SEC happens only when the owner asks for it. Don't
+   change what a statement, a finding, or an Accepted decision record says
+   beyond what the task asks: that takes the owner's decision, so stop and
+   ask. A test of this task's work that the plan assigns to a later task may
+   be written now: say in the plan and the pull request that it was written
+   ahead of that task.
+7. **Record the details you settled.** Where the task left a detail open and
+   you decided it, write it where [where documents go](#where-documents-go)
+   puts it: a rule as a statement in its spec, with the next unused ID; what
+   EDGAR does as a finding, with the stored versions that show it; and a
+   significant choice as a decision record, whose status is Proposed. In a
+   code task, a detail the specification leaves open is an ambiguity: stop
+   and report it instead ([rules](#rules)). List each detail you settled in
+   the pull request for the owner to confirm, with the alternative where
+   there was one. Only the owner confirms a detail or accepts a decision
+   record.
+8. **Update the plan and the status lines.** Mark the task done in the plan,
+   with the date, and name the next task. Update the **Status** line of each
+   document the task changed. When another open pull request also edits the
+   plan, the later one to merge rebases onto `origin/main` once the other
+   merges: it keeps both tasks' entries, and names the next task again.
+9. **Verify.** Run the checks CI runs, from [commands](#commands): the format
+   check, the lint, the type check, the tests, and
+   `uv run scripts/verify.py --since origin/main`. Check that each new test
+   fails without the behavior it covers. Runs against the SEC wait for the
+   owner, and only one runs at a time, across every checkout and worktree
+   ([FETCH-7](spec/snapshots.md#10-fetching)). A worktree has no `.env.dev`,
+   because git ignores it, so a run there takes `SEC_USER_AGENT` from the
+   environment. Report only what you ran, with its outcome.
+10. **Open the pull request.** Commit as
+    [commits and pull requests](#commits-and-pull-requests) says. Push the
+    branch, and open the pull request with `gh pr create`, under a title
+    that ends with the task's ID, such as "Specify the notices (T4)". Its
+    description gives:
+    - the task, and the plan it's in, linked;
+    - what changed;
+    - the details to confirm, linked to where step 7 recorded them, or that
+      there are none;
+    - the checks run, with their results;
+    - any tests written ahead of a later task;
+    - anything deferred, and the remaining work.
+
+    Don't merge it: the owner merges pull requests.
+11. **Report.** Finish with a short handoff: what changed, the evidence, the
+    limitations, and the remaining work, with the pull request's link and
+    the next task. Name what awaits the owner: this task's details to
+    confirm, any decision record still Proposed, and any approval, such as a
+    run against the SEC.
