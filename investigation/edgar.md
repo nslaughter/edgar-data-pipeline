@@ -1,11 +1,12 @@
 # Source investigation: EDGAR
 
 **Status:** Started October 7, 2026. The baseline was fetched October 7;
-thirteen findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
-were read from it on October 10. SRC-12 and SRC-13, on `submissions`'
-further files and its acceptance times, were read from them and the
-baseline once they were fetched on October 10. Since October 10, how soon
-each feed shows a new filing (Q4) is measured from the pipeline's record. Data here comes from
+seventeen findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
+and SRC-14 to SRC-17, on restated and repeated values, were read from it
+on October 10. SRC-12 and SRC-13, on `submissions`' further files and its
+acceptance times, were read from them and the baseline once they were
+fetched on October 10. Since October 10, how soon each feed shows a new
+filing (Q4) is measured from the pipeline's record. Data here comes from
 the U.S. Securities and Exchange Commission's EDGAR system.
 
 This document records how EDGAR's feeds and filings behave, each finding
@@ -163,16 +164,19 @@ accession number's dashes removed; the header is
 | Walmart | 10-Q | 0000104169-26-000154 | `0bc822d86b45` 17:41:47.626Z | `dd6bc42dc512` 17:41:09.456Z |
 | Walmart | 8-K/A | 0000104169-26-000028 | `91aa33498ef4` 17:41:48.242Z | `7408a912ac83` 17:41:09.665Z |
 
-The XBRL instances of the six 10-Ks and 10-Qs, in the same directories:
+The XBRL instances of the six 10-Ks and 10-Qs and the two 8-K/As, in the
+same directories:
 
 | Company | Form | Instance | Record |
 | --- | --- | --- | --- |
 | Apple | 10-K | `aapl-20250927_htm.xml` | `e1076735f1c8` 17:41:43.991Z |
 | Apple | 10-Q | `aapl-20260627_htm.xml` | `28f986bb243c` 17:41:44.837Z |
+| Apple | 8-K/A | `ef20081427_8ka_htm.xml` | `598c297043dd` 17:41:45.530Z |
 | Microsoft | 10-K | `msft-20260630_htm.xml` | `56e56d82ee2d` 17:41:46.095Z |
 | Microsoft | 10-Q | `msft-20260331_htm.xml` | `d9c4e6b92fcc` 17:41:46.815Z |
 | Walmart | 10-K | `wmt-20260131_htm.xml` | `07c72faa90cf` 17:41:47.464Z |
 | Walmart | 10-Q | `wmt-20260731_htm.xml` | `2e39345b995e` 17:41:48.099Z |
+| Walmart | 8-K/A | `wmt-20260115_htm.xml` | `d6d74874acd8` 17:41:48.887Z |
 
 The quarter's daily index listing, in `daily-index` at
 `https://www.sec.gov/Archives/edgar/daily-index/2026/QTR4/index.json`:
@@ -415,3 +419,94 @@ finding relies on a record's time to within a second.
   show whether the SEC's own `EFFECT` notices keep EDGAR's hours.
   Shown by the three `submissions` records, the four further files, and
   the eight headers in the records cited.
+- **SRC-14** (Q3) `companyfacts` keeps each filing's value for a concept,
+  unit, and period beside every other filing's, each with its own `accn`,
+  `filed`, `form`, `fy`, and `fp`; a later filing's value replaces none. Of
+  the three companies' 40,702 keys, each a concept, a unit, a `start`, and
+  an `end`, 24,825 have values from more than one filing, up to 12, and no
+  filing gives a key twice. In each of the six 10-Ks and 10-Qs whose XBRL
+  instances are stored, the values with its `accn` are its facts of
+  `us-gaap` and `dei` concepts that have a unit, no dimensions, and aren't
+  nil, one value per key, whether or not an earlier filing reported them:
+  1,386 of their 2,641 values have a key an earlier filing reported. Each
+  value is its fact's, except Microsoft's `EntityListingParValuePerShare`,
+  0.00000625 in both its instances and 0.000006 in `companyfacts`. Facts of
+  a company's own concepts, facts with dimensions, and nil facts don't
+  appear. Three of the instances give two values for each of 23 keys, one
+  to `decimals` -6 and one to -8, and `companyfacts` gives the one to -6:
+  Walmart's 10-K for the year ending 2026-01-31 gives its cash at that
+  date as 10,700,000,000 and 10,727,000,000, and `companyfacts` gives
+  10,727,000,000. Five 8-Ks also report the 10-K before each again:
+  Apple's of 2013-04-24 and 2015-01-28, and Microsoft's of 2013-11-26,
+  2015-10-27, and 2024-12-03. 2,859 of their 2,888 values have a key that
+  10-K reported, each with the 10-K's value.
+  Shown by the three `companyfacts` records and the six 10-K and 10-Q XBRL
+  instances in the records cited.
+- **SRC-15** (Q3) A restated value differs from one reported again
+  unchanged only in its `val`. No field says that a value changed, which
+  earlier value it differs from, or why, and `companyfacts` doesn't give a
+  value's `decimals`. Of the 24,825 keys with values from more than one
+  filing (SRC-14), 1,487 have more than one `val`: 426 of Apple's 7,141,
+  434 of Microsoft's 8,860, and 627 of Walmart's 8,824. In order of
+  `filed`, and of accession number on Apple's three days with two filings
+  (SRC-10), their values change 1,559 times, nearly all in 10-Qs and
+  10-Ks: 870 times in a 10-Q, 622 in a 10-K, 62 in Apple's 10-K/A
+  (SRC-16), 4 in an 8-K, and once in Microsoft's 10-Q/A. The four in 8-Ks
+  each return to the 10-K's value after a 10-Q changed it (SRC-14). 119
+  of the changes are to or from the same amount rounded to fewer digits.
+  Apple's `LongTermDebt` at 2025-09-27 is 90,678,000,000 in its 10-K for
+  the year ending then, to `decimals` -6 in its instance, and
+  90,700,000,000 in its three 10-Qs since, to -8 in the instance of the
+  last. Other changes keep the precision: Apple's `OtherAssetsNoncurrent`
+  at the same date is 83,727,000,000 in the 10-K and the 10-Q of
+  2026-01-30, and 72,634,000,000 in the 10-Qs of 2026-05-01 and
+  2026-07-31, to -6 in both instances. In 29 keys a later filing returns
+  to an earlier value: Apple's `LongTermDebt` at 2023-09-30 is
+  105,103,000,000 in its 10-K of 2023-11-03, 105,100,000,000 in the three
+  10-Qs after it, and 105,103,000,000 again in its 10-K of 2024-11-01.
+  Shown by the three `companyfacts` records and Apple's 10-K and 10-Q XBRL
+  instances in the records cited.
+- **SRC-16** (Q3) An amendment appears in `companyfacts` as a filing of its
+  own: form `10-K/A` or `10-Q/A`, its own `accn` and `filed`, and the `fy`
+  and `fp` of the report it amends. The values of the filing it amends
+  stay beside its own (SRC-14). Three of the 216 accession numbers are
+  amendments, all filed before `recent`'s first filing (SRC-10):
+
+  - Apple's 10-K/A of 2010-01-25 gives `fy` 2009 and `fp` `FY`, as its
+    10-K of 2009-10-27 does. All 210 of its values have keys the 10-K
+    reported, and 77 differ from the 10-K's, 15 of which Apple's 10-Q of
+    the same day also gives. `SalesRevenueNet` for the year ending
+    2009-09-26 is 36,537,000,000 in the 10-K and 42,905,000,000 in the
+    10-K/A, and `NetIncomeLoss` 5,704,000,000 and 8,235,000,000.
+  - Walmart's 10-Q/A of 2013-10-21 gives `fy` 2013 and `fp` `Q2`, as its
+    10-Q of 2013-09-05 does. 288 of its 289 values have keys the 10-Q
+    reported, each with the 10-Q's value. The other is
+    `EntityCommonStockSharesOutstanding` at 2013-10-17, which the 10-Q
+    gives at 2013-09-03.
+  - Microsoft's 10-Q/A of 2012-01-27, `fy` 2012 and `fp` `Q2`, is the only
+    filing in `companyfacts` with that `fy` and `fp`, and the first filing
+    to report the keys of 245 of its 440 values, among them all 218 that
+    end on 2011-12-31. The stored `submissions` don't list filings from 2012
+    (SRC-10), so whether Microsoft filed a 10-Q for that quarter is still
+    to be shown.
+
+  `recent` lists no 10-K/A or 10-Q/A for the three companies, and none of
+  the four 8-K/As it marks `isXBRL` has values in `companyfacts`. The
+  instances of two of them, Apple's and Walmart's (SRC-9), hold only `dei`
+  facts with no unit, 40 and 49.
+  Shown by the three `companyfacts` and `submissions` records and the two
+  8-K/A XBRL instances in the records cited.
+- **SRC-17** (Q3) Of a key's values, only the latest filed has a `frame`
+  (SRC-8), whether it repeats the earlier values or changes them. In all
+  18,902 keys that have values from more than one filing and a frame, the
+  frame is on the value with the latest `filed`. In six of Apple's keys,
+  its 10-Q and 8-K of 2013-04-24 are both latest, and the frame is on the
+  8-K's value, whose accession number is the later. So a frame carries the
+  latest filing's value even where an earlier one is more precise: Apple's
+  `LongTermDebt` at 2025-09-27 has `CY2025Q3I` on the 90,700,000,000 of
+  its 10-Q of 2026-07-31, not the 90,678,000,000 of its 10-K (SRC-15). The
+  baseline holds one version of each company's `companyfacts`, so it
+  doesn't show a frame moving to a later filing's value when that filing
+  appears; the daily refetches through each company's next report
+  (method, step 2) can.
+  Shown by the three `companyfacts` records in the records cited.
