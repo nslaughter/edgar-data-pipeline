@@ -1,10 +1,10 @@
 # Source investigation: EDGAR
 
 **Status:** Started October 7, 2026. The baseline was fetched October 7;
-ten findings so far, the last five, on fiscal periods and joins, read from
-it on October 10. Since October 10, how soon each feed shows a new filing
-(Q4) is measured from the pipeline's record. Data here comes from the U.S.
-Securities and Exchange Commission's EDGAR system.
+eleven findings so far, the last six, on fiscal periods and joins, read
+from it on October 10. Since October 10, how soon each feed shows a new
+filing (Q4) is measured from the pipeline's record. Data here comes from
+the U.S. Securities and Exchange Commission's EDGAR system.
 
 This document records how EDGAR's feeds and filings behave, each finding
 shown by versions in the snapshot store
@@ -247,9 +247,10 @@ The quarter's daily index listing, in `daily-index` at
   all 1,828 of their values: three 8-Ks, Apple's of 2015-01-28 and
   Microsoft's of 2015-10-27 and 2024-12-03, and Walmart's PRE 14A, DEF 14A,
   and 424B2 of April 2026. A value's own period is given by its `start`,
-  for a duration, and its `end` (SRC-7). Its `frame`, when it has one, is
-  a calendar period matched to the value's, whose dates can differ from
-  the value's own (SRC-8).
+  for a duration, and its `end` (SRC-7), though a duration that starts and
+  ends on the same day has no `start` (SRC-11). Its `frame`, when it has
+  one, is a calendar period matched to the value's, whose dates can differ
+  from the value's own (SRC-8).
   Shown by the three `companyfacts` and `submissions` records and the six
   XBRL instances in the records cited.
 - **SRC-7** (Q2) `fy` names a fiscal year by the calendar year it ends in,
@@ -275,9 +276,13 @@ The quarter's daily index listing, in `daily-index` at
   then `I` for an instant. An `I` frame is the calendar quarter end
   nearest the value's `end`, from 32 days before it to 42 days after:
   Walmart's instant of 2026-01-31 is `CY2025Q4I`, and Microsoft's
-  `EntityCommonStockSharesOutstanding` of 2010-01-25 is `CY2009Q4I`. A
-  quarter's frame is the calendar quarter holding most of it: Walmart's
-  from 2025-02-01 to 2025-04-30 is `CY2025Q1`, and Microsoft's ending
+  `EntityCommonStockSharesOutstanding` of 2010-01-25 is `CY2009Q4I`. All
+  but one of the 16,248 values with an `I` frame have no `start`, the one
+  being Walmart's `CommonStockDividendsPerShareDeclared` from 2015-02-18
+  to 2015-02-19, and a value with no `start` can be a duration (SRC-11),
+  so an `I` frame doesn't show that a value is an instant. A quarter's
+  frame is the calendar quarter holding most of it: Walmart's from
+  2025-02-01 to 2025-04-30 is `CY2025Q1`, and Microsoft's ending
   2025-09-30, `fy` 2026 `Q1`, is `CY2025Q3`. A year's is the calendar year
   it begins in for Walmart's years, which end on January 31, and the one
   it ends in for Apple's and Microsoft's: Walmart's year ending
@@ -316,3 +321,18 @@ The quarter's daily index listing, in `daily-index` at
   them: 2010-01-25, 2013-04-24, and 2015-01-28.
   Shown by the three `companyfacts` and `submissions` records in the
   records cited.
+- **SRC-11** (Q2) `companyfacts` gives a duration that starts and ends on
+  the same day as it gives an instant, with an `end` and no `start`. In
+  the six 10-Ks and 10-Qs whose XBRL instances are stored, all but three
+  of the 2,641 values have their context's dates: its `startDate` and
+  `endDate` as their `start` and `end`, or its `instant` as their `end`.
+  The three are Microsoft's `GoodwillImpairmentLoss` values of 0 in its
+  10-K for the year ending 2026-06-30, whose contexts start and end on
+  May 1 of 2024, 2025, and 2026: each has only an `end`, and an `I` frame,
+  `CY2024Q1I`, `CY2025Q1I`, and `CY2026Q1I` (SRC-8). So a value with no
+  `start` isn't always an instant. In the three companies' `companyfacts`,
+  59 values of four concepts, in 31 filings, have no `start` while the
+  same company's other values of that concept do; these three are the
+  only ones in a filing whose instance is stored.
+  Shown by the three `companyfacts` records and the six XBRL instances in
+  the records cited.
