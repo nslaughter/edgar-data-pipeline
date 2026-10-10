@@ -257,15 +257,15 @@ The quarter's daily index listing, in `daily-index` at
   and 10-Qs since 2009 all do so: Apple's quarter ending 2025-12-27 is `fy`
   2026, `fp` `Q1`, and so is Microsoft's ending 2025-09-30. Walmart's 20
   filings from 2009-09-09 to 2014-03-21 name the year it began in, so the
-  10-K for the year ending 2014-01-31 gives `fy` 2013. Its 50 filings since,
-  from the 10-Q of 2014-06-06, name the year it ends in, so the quarter
-  ending 2014-04-30 is `fy` 2015, `fp` `Q1`, and no Walmart filing gives
-  `fy` 2014. A value's `start` and `end` are the first and last days of its
-  period: Microsoft's years run from July 1 to June 30, and Walmart's from
-  February 1 to January 31. Apple's last 52 or 53 weeks, 364 or 371 days,
-  and end on a Saturday from September 24 to 30: on `submissions`'
-  `fiscalYearEnd`, `0926` (SRC-3), in 3 of its 17 years since 2009, after
-  it in 9, and before it in 5.
+  10-K for the year ending 2014-01-31 gives `fy` 2013. Its 50 10-Ks and
+  10-Qs since, from the 10-Q of 2014-06-06, name the year it ends in, so
+  the quarter ending 2014-04-30 is `fy` 2015, `fp` `Q1`, and no Walmart
+  filing gives `fy` 2014. A value's `start` and `end` are the first and
+  last days of its period: Microsoft's years run from July 1 to June 30,
+  and Walmart's from February 1 to January 31. Apple's last 52 or 53
+  weeks, 364 or 371 days, and end on a Saturday from September 24 to 30:
+  on `submissions`' `fiscalYearEnd`, `0926` (SRC-3), in 3 of its 17 years
+  since 2009, after it in 9, and before it in 5.
   Shown by the three `companyfacts` and `submissions` records in the
   records cited.
 - **SRC-8** (Q2) A value's `frame` is a calendar period, not a fiscal one,
