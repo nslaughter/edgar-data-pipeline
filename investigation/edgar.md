@@ -247,8 +247,9 @@ The quarter's daily index listing, in `daily-index` at
   all 1,828 of their values: three 8-Ks, Apple's of 2015-01-28 and
   Microsoft's of 2015-10-27 and 2024-12-03, and Walmart's PRE 14A, DEF 14A,
   and 424B2 of April 2026. A value's own period is given by its `start`,
-  for a duration, and its `end` (SRC-7), and by its `frame` when it has
-  one (SRC-8).
+  for a duration, and its `end` (SRC-7). Its `frame`, when it has one, is
+  a calendar period matched to the value's, whose dates can differ from
+  the value's own (SRC-8).
   Shown by the three `companyfacts` and `submissions` records and the six
   XBRL instances in the records cited.
 - **SRC-7** (Q2) `fy` names a fiscal year by the calendar year it ends in,
@@ -268,14 +269,23 @@ The quarter's daily index listing, in `daily-index` at
   since 2009, after it in 9, and before it in 5.
   Shown by the three `companyfacts` and `submissions` records in the
   records cited.
-- **SRC-8** (Q2) A value's `frame` is a calendar period, not a fiscal one,
-  and only some values have one. It is `CY` and a year, then `Q1` to `Q4`
-  for a quarter, then `I` for an instant: Walmart's year ending 2026-01-31,
-  `fy` 2026, is `CY2025`, and Microsoft's quarter ending 2025-09-30, `fy`
-  2026 `Q1`, is `CY2025Q3`. 39% of Apple's values have a `frame`, 42% of
-  Microsoft's, and 37% of Walmart's, and no two values of the same concept
-  and unit have the same one. Which of the values reported for a period
-  has it is for Q3.
+- **SRC-8** (Q2) A value's `frame` is a calendar period matched to the
+  value's own, not that period itself and not a fiscal one, and only some
+  values have one. It is `CY` and a year, then `Q1` to `Q4` for a quarter,
+  then `I` for an instant. An `I` frame is the calendar quarter end
+  nearest the value's `end`, from 32 days before it to 42 days after:
+  Walmart's instant of 2026-01-31 is `CY2025Q4I`, and Microsoft's
+  `EntityCommonStockSharesOutstanding` of 2010-01-25 is `CY2009Q4I`. A
+  quarter's frame is the calendar quarter holding most of it: Walmart's
+  from 2025-02-01 to 2025-04-30 is `CY2025Q1`, and Microsoft's ending
+  2025-09-30, `fy` 2026 `Q1`, is `CY2025Q3`. A year's is the calendar year
+  it begins in for Walmart's years, which end on January 31, and the one
+  it ends in for Apple's and Microsoft's: Walmart's year ending
+  2026-01-31, `fy` 2026, is `CY2025`, and Microsoft's from 2025-07-01 to
+  2026-06-30, `fy` 2026, is `CY2026`, though 184 of its days fall in 2025.
+  39% of Apple's values have a `frame`, 42% of Microsoft's, and 37% of
+  Walmart's, and no two values of the same concept and unit have the same
+  one. Which of the values reported for a period has it is for Q3.
   Shown by the three `companyfacts` records in the records cited.
 - **SRC-9** (Q2) A value's `accn` joins it to its filing in `submissions`'
   `filings.recent`, and so to that filing's `acceptanceDateTime`, whenever
