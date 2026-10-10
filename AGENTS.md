@@ -155,18 +155,20 @@ and nothing beyond it.
      come in order ([where documents go](#where-documents-go)): a
      specification that relies on the source needs the findings it cites,
      and code needs its specification. A decision record it depends on must
-     be Accepted. An approval it needs, such as a run against the SEC or a
-     wider scope, is met only when the owner gives it in the current
-     conversation.
+     be Accepted. A release of another repository it depends on, such as
+     `edgar-asof`, must be published. An approval it needs, such as a run
+     against the SEC or a wider scope, is met only when the owner gives it
+     in the current conversation.
 
    Never build on an unmerged branch. A task whose dependency is still in an
    open pull request waits for it to merge.
 3. **Stop if nothing can start.** Make no branch and no change. Report why,
    and what would unblock the next task: a pull request to merge, a decision
-   record to accept, an approval such as a run against the SEC, or a finding
-   the investigation still needs. When there is no plan, or every task in it
-   is done, the next step is for the owner to write or extend it. Stop too
-   when the documents contradict each other on the task ([rules](#rules)).
+   record to accept, an approval such as a run against the SEC, a finding
+   the investigation still needs, or a release of `edgar-asof`. When there
+   is no plan, or every task in it is done, the next step is for the owner
+   to write or extend it. Stop too when the documents contradict each other
+   on the task ([rules](#rules)).
 4. **Make a worktree.** Create the branch `<area>/<id>-<short-name>` from
    `origin/main` in a git worktree of its own, outside the main checkout,
    and run `uv sync` in it. `<id>` is the task's ID in lowercase, so other
