@@ -45,11 +45,13 @@ record, and each lag is a query.
 
 ## Decision
 
-Start with each company's `submissions`, polled every 10 seconds, a cadence
-each `Source` holds and the owner can change
-([0007](0007-control-the-pipeline-through-custom-resources.md)). The
-pipeline records every time raw, as its source gives it, and measures each
-lag from the record:
+Start with each company's `submissions` as the notice source. How often
+each is polled isn't fixed here: it's the cadence its `Source` holds
+([0007](0007-control-the-pipeline-through-custom-resources.md)), which the
+owner sets and changes, and the scheduler applies on its next reconcile. The
+`Source` resources the chart ships for the three companies start at 10
+seconds. The pipeline records every time raw, as its source gives it, and
+measures each lag from the record:
 
 - **for each fetch,** when the request was sent and when the response
   arrived, the response's `Date`, and its `Last-Modified` when sent;
@@ -72,16 +74,23 @@ because SRC-1 and SRC-2 leave the header's zone unsettled.
   late-October reports, but any filing measures them, and the archive keeps
   the reports' content for Q2 and Q3.
 - **A filing's public availability lies between its acceptance and its
-  first-seen time.** At 10 seconds, that bounds it within about 10 seconds
-  plus the source's own delay. Over many filings, the smallest lags observed
-  approach the source's delay, because polls fall at random moments relative
-  to acceptance.
-- **The load is small.** Three companies every 10 seconds is 0.3 requests a
-  second, 6% of the limit, and 25,920 records a day in PostgreSQL. Each poll
-  downloads the whole body, 20 to 27 KB compressed, since `submissions`
-  sends no validators (SRC-4). At this cadence, half the limit covers about
-  25 companies; past that, a feed covering every company becomes the better
-  source.
+  first-seen time.** At the starting 10 seconds, that bounds it within about
+  10 seconds plus the source's own delay. Over many filings, the smallest
+  lags observed approach the source's delay, because polls fall at random
+  moments relative to acceptance.
+- **The load is small.** At the starting cadence, three companies every 10
+  seconds is 0.3 requests a second, 6% of the limit, and 25,920 records a
+  day in PostgreSQL. Each poll downloads the whole body, 20 to 27 KB
+  compressed, since `submissions` sends no validators (SRC-4). At this
+  cadence, half the limit covers about 25 companies; past that, a feed
+  covering every company becomes the better source.
+- **The controls specification gives the cadence its field and bounds,**
+  in `Source`'s `v1alpha1` schema. Its proposed default: each `Source` must
+  state its cadence, since no one default suits both a company's
+  `submissions` and the daily indexes, published once a day; the schema's
+  minimum, 1 second, rejects a cadence too fast when it's applied; and the
+  scheduler reports in each `Source`'s status when all of them together
+  would poll faster than half the fetcher's limit.
 - **The specifications record the times.** The store's version 1.0.0 adds
   the response's `Date` and arrival time to each record, and the notices
   specification defines each filing's times and the queries that give each
@@ -95,8 +104,9 @@ because SRC-1 and SRC-2 leave the header's zone unsettled.
   default: the pipeline writes the records of the git store's scope to
   `data/` in the existing format, with their bodies.
 - **The source is revisited from the lags the record shows:** whether to
-  keep each company's `submissions`, add the latest-filings feed, or change
-  the cadence. A change is a later record that supersedes this one.
+  keep each company's `submissions` or add the latest-filings feed. A new
+  source is a later record that supersedes this one; a new cadence is a
+  change to a `Source`.
 - **The investigation drops its minute-by-minute watch.**
 
 ## Sources

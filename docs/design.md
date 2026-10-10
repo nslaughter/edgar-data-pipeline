@@ -130,7 +130,8 @@ A mode is a cadence on each `Source`, not a different deployment
 ([0007](decisions/0007-control-the-pipeline-through-custom-resources.md)).
 
 - **Continuous.** Sources are polled at the cadence each `Source` holds,
-  starting with each company's `submissions` every 10 seconds
+  which the owner sets and changes. Each company's `submissions` starts at
+  10 seconds
   ([0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)).
   Three companies at that cadence is 0.3 requests a second against a limit
   of 5, but each poll downloads the whole body, since `submissions` sends no
@@ -243,7 +244,8 @@ The normative parts become specifications, one per component or boundary:
 - **The export:** its format, its determinism, and its hashes, answering the
   store's open question 3.
 - **Controls:** the `Source`, `Backfill`, and `SecAccess` resources, their
-  schemas, and who may change what.
+  schemas, including each `Source`'s cadence and its bounds, and who may
+  change what.
 - **Telemetry:** the metrics and traces each service emits, which the
   dashboards and alerts rely on, and the alerts themselves.
 - **Deployment:** pinned versions, such as PostgreSQL's major version 18,
