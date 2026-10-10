@@ -48,10 +48,10 @@ record, and each lag is a query.
 Start with each company's `submissions` as the notice source. How often
 each is polled isn't fixed here: it's the cadence its `Source` holds
 ([0007](0007-control-the-pipeline-through-custom-resources.md)), which the
-owner sets and changes, and the scheduler applies on its next reconcile. The
-`Source` resources the chart ships for the three companies start at 10
-seconds. The pipeline records every time raw, as its source gives it, and
-measures each lag from the record:
+owner sets in the umbrella chart's values, and the scheduler applies on its
+next reconcile. The chart's `Source` resources for the three companies start
+at 10 seconds. The pipeline records every time raw, as its source gives it,
+and measures each lag from the record:
 
 - **for each fetch,** when the request was sent and when the response
   arrived, the response's `Date`, and its `Last-Modified` when sent;
@@ -71,13 +71,25 @@ because SRC-1 and SRC-2 leave the header's zone unsettled.
 2. **The polling interval is configurable,** not fixed here: each
    `Source`'s cadence, starting at 10 seconds in the `Source` resources the
    chart ships.
-3. **How the controls specification bounds the cadence:** each `Source`
-   must state its cadence, since no one default suits both a company's
-   `submissions` and the daily indexes, published once a day; the schema's
-   minimum, 1 second, rejects a cadence too fast when it's applied; and the
-   scheduler reports in each `Source`'s status when all of them together
-   would poll faster than half the fetcher's limit.
-4. **How findings about arrival cite the pipeline's records:** the store's
+3. **How the cadence is bounded:** each `Source` must state its cadence,
+   since no one default suits both a company's `submissions` and the daily
+   indexes, published once a day, and the cadence is at least 1 second.
+4. **Where a configuration over the budget is blocked: in the chart.** Helm
+   is used for everything possible, so the `Source` resources come from the
+   umbrella chart's values, and a bad Helm apply is blocked before anything
+   reaches the cluster. The chart's `values.schema.json` requires each
+   cadence and its minimum, and a template check fails `helm install` or
+   `helm upgrade` when all `Source` resources together would poll faster
+   than half the fetcher's limit. Helm runs one operation on a release at a
+   time, so two changes can't both pass. For anything that reaches the
+   cluster another way, the custom resource's schema keeps the 1-second
+   minimum, and the scheduler reports in each `Source`'s status when the
+   total is over the budget.
+5. **No admission webhook for now.** If something other than the chart
+   comes to create or change `Source` resources, a webhook is added: its
+   certificates come from cert-manager, and it refuses `Source` changes
+   while no scheduler replica serves it.
+6. **How findings about arrival cite the pipeline's records:** the store's
    version 1.0.0 has the pipeline write the records of the git store's
    scope to `data/` in the existing format, with their bodies, so a finding
    cites them as it cites any stored version.
@@ -101,8 +113,8 @@ because SRC-1 and SRC-2 leave the header's zone unsettled.
   compressed, since `submissions` sends no validators (SRC-4). At this
   cadence, half the limit covers about 25 companies; past that, a feed
   covering every company becomes the better source.
-- **The controls specification gives the cadence its field and bounds,**
-  in `Source`'s `v1alpha1` schema, as the owner decided above.
+- **The controls specification and the chart give the cadence its field
+  and bounds,** as the owner decided above.
 - **The specifications record the times.** The store's version 1.0.0 adds
   the response's `Date` and arrival time to each record, and the notices
   specification defines each filing's times and the queries that give each
