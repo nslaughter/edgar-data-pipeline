@@ -5,6 +5,10 @@
       "reason": "Apple's filing history, with each filing's form, dates, and acceptance time. Apple, a Dow company, has a 52- or 53-week fiscal year ending on the last Saturday of September."
     },
     {
+      "url": "https://data.sec.gov/submissions/CIK0000320193-submissions-001.json",
+      "reason": "Apple's filings from 1994-01-26 to 2015-09-15, which `submissions` lists in this further file, not in `filings.recent`: to join the 40% of Apple's `companyfacts` values filed in those years to their acceptance times (SRC-10)."
+    },
+    {
       "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json",
       "reason": "Apple's reported financial values, each with its fiscal period and the filing that reported it: the values the bitemporal model tracks."
     },
@@ -17,6 +21,10 @@
       "reason": "Microsoft's filing history, with each filing's form, dates, and acceptance time. Microsoft, a Dow company, has a fiscal year ending June 30."
     },
     {
+      "url": "https://data.sec.gov/submissions/CIK0000789019-submissions-001.json",
+      "reason": "Microsoft's filings from 2008-08-13 to 2020-08-06, which `submissions` lists in this further file, not in `filings.recent`: to join the 64% of Microsoft's `companyfacts` values filed in those years to their acceptance times (SRC-10)."
+    },
+    {
       "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000789019.json",
       "reason": "Microsoft's reported financial values, each with its fiscal period and the filing that reported it: the values the bitemporal model tracks."
     },
@@ -27,6 +35,14 @@
     {
       "url": "https://data.sec.gov/submissions/CIK0000104169.json",
       "reason": "Walmart's filing history, with each filing's form, dates, and acceptance time. Walmart, a Dow company, has a fiscal year ending January 31, named for the calendar year it ends in."
+    },
+    {
+      "url": "https://data.sec.gov/submissions/CIK0000104169-submissions-001.json",
+      "reason": "Walmart's filings from 2012-06-05 to 2023-06-01, which `submissions` lists in this further file, not in `filings.recent`: with the file listing its earlier filings, to join the 80% of Walmart's `companyfacts` values filed before 2023-06-02 to their acceptance times (SRC-10)."
+    },
+    {
+      "url": "https://data.sec.gov/submissions/CIK0000104169-submissions-002.json",
+      "reason": "Walmart's filings from 1994-02-14 to 2012-06-04, which `submissions` lists in this further file: with the file above, to join the 80% of Walmart's `companyfacts` values filed before 2023-06-02 to their acceptance times (SRC-10)."
     },
     {
       "url": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000104169.json",
