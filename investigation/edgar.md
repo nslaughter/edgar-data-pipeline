@@ -1,9 +1,10 @@
 # Source investigation: EDGAR
 
 **Status:** Started October 7, 2026. The baseline was fetched October 7;
-five findings so far. Since October 10, how soon each feed shows a new
-filing (Q4) is measured from the pipeline's record. Data here comes from the
-U.S. Securities and Exchange Commission's EDGAR system.
+eleven findings so far, the last six, on fiscal periods and joins, read
+from it on October 10. Since October 10, how soon each feed shows a new
+filing (Q4) is measured from the pipeline's record. Data here comes from
+the U.S. Securities and Exchange Commission's EDGAR system.
 
 This document records how EDGAR's feeds and filings behave, each finding
 shown by versions in the snapshot store
@@ -160,6 +161,17 @@ accession number's dashes removed; the header is
 | Walmart | 10-Q | 0000104169-26-000154 | `0bc822d86b45` 17:41:47.626Z | `dd6bc42dc512` 17:41:09.456Z |
 | Walmart | 8-K/A | 0000104169-26-000028 | `91aa33498ef4` 17:41:48.242Z | `7408a912ac83` 17:41:09.665Z |
 
+The XBRL instances of the six 10-Ks and 10-Qs, in the same directories:
+
+| Company | Form | Instance | Record |
+| --- | --- | --- | --- |
+| Apple | 10-K | `aapl-20250927_htm.xml` | `e1076735f1c8` 17:41:43.991Z |
+| Apple | 10-Q | `aapl-20260627_htm.xml` | `28f986bb243c` 17:41:44.837Z |
+| Microsoft | 10-K | `msft-20260630_htm.xml` | `56e56d82ee2d` 17:41:46.095Z |
+| Microsoft | 10-Q | `msft-20260331_htm.xml` | `d9c4e6b92fcc` 17:41:46.815Z |
+| Walmart | 10-K | `wmt-20260131_htm.xml` | `07c72faa90cf` 17:41:47.464Z |
+| Walmart | 10-Q | `wmt-20260731_htm.xml` | `2e39345b995e` 17:41:48.099Z |
+
 The quarter's daily index listing, in `daily-index` at
 `https://www.sec.gov/Archives/edgar/daily-index/2026/QTR4/index.json`:
 `b2627c1a365d` 17:40:47.727Z.
@@ -220,3 +232,107 @@ The quarter's daily index listing, in `daily-index` at
   given. The quarter's listing, fetched at 17:40:47.727Z, 1:40 PM US
   Eastern, held October 1, 2, 5, and 6, and not yet October 7.
   Shown by the daily index listing in the records cited.
+- **SRC-6** (Q2) `companyfacts`' `fy` and `fp` are the fiscal year and
+  period of the filing that reported a value, not of the value. In all 216
+  accession numbers of the three companies, every value with the same
+  `accn` has the same `fy`, `fp`, `form`, and `filed`, whatever its own
+  dates. Apple's 10-K for the year ending 2025-09-27 gives `fy` 2025 and
+  `fp` `FY` to all 427 of its values, whose `end` runs from 2022-09-24 to
+  2025-10-17; 187 of them end on 2025-09-27. In the 86 filings that
+  `submissions` lists (SRC-9), 46% of the values end on the filing's
+  `reportDate`. In each of the six 10-Ks and 10-Qs whose XBRL instances are
+  stored, `fy` and `fp` are the instance's `dei:DocumentFiscalYearFocus`
+  and `dei:DocumentFiscalPeriodFocus`, and `reportDate` is its
+  `dei:DocumentPeriodEndDate`. Six filings give a null `fy` and `fp` to
+  all 1,828 of their values: three 8-Ks, Apple's of 2015-01-28 and
+  Microsoft's of 2015-10-27 and 2024-12-03, and Walmart's PRE 14A, DEF 14A,
+  and 424B2 of April 2026. A value's own period is given by its `start`,
+  for a duration, and its `end` (SRC-7), though a duration that starts and
+  ends on the same day has no `start` (SRC-11). Its `frame`, when it has
+  one, is a calendar period matched to the value's, whose dates can differ
+  from the value's own (SRC-8).
+  Shown by the three `companyfacts` and `submissions` records and the six
+  XBRL instances in the records cited.
+- **SRC-7** (Q2) `fy` names a fiscal year by the calendar year it ends in,
+  except in Walmart's filings through March 2014, and `fp` numbers a 10-Q's
+  quarter from the start of the fiscal year. Apple's and Microsoft's 10-Ks
+  and 10-Qs since 2009 all do so: Apple's quarter ending 2025-12-27 is `fy`
+  2026, `fp` `Q1`, and so is Microsoft's ending 2025-09-30. Walmart's 20
+  filings from 2009-09-09 to 2014-03-21 name the year it began in, so the
+  10-K for the year ending 2014-01-31 gives `fy` 2013. Its 50 10-Ks and
+  10-Qs since, from the 10-Q of 2014-06-06, name the year it ends in, so
+  the quarter ending 2014-04-30 is `fy` 2015, `fp` `Q1`, and no Walmart
+  filing gives `fy` 2014. A value's `start` and `end` are the first and
+  last days of its period: Microsoft's years run from July 1 to June 30,
+  and Walmart's from February 1 to January 31. Apple's last 52 or 53
+  weeks, 364 or 371 days, and end on a Saturday from September 24 to 30:
+  on `submissions`' `fiscalYearEnd`, `0926` (SRC-3), in 3 of its 17 years
+  since 2009, after it in 9, and before it in 5.
+  Shown by the three `companyfacts` and `submissions` records in the
+  records cited.
+- **SRC-8** (Q2) A value's `frame` is a calendar period matched to the
+  value's own, not that period itself and not a fiscal one, and only some
+  values have one. It is `CY` and a year, then `Q1` to `Q4` for a quarter,
+  then `I` for an instant. An `I` frame is the calendar quarter end
+  nearest the value's `end`, from 32 days before it to 42 days after:
+  Walmart's instant of 2026-01-31 is `CY2025Q4I`, and Microsoft's
+  `EntityCommonStockSharesOutstanding` of 2010-01-25 is `CY2009Q4I`. All
+  but one of the 16,248 values with an `I` frame have no `start`, the one
+  being Walmart's `CommonStockDividendsPerShareDeclared` from 2015-02-18
+  to 2015-02-19, and a value with no `start` can be a duration (SRC-11),
+  so an `I` frame doesn't show that a value is an instant. A quarter's
+  frame is the calendar quarter holding most of it: Walmart's from
+  2025-02-01 to 2025-04-30 is `CY2025Q1`, and Microsoft's ending
+  2025-09-30, `fy` 2026 `Q1`, is `CY2025Q3`. A year's is the calendar year
+  it begins in for Walmart's years, which end on January 31, and the one
+  it ends in for Apple's and Microsoft's: Walmart's year ending
+  2026-01-31, `fy` 2026, is `CY2025`, and Microsoft's from 2025-07-01 to
+  2026-06-30, `fy` 2026, is `CY2026`, though 184 of its days fall in 2025.
+  39% of Apple's values have a `frame`, 42% of Microsoft's, and 37% of
+  Walmart's, and no two values of the same concept and unit have the same
+  one. Which of the values reported for a period has it is for Q3.
+  Shown by the three `companyfacts` records in the records cited.
+- **SRC-9** (Q2) A value's `accn` joins it to its filing in `submissions`'
+  `filings.recent`, and so to that filing's `acceptanceDateTime`, whenever
+  `recent` holds the filing. `recent` holds 1,000 of Apple's filings, from
+  2015-09-17; 1,002 of Microsoft's, from 2020-08-07; and 1,000 of
+  Walmart's, from 2023-06-02. The 86 accession numbers in `companyfacts`
+  filed since then are all in `recent`, with the same `form`, and with a
+  `filingDate` equal to `filed`; they hold 31,807 of the three companies'
+  82,991 values, 38%. Every 10-K and 10-Q in `recent` has values in
+  `companyfacts`. For 13 of Apple's 44, filed from 2015-10-28 to
+  2019-07-31, `acceptanceDateTime` is on the day after `filed`, between
+  00:31 and 02:34 UTC, as SRC-2 found for Apple's 8-K/A; for none of
+  Microsoft's or Walmart's. Of the eight filings whose headers are stored,
+  the six 10-Ks and 10-Qs have values, each with its header's
+  `FILED AS OF DATE` as `filed`, and the two 8-K/As have none.
+  Shown by the three `companyfacts` and `submissions` records and the
+  eight headers in the records cited.
+- **SRC-10** (Q2) The stored `submissions` join the rest of the values,
+  51,184 or 62%, to no filing and no acceptance time. Their 130 accession
+  numbers were all filed before `recent`'s first filing: from 2009-07-22 to
+  2015-07-22 for Apple, 40% of its values; from 2009-10-23 to 2020-07-30
+  for Microsoft, 64%; and from 2009-09-09 to 2023-03-17 for Walmart, 80%.
+  Each one's filing date lies within the dates of a further file that
+  `submissions` names in `filings.files`, such as
+  `CIK0000320193-submissions-001.json`, which the scope doesn't cover, so
+  whether those files list them is still to be shown. On three days Apple
+  made two filings with values, all among these, so `filed` doesn't order
+  them: 2010-01-25, 2013-04-24, and 2015-01-28.
+  Shown by the three `companyfacts` and `submissions` records in the
+  records cited.
+- **SRC-11** (Q2) `companyfacts` gives a duration that starts and ends on
+  the same day as it gives an instant, with an `end` and no `start`. In
+  the six 10-Ks and 10-Qs whose XBRL instances are stored, all but three
+  of the 2,641 values have their context's dates: its `startDate` and
+  `endDate` as their `start` and `end`, or its `instant` as their `end`.
+  The three are Microsoft's `GoodwillImpairmentLoss` values of 0 in its
+  10-K for the year ending 2026-06-30, whose contexts start and end on
+  May 1 of 2024, 2025, and 2026: each has only an `end`, and an `I` frame,
+  `CY2024Q1I`, `CY2025Q1I`, and `CY2026Q1I` (SRC-8). So a value with no
+  `start` isn't always an instant. In the three companies' `companyfacts`,
+  59 values of four concepts, in 31 filings, have no `start` while the
+  same company's other values of that concept do; these three are the
+  only ones in a filing whose instance is stored.
+  Shown by the three `companyfacts` records and the six XBRL instances in
+  the records cited.
