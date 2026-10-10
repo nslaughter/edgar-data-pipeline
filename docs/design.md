@@ -1,6 +1,6 @@
 # Design: the EDGAR data pipeline
 
-**Status:** Draft, October 9, 2026. This document explains the pipeline's
+**Status:** Draft, October 10, 2026. This document explains the pipeline's
 architecture and the reasons for it. It makes no rules: the specifications
 under [`spec/`](../spec/) govern, the records under
 [`docs/decisions/`](decisions/) record each significant choice, and
@@ -42,9 +42,18 @@ be shown: that a filing's archived files never change after acceptance
 
 | Time | Where it comes from | After an outage |
 | --- | --- | --- |
-| Acceptance | The filing's header, `ACCEPTANCE-DATETIME` (SRC-1); its time zone is still to be established | Unaffected: it is read from the filing whenever the filing is fetched |
-| Public availability | Not stated by the SEC; the investigation measures it (Q4) | Estimated from acceptance and the measured delay |
-| First seen | The pipeline's first poll that showed the filing | Bounded: after the last successful poll before the gap, and at or before the first poll after it; flagged as a gap |
+| Acceptance | The filing's header, `ACCEPTANCE-DATETIME` (SRC-1), with `submissions`' `acceptanceDateTime` beside it (SRC-2); both kept as given, since the header's time zone is still to be established | Unaffected: it is read from the filing whenever the filing is fetched |
+| Public availability | Not stated by the SEC. It lies between acceptance and first seen, and the record measures the delay (Q4, [0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)) | Estimated from acceptance and the measured delay |
+| First seen | For each source, the pipeline's first poll that showed the filing, after the last that didn't | Bounded: after the last successful poll before the gap, and at or before the first poll after it; flagged as a gap |
+
+The record keeps every time raw, as its source gives it, and interprets
+time zones in queries
+([0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)):
+for each fetch, when it was sent and when the response arrived, with the
+response's `Date` and `Last-Modified`; for each filing, both acceptance
+times as given; and for each source, the polls that bound when it first
+showed the filing. Each lag, from acceptance to each source and on to the
+facts, is then a query, and its distribution a dashboard.
 
 A fact also has a valid time: the fiscal period or instant it describes.
 
@@ -120,10 +129,14 @@ filing through every step, across both languages
 A mode is a cadence on each `Source`, not a different deployment
 ([0007](decisions/0007-control-the-pipeline-through-custom-resources.md)).
 
-- **Continuous.** Sources are polled at a cadence the investigation will
-  set (Q4). Polling three companies every minute is 3 requests a minute
-  against a limit of 5 a second, but each poll downloads the whole body,
-  since `submissions` sends no validators (SRC-4).
+- **Continuous.** Sources are polled at the cadence each `Source` holds,
+  which the owner sets in the chart's values. Each company's `submissions`
+  starts at 10 seconds
+  ([0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)).
+  Three companies at that cadence is 0.3 requests a second against a limit
+  of 5, but each poll downloads the whole body, since `submissions` sends no
+  validators (SRC-4). The cadence changes as the record shows how soon each
+  source shows a new filing.
 - **Daily.** Sources are polled once a day, and the same workers drain each
   round.
 
@@ -144,6 +157,11 @@ dashboard
   fetcher records the stop here, and fetching resumes only when the owner
   acknowledges it.
 
+The owner changes them through the umbrella chart's values with
+`helm upgrade`, as everything on the cluster is changed. The chart refuses a
+configuration whose `Source` resources together would poll faster than half
+the fetcher's limit, before anything reaches the cluster
+([0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)).
 RBAC lets the owner change the resources and the services change only their
 status, so each control is kept by the API server, survives restarts, and
 shows in `kubectl get` and in Grafana. While fetching is paused or stopped,
@@ -174,7 +192,7 @@ The pipeline reports:
 
 - for each source, polls that succeeded and failed, and the time since the
   last success;
-- for each filing, the delay from acceptance to first seen;
+- for each filing and each source, the delay from acceptance to first seen;
 - open gaps and their lengths;
 - queue depth, redeliveries, and consumer lag;
 - the fetcher's request rate, retries, `403`s, and which pod holds the
@@ -185,10 +203,11 @@ The pipeline reports:
   kube-state-metrics.
 
 Grafana also reads the record from PostgreSQL, through views made for it:
-coverage over time with gaps as bands, and each filing's times from
-acceptance to facts available. Alerts fire on a `403`, on a gap longer than
-its source's cadence, and on a backup more than a day old, and `promtool`
-tests them in CI.
+coverage over time with gaps as bands, each source's lag from acceptance
+as a distribution, and each filing's times from acceptance to facts
+available. Alerts fire on a `403`, on a gap longer than its source's
+cadence, and on a backup more than a day old, and `promtool` tests them in
+CI.
 
 Tempo comes next, with one trace per filing from the poll that first saw it
 to its facts, carried through NATS in message headers. Loki, fed by Alloy,
@@ -217,15 +236,21 @@ The normative parts become specifications, one per component or boundary:
 - **`spec/snapshots.md`, a new major version:** the store's guarantees on
   Garage and PostgreSQL as well as git; the rate limit and the one-process
   rule across the cluster, through the Lease (FETCH-6, FETCH-7); the
-  user agent from a Secret (FETCH-2, ID-1); and how `data/scope.json`
-  relates to `Source` resources.
-- **Notices:** the discoverer's messages, filings' first-seen times,
-  coverage, and gaps.
+  user agent from a Secret (FETCH-2, ID-1); how `data/scope.json`
+  relates to `Source` resources; each response's `Date` and arrival time
+  ([0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md));
+  and how the records of the git store's scope reach `data/`, so findings
+  can cite them: the owner decided that the pipeline writes them there in
+  the existing format, with their bodies.
+- **Notices:** the discoverer's messages; each filing's times, raw, with
+  the polls that bound when each source first showed it; coverage; gaps;
+  and the queries that give each lag.
 - **Facts:** the fact table, its times, and what "as of T" returns.
 - **The export:** its format, its determinism, and its hashes, answering the
   store's open question 3.
 - **Controls:** the `Source`, `Backfill`, and `SecAccess` resources, their
-  schemas, and who may change what.
+  schemas, including each `Source`'s cadence and its bounds, which the
+  chart checks before it applies them, and who may change what.
 - **Telemetry:** the metrics and traces each service emits, which the
   dashboards and alerts rely on, and the alerts themselves.
 - **Deployment:** pinned versions, such as PostgreSQL's major version 18,
@@ -234,8 +259,11 @@ The normative parts become specifications, one per component or boundary:
 ## What waits on the investigation
 
 - Which acceptance time to trust, and its time zone (SRC-1, SRC-2).
-- The notice source and its cadence: `submissions`, the daily indexes, or
-  EDGAR's latest-filings feed, and how soon each shows a new filing (Q4).
+- Whether to keep each company's `submissions` as the notice source, add
+  EDGAR's latest-filings feed, or change the cadence
+  ([0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)):
+  how soon each shows a new filing (Q4), which the pipeline's record
+  measures once it runs.
 - How fiscal periods map to facts (Q2, SRC-3), and how restatements appear
   (Q3).
 - Whether archived files ever change (Q1).
@@ -244,5 +272,5 @@ The normative parts become specifications, one per component or boundary:
 ## Decisions
 
 See [`docs/decisions/`](decisions/) for each record and its status.
-Decisions still to come: scaling workers by queue depth, the XBRL parser,
-and the notice source and its cadence.
+Decisions still to come: scaling workers by queue depth and the XBRL
+parser.
