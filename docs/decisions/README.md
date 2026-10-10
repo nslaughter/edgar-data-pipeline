@@ -19,7 +19,7 @@ A record's status is **Proposed** until the owner accepts it, then
 | [0007](0007-control-the-pipeline-through-custom-resources.md) | Control the pipeline through custom resources, reconciled by the scheduler | Accepted |
 | [0008](0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md) | Monitor with Prometheus and Grafana, then Tempo and Loki | Accepted |
 | [0009](0009-read-edgar-through-a-public-point-in-time-library.md) | Read EDGAR through a public point-in-time library, in its own repository | Accepted |
+| [0010](0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md) | Poll each company's `submissions` every 10 seconds, and measure lag from the record | Proposed |
 
-Decisions still to come: scaling workers by queue depth, the XBRL parser,
-and the notice source and its cadence, which waits on the source
-investigation.
+Decisions still to come: scaling workers by queue depth and the XBRL
+parser. 0010 proposes the notice source and its cadence.

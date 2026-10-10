@@ -1,8 +1,9 @@
 # Source investigation: EDGAR
 
 **Status:** Started October 7, 2026. The baseline was fetched October 7;
-five findings so far. Data here comes from the U.S. Securities and Exchange
-Commission's EDGAR system.
+five findings so far. Since October 10, how soon each feed shows a new
+filing (Q4) is measured from the pipeline's record. Data here comes from the
+U.S. Securities and Exchange Commission's EDGAR system.
 
 This document records how EDGAR's feeds and filings behave, each finding
 shown by versions in the snapshot store
@@ -50,14 +51,15 @@ expected to hold; findings say what it does hold.
    index costs a `304`. Continue through each company's next periodic
    report: Microsoft's and Apple's are expected in late October or early
    November, and Walmart's after its quarter ends October 31.
-3. **Watch a filing arrive.** Around Microsoft's and Apple's next periodic
-   reports, poll that company's `submissions` and `companyfacts` every
-   minute, from before the time of day its earlier filings were accepted
-   (SRC-1) until both show the new filing. This measures how long after
-   acceptance each feed shows it, which a daily refetch can't.
+3. **Arrival, from the pipeline's record.** How long after acceptance each
+   feed shows a new filing is measured from the pipeline's record once its
+   fetcher and discoverer run, not by polling by hand
+   ([0010](../docs/decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)).
+   The record keeps every time raw, and each lag is a query over it. A
+   finding about arrival cites the records it rests on once they reach the
+   store, as the store's version 1.0.0 will say.
 4. **New filings.** When a company files a 10-K, a 10-Q, or an amendment,
-   fetch its filing index, header, and XBRL instance, and note when it first
-   appears in each feed.
+   fetch its filing index, header, and XBRL instance.
 5. **Findings.** Write each finding as the versions show it, and commit it
    with the store it cites, after `uv run scripts/verify.py`.
 
@@ -93,8 +95,12 @@ Each question says what the pipeline's specification needs from it.
   appears in `submissions`, `companyfacts`, and the daily index; when a
   day's index is published; and whether a published index changes. EDGAR's
   latest-filings feed is a further candidate, once its URL is confirmed and
-  the scope widened to cover it. Decides where the pipeline's notices of new
-  filings come from, and how often it polls.
+  the scope widened to cover it. The pipeline's record measures how soon
+  each feed shows a filing (method, step 3), and the daily refetches show
+  when indexes are published and whether they change. Decides whether the
+  pipeline keeps the notice source it starts with
+  ([0010](../docs/decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)),
+  and how often it polls.
 - **Q5. Sizes and pace.** Bytes per URL and per filing, growth per refetch,
   and the requests and time a backfill of one company's filings takes at 5
   requests a second. Sets the store's budget and says whether the pace
