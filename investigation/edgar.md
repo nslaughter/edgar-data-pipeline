@@ -1,9 +1,11 @@
 # Source investigation: EDGAR
 
 **Status:** Started October 7, 2026. The baseline was fetched October 7;
-eleven findings so far, the last six, on fiscal periods and joins, read
-from it on October 10. Since October 10, how soon each feed shows a new
-filing (Q4) is measured from the pipeline's record. Data here comes from
+thirteen findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
+were read from it on October 10. SRC-12 and SRC-13, on `submissions`'
+further files and its acceptance times, were read from them and the
+baseline once they were fetched on October 10. Since October 10, how soon
+each feed shows a new filing (Q4) is measured from the pipeline's record. Data here comes from
 the U.S. Securities and Exchange Commission's EDGAR system.
 
 This document records how EDGAR's feeds and filings behave, each finding
@@ -176,6 +178,19 @@ The quarter's daily index listing, in `daily-index` at
 `https://www.sec.gov/Archives/edgar/daily-index/2026/QTR4/index.json`:
 `b2627c1a365d` 17:40:47.727Z.
 
+The further `submissions` files that each company's `submissions` names in
+`filings.files`, fetched on October 10, 2026 by `scripts/snapshot.py` at
+commit `02b4946`, in `submissions` at
+`https://data.sec.gov/submissions/FILE`. Microsoft's second file,
+`CIK0000789019-submissions-002.json`, is outside the scope:
+
+| Company | File | Filing dates | Record |
+| --- | --- | --- | --- |
+| Apple | `CIK0000320193-submissions-001.json` | 1994-01-26 to 2015-09-11 | `4995251b37e0` 16:57:28.443Z |
+| Microsoft | `CIK0000789019-submissions-001.json` | 2008-08-13 to 2020-08-05 | `de768837e664` 16:57:28.887Z |
+| Walmart | `CIK0000104169-submissions-001.json` | 2012-06-05 to 2023-05-26 | `7a164befa763` 16:57:29.177Z |
+| Walmart | `CIK0000104169-submissions-002.json` | 1994-02-14 to 2012-06-04 | `e162c62bfcae` 16:57:29.338Z |
+
 ### Findings so far
 
 - **SRC-1** (Q2) A filing's header gives its acceptance time as
@@ -336,3 +351,46 @@ The quarter's daily index listing, in `daily-index` at
   only ones in a filing whose instance is stored.
   Shown by the three `companyfacts` records and the six XBRL instances in
   the records cited.
+- **SRC-12** (Q2) `submissions`' further files list a company's older
+  filings in the same 16 columns as `filings.recent`, and with them every
+  `companyfacts` value of the three companies joins to a filing and its
+  `acceptanceDateTime`. Each further file is a JSON object of those
+  columns, each a list as long as the `filingCount` that `filings.files`
+  gives the file, and no accession number is in two of a company's lists.
+  A file's earliest `filingDate` is its `filingFrom`, but its latest can be
+  earlier than its `filingTo`: Apple's file ends on 2015-09-11, not
+  2015-09-15; Microsoft's first on 2020-08-05, not 2020-08-06; and
+  Walmart's first on 2023-05-26, not 2023-06-01. Every `acceptanceDateTime`
+  in them is RFC 3339 with a `Z` and milliseconds of `.000`, as in
+  `filings.recent` (SRC-2). They list all 130 accession numbers that
+  SRC-10 joined to no filing: Apple's 28 in its file, Microsoft's 46 in its
+  first, and Walmart's 56 in its two, each with the same `form` and with a
+  `filingDate` equal to `filed`, as SRC-9 found for `filings.recent`. So
+  all 82,991 values join, the 51,184 of SRC-10 through the further files.
+  Microsoft's second file, which lists its filings from 1994-02-14 to
+  2008-08-12, before any of its values, isn't needed for them.
+  Shown by the three `submissions` records and the four further files in
+  the records cited.
+- **SRC-13** (Q2) Read as the UTC instants they state, `submissions`'
+  `acceptanceDateTime` values put most of Apple's filings, and most of
+  Walmart's before June 2023, outside the hours the SEC gives for EDGAR:
+  6:00 a.m. to 10:00 p.m. Eastern Time on business days
+  ([EDGAR Filer Manual, Volume II, §2.3.1](https://www.sec.gov/files/edgar/filermanual/efmvol2-c2.pdf)).
+  1,371 of Apple's 2,126 filings since 2003 fall outside them, 1,088 after
+  10 p.m., in `filings.recent` and its further file alike. 1,732 of
+  Walmart's 3,274 filings from 2003 to 2023-05-26, in its further files,
+  fall outside them, but none of the 1,000 in its `filings.recent`, which
+  begins on 2023-06-02. Only 3 of Microsoft's 3,004 filings since 2008 do,
+  all `EFFECT` notices that the SEC files itself, with accession numbers
+  beginning `9999999995`, at 00:15 Eastern Time. Moved 8 hours earlier,
+  the difference SRC-2 found between Apple's `submissions` and its
+  headers, and read as Eastern Time, all but 53 of those Apple filings and
+  all but 30 of those Walmart filings fall within EDGAR's hours. Read as
+  Eastern Time, all eight stored headers' times do (SRC-1). Before 2003,
+  130 of Apple's 138 filings and 118 of Walmart's 147 have an
+  `acceptanceDateTime` of exactly 08:00:00 or 10:00:00 UTC, which no later
+  filing of the three companies has. So, read as UTC, `acceptanceDateTime`
+  isn't the time of acceptance for at least the filings it puts outside
+  EDGAR's hours, and `submissions` doesn't mark which values are affected.
+  Shown by the three `submissions` records, the four further files, and
+  the eight headers in the records cited.
