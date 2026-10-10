@@ -93,6 +93,9 @@ a 403.
 
 ## Related projects and writing
 
+- [edgar-asof](https://github.com/nslaughter/edgar-asof): the point-in-time
+  library this pipeline's Python services will read EDGAR through
+  ([decision 0009](docs/decisions/0009-read-edgar-through-a-public-point-in-time-library.md)).
 - [financial-data-api](https://github.com/nslaughter/financial-data-api): a
   REST API for a synthetic dataset with revision history and queries as of a
   past date.
@@ -108,3 +111,9 @@ and research or analysis workflow.
 [Discuss a data ingestion project](https://www.linkedin.com/in/nathan-slaughter)
 with the source, intended storage, approximate volume, and freshness and
 recovery needs.
+
+## License
+
+The code and documents are under the [MIT License](LICENSE). Data under
+`data/` comes from the SEC's EDGAR system, as [Using EDGAR data](#using-edgar-data)
+describes.

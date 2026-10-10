@@ -18,6 +18,7 @@ A record's status is **Proposed** until the owner accepts it, then
 | [0006](0006-write-the-services-in-go-and-python.md) | Write the services in Go and Python, divided by whether they read EDGAR's content | Accepted |
 | [0007](0007-control-the-pipeline-through-custom-resources.md) | Control the pipeline through custom resources, reconciled by the scheduler | Accepted |
 | [0008](0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md) | Monitor with Prometheus and Grafana, then Tempo and Loki | Accepted |
+| [0009](0009-read-edgar-through-a-public-point-in-time-library.md) | Read EDGAR through a public point-in-time library, in its own repository | Accepted |
 
 Decisions still to come: scaling workers by queue depth, the XBRL parser,
 and the notice source and its cadence, which waits on the source
