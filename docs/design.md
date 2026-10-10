@@ -235,8 +235,8 @@ The normative parts become specifications, one per component or boundary:
   relates to `Source` resources; each response's `Date` and arrival time
   ([0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md));
   and how the records of the git store's scope reach `data/`, so findings
-  can cite them. The proposed default is that the pipeline writes them
-  there in the existing format, with their bodies.
+  can cite them: the owner decided that the pipeline writes them there in
+  the existing format, with their bodies.
 - **Notices:** the discoverer's messages; each filing's times, raw, with
   the polls that bound when each source first showed it; coverage; gaps;
   and the queries that give each lag.
@@ -269,5 +269,3 @@ The normative parts become specifications, one per component or boundary:
 See [`docs/decisions/`](decisions/) for each record and its status.
 Decisions still to come: scaling workers by queue depth and the XBRL
 parser.
-[0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)
-proposes the notice source and its cadence.

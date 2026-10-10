@@ -1,6 +1,6 @@
 # 10. Poll each company's `submissions`, and measure lag from the record
 
-**Status:** Proposed, October 10, 2026.
+**Status:** Accepted, October 10, 2026.
 
 ## Context
 
@@ -65,6 +65,23 @@ Time zones are interpreted in queries, not when times are written, as
 ([0009](0009-read-edgar-through-a-public-point-in-time-library.md)),
 because SRC-1 and SRC-2 leave the header's zone unsettled.
 
+## What the owner decided
+
+1. **This record,** accepted on October 10, 2026.
+2. **The polling interval is configurable,** not fixed here: each
+   `Source`'s cadence, starting at 10 seconds in the `Source` resources the
+   chart ships.
+3. **How the controls specification bounds the cadence:** each `Source`
+   must state its cadence, since no one default suits both a company's
+   `submissions` and the daily indexes, published once a day; the schema's
+   minimum, 1 second, rejects a cadence too fast when it's applied; and the
+   scheduler reports in each `Source`'s status when all of them together
+   would poll faster than half the fetcher's limit.
+4. **How findings about arrival cite the pipeline's records:** the store's
+   version 1.0.0 has the pipeline write the records of the git store's
+   scope to `data/` in the existing format, with their bodies, so a finding
+   cites them as it cites any stored version.
+
 ## Consequences
 
 - **Q4 is answered from the record,** once the fetcher and the discoverer
@@ -85,12 +102,7 @@ because SRC-1 and SRC-2 leave the header's zone unsettled.
   cadence, half the limit covers about 25 companies; past that, a feed
   covering every company becomes the better source.
 - **The controls specification gives the cadence its field and bounds,**
-  in `Source`'s `v1alpha1` schema. Its proposed default: each `Source` must
-  state its cadence, since no one default suits both a company's
-  `submissions` and the daily indexes, published once a day; the schema's
-  minimum, 1 second, rejects a cadence too fast when it's applied; and the
-  scheduler reports in each `Source`'s status when all of them together
-  would poll faster than half the fetcher's limit.
+  in `Source`'s `v1alpha1` schema, as the owner decided above.
 - **The specifications record the times.** The store's version 1.0.0 adds
   the response's `Date` and arrival time to each record, and the notices
   specification defines each filing's times and the queries that give each
@@ -99,10 +111,8 @@ because SRC-1 and SRC-2 leave the header's zone unsettled.
   against the SEC's `Date`. Until the header's zone is settled, Apple's
   8-hour difference (SRC-2) shows in the lag queries as an outlier.
 - **Findings about arrival rest on the pipeline's records,** which live in
-  the cluster. The store's version 1.0.0 says how they reach `data/`, so a
-  finding can cite them as it cites any stored version. Its proposed
-  default: the pipeline writes the records of the git store's scope to
-  `data/` in the existing format, with their bodies.
+  the cluster. The store's version 1.0.0 specifies how they reach `data/`,
+  as the owner decided above.
 - **The source is revisited from the lags the record shows:** whether to
   keep each company's `submissions` or add the latest-filings feed. A new
   source is a later record that supersedes this one; a new cadence is a
