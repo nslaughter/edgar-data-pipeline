@@ -9,6 +9,7 @@ EDGAR's feeds and verify the stored versions.
 | Document | Governs |
 | --- | --- |
 | [`spec/snapshots.md`](spec/snapshots.md) | Everything under `data/`: the layout, records, versions, history, scope, how fetches are made, and import manifests, as numbered statements with an index. `scripts/snapshot.py` implements its rules and `scripts/verify.py` checks its invariants. |
+| [`spec/deployment.md`](spec/deployment.md) | What the umbrella Helm chart under `deploy/` installs and at which versions: its dependencies, the pins of every chart, image, and tool, and PostgreSQL's major version 18, as numbered statements with an index. The chart and its tests are still to be written. |
 | [`investigation/edgar.md`](investigation/edgar.md) | What EDGAR's feeds and filings do: the investigation's scope, method, and questions, and findings with IDs that cite the stored versions showing them. The pipeline's specification depends on EDGAR only through these findings. |
 | [`docs/design.md`](docs/design.md) | Nothing; it explains. The pipeline's architecture on Kubernetes, the record it keeps and its times, and what waits on the investigation. [`docs/decisions/`](docs/decisions/) records each significant choice and its status. |
 | [`docs/plan.md`](docs/plan.md) | Nothing; it orders the work. The tasks that build the pipeline, in order, what each depends on, and which are done. [Doing the next item](#doing-the-next-item) takes the next task from it. |
@@ -20,6 +21,7 @@ Each document makes one kind of claim, and its directory says which.
 ```text
 spec/                    normative: numbered statements that code and tests cite
   snapshots.md           the snapshot store
+  deployment.md          what the umbrella chart installs, and its pins
   NAME.md                one per component, or boundary between components
   schemas/               machine-readable contracts that statements name
 docs/
