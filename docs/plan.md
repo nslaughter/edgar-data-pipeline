@@ -1,8 +1,8 @@
 # Plan: the EDGAR data pipeline
 
-**Status:** October 11, 2026. T1 to T3 are done. The next is T4, a run
-against the SEC that waits for the owner to ask for it; the first task
-ready without the owner is T13.
+**Status:** October 11, 2026. T1 to T3 and T13 are done. The next is T4, a
+run against the SEC that waits for the owner to ask for it; the first task
+ready without the owner is T14.
 
 The tasks that build the pipeline, in the order they're to be done, and
 which are done. When the owner asks for the next item, an agent takes the
@@ -70,7 +70,7 @@ into smaller tasks once its specifications are written.
 
 | ID | Task | Depends on | Done |
 | --- | --- | --- | --- |
-| T13 | **Deployment, `spec/deployment.md`.** The pinned charts, operators, and images, PostgreSQL's major version 18 among them, and the chart tests that check them ([0001](decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md), [0004](decisions/0004-keep-the-record-in-postgresql-18.md)). As the second specification, it extends `tests/test_spec_coverage.py` to every `spec/*.md`. | — | |
+| T13 | **Deployment, `spec/deployment.md`.** The pinned charts, operators, and images, PostgreSQL's major version 18 among them, and the chart tests that check them ([0001](decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md), [0004](decisions/0004-keep-the-record-in-postgresql-18.md)). As the second specification, it extends `tests/test_spec_coverage.py` to every `spec/*.md`. | — | October 11, 2026: version 0.1.0, whose tests T20 writes |
 | T14 | **Controls, `spec/controls.md`.** The `Source`, `Backfill`, and `SecAccess` resources, their `v1alpha1` schemas in `spec/schemas/`, including each `Source`'s cadence and its bounds, which the chart checks before it applies them, and who may change what ([0007](decisions/0007-control-the-pipeline-through-custom-resources.md), [0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)). | 0010 | |
 | T15 | **The snapshot store's version 1.0.0.** A major version of [`spec/snapshots.md`](../spec/snapshots.md): its guarantees on Garage and PostgreSQL as well as git, the rate limit and one process through the Lease (FETCH-6, FETCH-7), the user agent from a Secret (FETCH-2, ID-1), how `data/scope.json` relates to `Source` resources, each response's `Date` and arrival time, how the records of the git store's scope reach `data/` so findings can cite them, how `edgar-asof`'s cache relates to the store, and how data written under version 0.2.0 is read. | T14, 0010 | |
 | T16 | **Notices, `spec/notices.md`.** The discoverer's messages; each filing's times, raw, with the polls that bound when each source first showed it; coverage and gaps; and the queries that give each lag. | T15, 0010 | |
