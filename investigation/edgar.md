@@ -459,14 +459,17 @@ finding relies on a record's time to within a second.
   of the changes are arithmetic matches: both values are nonzero, and one
   equals the other rounded half-up, with halves rounded away from zero,
   at the place of the coarser value's last nonzero digit. Of the 107, the
-  stored instances give both values' `decimals` for only 3. In two, the
-  reported precision falls. Apple's `LongTermDebt` at 2025-09-27 is
-  90,678,000,000 in its 10-K for the year ending then, to `decimals` -6 in
-  its instance, and 90,700,000,000 in its three 10-Qs since, to -8 in the
-  instance of the last. Walmart's `SupplierFinanceProgramObligation` at
-  2026-01-31 is 5,989,000,000 in its 10-K for the year ending then, to -6
-  in its instance, and 6,000,000,000 in its two 10-Qs since, to -8 in the
-  instance of the last. The third is a restatement at the same precision:
+  stored instances give both amounts' `decimals`, each from the filing
+  that reported it or a later one that repeats it, for only 3. In two,
+  the precision falls from the 10-K's instance to a later 10-Q's, and the
+  10-Q that made the change has no stored instance. Apple's
+  `LongTermDebt` at 2025-09-27 is 90,678,000,000 in its 10-K for the year
+  ending then, to `decimals` -6 in its instance, and 90,700,000,000 in
+  its three 10-Qs since, to -8 in the instance of the last. Walmart's
+  `SupplierFinanceProgramObligation` at 2026-01-31 is 5,989,000,000 in
+  its 10-K for the year ending then, to -6 in its instance, and
+  6,000,000,000 in its two 10-Qs since, to -8 in the instance of the
+  last. The third is a restatement at the same precision:
   Microsoft's `DividendsCommonStockCash` for 2026-01-01 to 2026-03-31 is
   6,760,000,000 in its 10-Q of 2026-04-29 and 6,758,000,000 in its 10-K
   of 2026-07-29, to -6 in both instances. Other changes keep the
