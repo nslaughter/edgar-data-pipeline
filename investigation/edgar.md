@@ -5,11 +5,12 @@ seventeen findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
 and SRC-14 to SRC-17, on restated and repeated values, were read from it
 on October 10. SRC-12 and SRC-13, on `submissions`' further files and its
 acceptance times, were read from them and the baseline once they were
-fetched on October 10. On October 11, SRC-16 was read from Microsoft's
-further file as well, and SRC-15 and SRC-17 were checked against the
-further files. Since October 10, how soon each feed shows a new filing
-(Q4) is measured from the pipeline's record. Data here comes from the
-U.S. Securities and Exchange Commission's EDGAR system.
+fetched on October 10. On October 11, SRC-15's rounding matches and their
+`decimals` were read again from the baseline, SRC-16 was read from
+Microsoft's further file as well, and SRC-15 and SRC-17 were checked
+against the further files. Since October 10, how soon each feed shows a
+new filing (Q4) is measured from the pipeline's record. Data here comes
+from the U.S. Securities and Exchange Commission's EDGAR system.
 
 This document records how EDGAR's feeds and filings behave, each finding
 shown by versions in the snapshot store
