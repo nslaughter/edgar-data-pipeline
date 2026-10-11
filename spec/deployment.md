@@ -135,10 +135,13 @@ PostgreSQL's major version ([PG-1]) and Helm's ([PIN-7]).
   `REPOSITORY:TAG@sha256:DIGEST`, where `DIGEST` is 64 lower-case
   hexadecimal digits: the tag for readers, and the digest for the runtime.
   An image an operator chooses without such a field is held to [PIN-5].
-- **PIN-5** (rule) In every pod in the namespaces the installed chart uses,
-  including the pods its operators create, each container and init
-  container that runs a third-party image names it by digest, as [PIN-4]
-  has it.
+- **PIN-5** (rule) In every pod of the installed chart, each container and
+  init container that runs a third-party image names it by digest, as
+  [PIN-4] has it. The chart's pods are those of the resources it renders,
+  and those its operators create for them, such as the database's
+  instances, in whichever namespace they run. Kind's own pods, such as its
+  control plane, CoreDNS, kindnet, and its storage provisioner, aren't the
+  chart's: their images come with the node image that [PIN-6] pins.
 - **PIN-6** (invariant) `deploy/kind.yaml` names every node's image as
   `kindest/node:TAG@sha256:DIGEST`, which also pins the cluster's Kubernetes
   version.
@@ -174,7 +177,7 @@ document.
 | PIN-2 | invariant | tests | Each dependency from a repository is committed, packaged. |
 | PIN-3 | invariant | tests, review | Garage's chart is committed unchanged from a release tag. |
 | PIN-4 | invariant | tests | Each third-party image the chart renders is named by tag and digest. |
-| PIN-5 | rule | kind | Each container on the cluster runs a third-party image named by digest. |
+| PIN-5 | rule | kind | Each third-party image in the installed chart's pods is named by digest. |
 | PIN-6 | invariant | tests | Each kind node's image is named by digest. |
 | PIN-7 | invariant | tests | CI installs Helm and kind at exact versions, Helm at major version 4. |
 | PG-1 | invariant | tests | One image catalog, of major version 18, names the database's image. |
