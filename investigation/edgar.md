@@ -5,10 +5,12 @@ seventeen findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
 and SRC-14 to SRC-17, on restated and repeated values, were read from it
 on October 10. SRC-12 and SRC-13, on `submissions`' further files and its
 acceptance times, were read from them and the baseline once they were
-fetched on October 10, and SRC-15 to SRC-17 were checked against them on
-October 11. Since October 10, how soon each feed shows a new filing (Q4)
-is measured from the pipeline's record. Data here comes from the U.S.
-Securities and Exchange Commission's EDGAR system.
+fetched on October 10. On October 11, SRC-15's rounding matches and their
+`decimals` were read again from the baseline, SRC-16 was read from
+Microsoft's further file as well, and SRC-15 and SRC-17 were checked
+against the further files. Since October 10, how soon each feed shows a
+new filing (Q4) is measured from the pipeline's record. Data here comes
+from the U.S. Securities and Exchange Commission's EDGAR system.
 
 This document records how EDGAR's feeds and filings behave, each finding
 shown by versions in the snapshot store
@@ -454,20 +456,33 @@ finding relies on a record's time to within a second.
   (SRC-12), their values change 1,559 times, nearly all in 10-Qs and
   10-Ks: 870 times in a 10-Q, 622 in a 10-K, 62 in Apple's 10-K/A
   (SRC-16), 4 in an 8-K, and once in Microsoft's 10-Q/A. The four in 8-Ks
-  each return to the 10-K's value after a 10-Q changed it (SRC-14). 119
-  of the changes are to or from the same amount rounded to fewer digits.
-  Apple's `LongTermDebt` at 2025-09-27 is 90,678,000,000 in its 10-K for
-  the year ending then, to `decimals` -6 in its instance, and
-  90,700,000,000 in its three 10-Qs since, to -8 in the instance of the
-  last. Other changes keep the precision: Apple's `OtherAssetsNoncurrent`
-  at the same date is 83,727,000,000 in the 10-K and the 10-Q of
-  2026-01-30, and 72,634,000,000 in the 10-Qs of 2026-05-01 and
-  2026-07-31, to -6 in both instances. In 29 keys a later filing returns
-  to an earlier value: Apple's `LongTermDebt` at 2023-09-30 is
-  105,103,000,000 in its 10-K of 2023-11-03, 105,100,000,000 in the three
-  10-Qs after it, and 105,103,000,000 again in its 10-K of 2024-11-01.
-  Shown by the three `companyfacts` records, Apple's further file, and
-  Apple's 10-K and 10-Q XBRL instances in the records cited.
+  each return to the 10-K's value after a 10-Q changed it (SRC-14). 107
+  of the changes are arithmetic matches: both values are nonzero, and one
+  equals the other rounded half-up, with halves rounded away from zero,
+  at the place of the coarser value's last nonzero digit. Of the 107, the
+  stored instances give both amounts' `decimals`, each from the filing
+  that reported it or a later one that repeats it, for only 3. In two,
+  the precision falls from the 10-K's instance to a later 10-Q's, and the
+  10-Q that made the change has no stored instance. Apple's
+  `LongTermDebt` at 2025-09-27 is 90,678,000,000 in its 10-K for the year
+  ending then, to `decimals` -6 in its instance, and 90,700,000,000 in
+  its three 10-Qs since, to -8 in the instance of the last. Walmart's
+  `SupplierFinanceProgramObligation` at 2026-01-31 is 5,989,000,000 in
+  its 10-K for the year ending then, to -6 in its instance, and
+  6,000,000,000 in its two 10-Qs since, to -8 in the instance of the
+  last. The third is a restatement at the same precision:
+  Microsoft's `DividendsCommonStockCash` for 2026-01-01 to 2026-03-31 is
+  6,760,000,000 in its 10-Q of 2026-04-29 and 6,758,000,000 in its 10-K
+  of 2026-07-29, to -6 in both instances. Other changes keep the
+  precision: Apple's `OtherAssetsNoncurrent` at 2025-09-27 is
+  83,727,000,000 in the 10-K and the 10-Q of 2026-01-30, and
+  72,634,000,000 in the 10-Qs of 2026-05-01 and 2026-07-31, to -6 in both
+  instances. In 29 keys a later filing returns to an earlier value:
+  Apple's `LongTermDebt` at 2023-09-30 is 105,103,000,000 in its 10-K of
+  2023-11-03, 105,100,000,000 in the three 10-Qs after it, and
+  105,103,000,000 again in its 10-K of 2024-11-01.
+  Shown by the three `companyfacts` records, Apple's further file, and the
+  six 10-K and 10-Q XBRL instances in the records cited.
 - **SRC-16** (Q3) An amendment appears in `companyfacts` as a filing of its
   own: form `10-K/A` or `10-Q/A`, its own `accn` and `filed`, and the `fy`
   and `fp` of the report it amends. The values of the filing it amends
@@ -513,5 +528,5 @@ finding relies on a record's time to within a second.
   doesn't show a frame moving to a later filing's value when that filing
   appears; the daily refetches through each company's next report
   (method, step 2) can.
-  Shown by the three `companyfacts` records and Apple's further file in
-  the records cited.
+  Shown by the three `companyfacts` records, Apple's further file, and
+  Apple's 10-K and 10-Q XBRL instances in the records cited.

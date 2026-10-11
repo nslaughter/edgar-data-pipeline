@@ -1,6 +1,6 @@
 # Plan: the EDGAR data pipeline
 
-**Status:** October 10, 2026. T1 and T2 are done; the next is T3.
+**Status:** October 11, 2026. T1 and T2 are done; the next is T3.
 
 The tasks that build the pipeline, in the order they're to be done, and
 which are done. When the owner asks for the next item, an agent takes the
@@ -46,7 +46,7 @@ not from these tasks.
 | ID | Task | Depends on | Done |
 | --- | --- | --- | --- |
 | T1 | **Fiscal periods and joins, from the baseline (Q2).** From the stored `companyfacts` and `submissions`: whether `fy` and `fp` describe a value's period or its filing's, how each company's fiscal year appears, and whether each value's accession number joins it to a filing, and so to an acceptance time. The answer also decides `edgar-asof`'s first release, which joins `companyfacts` values to acceptance times this way. | — | October 10, 2026: SRC-6 to SRC-11 |
-| T2 | **Restated and repeated values, from the baseline (Q3).** From the stored `companyfacts`: whether a value a later filing reports for the same concept and period is kept beside the earlier one, how a restated value differs from one reported again unchanged, and how amendments appear. `edgar-asof`'s specification cites these findings too. | — | October 10, 2026: SRC-14 to SRC-17 |
+| T2 | **Restated and repeated values, from the baseline (Q3).** From the stored `companyfacts`: whether a value a later filing reports for the same concept and period is kept beside the earlier one, how a restated value differs from one reported again unchanged, and how amendments appear. `edgar-asof`'s specification cites these findings too. | — | October 11, 2026: SRC-14 to SRC-17 |
 | T3 | **Sizes and the pace of a backfill, from the baseline (Q5).** Bytes per URL and per filing, and the requests and time a backfill of each company's filings takes at 5 requests a second, from the filings its `submissions` lists. Growth per refetch waits for T8. | — | |
 | T4 | **The first refetch (Q1, Q4).** The [method's](../investigation/edgar.md#method) step 2 for the first time: refetch `submissions`, `companyfacts`, and the daily index listing; fetch the master indexes not yet stored; and refetch the stored ones. Shows whether a conditional request gets a `304` (SRC-4), and whether a published index changes. | Run | |
 | T5 | **The latest-filings feed (Q4).** Once the owner confirms its URL, widen the scope to it in its own commit, fetch it, and record what it holds, so T11 can weigh it as a second notice source. | Scope, run | |
