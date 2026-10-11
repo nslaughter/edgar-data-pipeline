@@ -369,8 +369,8 @@ commit `02b4946`, in `submissions` at
   all 82,991 values join, the 51,184 of SRC-10 through the further files.
   Microsoft's second file, which lists its filings from 1994-02-14 to
   2008-08-12, before any of its values, isn't needed for them.
-  Shown by the three `submissions` records and the four further files in
-  the records cited.
+  Shown by the three `companyfacts` and `submissions` records and the four
+  further files in the records cited.
 - **SRC-13** (Q2) Read as the UTC instants they state, `submissions`'
   `acceptanceDateTime` values put most of Apple's filings, and most of
   Walmart's before June 2023, outside the hours the SEC gives for EDGAR:
