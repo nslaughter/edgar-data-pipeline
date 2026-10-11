@@ -3,9 +3,9 @@
 Every statement appears in its specification's index with its kind, checked
 in ways the specifications name; each ID area belongs to one specification;
 every statement checked by `verify`, `tests`, or `kind` has a test marked
-with its ID, unless a later task in docs/plan.md writes it; every marker
-names a statement; and every problem verify.py reports names an invariant
-it checks.
+with its ID, unless a later task in docs/plan.md, not yet done, writes it;
+every marker names a statement; and every problem verify.py reports names
+an invariant it checks.
 """
 
 from __future__ import annotations
@@ -20,6 +20,8 @@ INDEX_ROW = re.compile(r"^\| ([A-Z]+-\d+) \| (invariant|rule|retired) \| ([^|]+)
 STATEMENT = re.compile(r"^- \*\*([A-Z]+-\d+)\*\* \((invariant|rule)\)", re.M)
 # verify.py quotes an ID only where it reports one.
 REPORTED = re.compile(r'"([A-Z]+-\d+)"')
+# A task's row in docs/plan.md, with its last column, Done.
+PLAN_ROW = re.compile(r"^\| (T\d+) \|.*\|([^|]*)\|$", re.M)
 # Each way an index says a statement is checked, as the specifications' §3
 # name them, so a misspelled one can't exempt a statement from its test.
 CHECKS = {"verify", "tests", "kind", "review", "operator", "first import"}
@@ -27,7 +29,8 @@ CHECKS = {"verify", "tests", "kind", "review", "operator", "first import"}
 TESTED_BY = {"verify", "tests", "kind"}
 # Statements whose tests a later task in docs/plan.md writes, with that task:
 # T20 builds the umbrella chart that spec/deployment.md's tests check. Strict,
-# like xfail_strict: a statement listed here that has a test fails too.
+# like xfail_strict: a statement listed here that has a test fails too, and so
+# does one whose task the plan marks done.
 AWAITING = dict.fromkeys(
     [
         "CHART-1",
@@ -89,6 +92,12 @@ def needing_tests() -> list[str]:
     ]
 
 
+def plan_tasks() -> dict[str, str]:
+    """Each task in docs/plan.md, with what its Done column says."""
+    plan = (ROOT / "docs" / "plan.md").read_text(encoding="utf-8")
+    return {task: done.strip() for task, done in PLAN_ROW.findall(plan)}
+
+
 def test_every_statement_is_in_its_specs_index_with_its_kind() -> None:
     for name, spec in SPECS.items():
         stated = dict(STATEMENT.findall(spec))
@@ -123,6 +132,12 @@ def test_a_statement_awaits_its_test_only_until_the_test_exists() -> None:
 
     assert sorted(set(AWAITING) - set(needing_tests())) == []
     assert sorted(id for id in AWAITING if id in marked) == []
+
+
+def test_a_statement_awaits_only_a_task_the_plan_has_not_done() -> None:
+    not_done = {task for task, done in plan_tasks().items() if not done}
+
+    assert sorted(set(AWAITING.values()) - not_done) == []
 
 
 def test_every_marker_names_a_statement() -> None:
