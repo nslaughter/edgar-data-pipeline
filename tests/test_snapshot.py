@@ -17,6 +17,7 @@ import threading
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -337,6 +338,30 @@ def test_requests_are_spaced_by_the_minimum_interval(server: Server) -> None:
         response.body.close()
 
     assert sleeps == [pytest.approx(0.15)]
+
+
+@pytest.mark.spec("FETCH-6")
+def test_records_give_the_time_after_the_wait(server: Server, tmp_path: Path) -> None:
+    """requested_at is when the request was sent (§6), after the FETCH-6 wait."""
+    server.routes["/a.xml"] = plain(b"<rss/>")
+    server.routes["/b.xml"] = plain(b"<rss/>")
+    # One fake clock, which only the wait advances, for both the wait and the record.
+    seconds = [1_791_000_000.0]
+
+    def sleep(delay: float) -> None:
+        seconds[0] += delay
+
+    def wall() -> str:
+        when = datetime.fromtimestamp(seconds[0], UTC)
+        return when.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+    paced = snapshot.Fetcher(UA, sleep=sleep, clock=lambda: seconds[0], wall=wall)
+    scoped(server, tmp_path)
+    urls = [server.url("/a.xml"), server.url("/b.xml")]
+
+    assert snapshot.run(paced, tmp_path, "notices", urls, tool=TOOL) == 0
+    first, second = (datetime.fromisoformat(r["requested_at"]) for r in log(tmp_path))
+    assert (second - first).total_seconds() == pytest.approx(0.2, abs=0.001)
 
 
 @pytest.mark.spec("FETCH-8", "FETCH-14")

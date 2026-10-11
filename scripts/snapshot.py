@@ -86,8 +86,16 @@ class Response:
     body: Body
 
 
+def now() -> str:
+    return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
 class Fetcher:
-    """Sends requests no closer together than min_interval (FETCH-6)."""
+    """Sends requests no closer together than min_interval (FETCH-6).
+
+    sent_at is when the latest request was sent, read after the wait, as a
+    record's requested_at gives it.
+    """
 
     def __init__(
         self,
@@ -96,18 +104,22 @@ class Fetcher:
         min_interval: float = MIN_INTERVAL,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
+        wall: Callable[[], str] = now,
     ) -> None:
         self.user_agent = user_agent
         self.min_interval = min_interval
         self.sleep = sleep
         self.clock = clock
+        self.wall = wall
         self._last = -math.inf
+        self.sent_at: str | None = None
 
     def get(self, url: str, headers: dict[str, str]) -> Response:
         delay = self._last + self.min_interval - self.clock()
         if delay > 0:
             self.sleep(delay)
         self._last = self.clock()
+        self.sent_at = self.wall()
         request = urllib.request.Request(
             url,
             headers={"User-Agent": self.user_agent, "Accept-Encoding": "gzip", **headers},
@@ -141,10 +153,6 @@ def user_agent() -> str:
             if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
                 value = value[1:-1].strip()
     return value
-
-
-def now() -> str:
-    return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def tool_version() -> str:
@@ -287,7 +295,6 @@ def snapshot(fetcher: Fetcher, data: Path, feed: str, url: str, *, tool: str) ->
 
     record: dict[str, Any] = {}
     for attempt in range(1, ATTEMPTS + 1):
-        requested_at = now()
         response: Response | None = None
         error = None
         try:
@@ -302,7 +309,7 @@ def snapshot(fetcher: Fetcher, data: Path, feed: str, url: str, *, tool: str) ->
         record = {
             "feed": feed,
             "url": url,
-            "requested_at": requested_at,
+            "requested_at": fetcher.sent_at,
             "attempts": attempt,
             "status": response.status if response else None,
             "error": error,
