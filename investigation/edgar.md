@@ -376,21 +376,25 @@ commit `02b4946`, in `submissions` at
   Walmart's before June 2023, outside the hours the SEC gives for EDGAR:
   6:00 a.m. to 10:00 p.m. Eastern Time on business days
   ([EDGAR Filer Manual, Volume II, §2.3.1](https://www.sec.gov/files/edgar/filermanual/efmvol2-c2.pdf)).
-  1,371 of Apple's 2,126 filings since 2003 fall outside them, 1,088 after
-  10 p.m., in `filings.recent` and its further file alike. 1,732 of
-  Walmart's 3,274 filings from 2003 to 2023-05-26, in its further files,
-  fall outside them, but none of the 1,000 in its `filings.recent`, which
-  begins on 2023-06-02. Only 3 of Microsoft's 3,004 filings since 2008 do,
-  all `EFFECT` notices that the SEC files itself, with accession numbers
-  beginning `9999999995`, at 00:15 Eastern Time. Moved 8 hours earlier,
-  the difference SRC-2 found between Apple's `submissions` and its
-  headers, and read as Eastern Time, all but 53 of those Apple filings and
-  all but 30 of those Walmart filings fall within EDGAR's hours. Read as
-  Eastern Time, all eight stored headers' times do (SRC-1). Before 2003,
-  130 of Apple's 138 filings and 118 of Walmart's 147 have an
-  `acceptanceDateTime` of exactly 08:00:00 or 10:00:00 UTC, which no later
-  filing of the three companies has. So, read as UTC, `acceptanceDateTime`
-  isn't the time of acceptance for at least the filings it puts outside
-  EDGAR's hours, and `submissions` doesn't mark which values are affected.
+  Each count here compares the time of day alone, not whether the day is
+  a business day. 1,371 of Apple's 2,126 filings since 2003 fall outside
+  those hours, 1,088 after 10 p.m., in `filings.recent` and its further
+  file alike. 1,732 of Walmart's 3,274 filings from 2003 to 2023-05-26, in
+  its further files, fall outside them, but none of the 1,000 in its
+  `filings.recent`, which begins on 2023-06-02. Only 3 of Microsoft's
+  3,004 filings since 2008-08-13 do, all `EFFECT` notices that the SEC
+  files itself, with accession numbers beginning `9999999995`, at 00:15
+  Eastern Time. Moved 8 hours earlier, the difference SRC-2 found between
+  Apple's `submissions` and its headers, and read as Eastern Time, all but
+  52 of those Apple filings and all but 30 of those Walmart filings fall
+  within EDGAR's hours. Read as Eastern Time, all eight stored headers'
+  times do (SRC-1). Before 2003, 130 of Apple's 138 filings and 118 of
+  Walmart's 147 have an `acceptanceDateTime` of exactly 08:00:00 or
+  10:00:00 UTC, which no stored filing since 2003 has; Microsoft's before
+  2008-08-13 aren't stored. So, read as UTC, `acceptanceDateTime`
+  disagrees with EDGAR's stated hours for those filings, and `submissions`
+  doesn't mark which of its values do. Which time is right for them isn't
+  shown: no stored header is of one of them, and the stored versions don't
+  show whether the SEC's own `EFFECT` notices keep EDGAR's hours.
   Shown by the three `submissions` records, the four further files, and
   the eight headers in the records cited.
