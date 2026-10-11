@@ -11,7 +11,7 @@ It rests on the decisions to deploy on Kubernetes with Helm, on kind
 ([0001]), and to keep the record in PostgreSQL 18 ([0004]), and on the
 decisions that chose the other components ([0002], [0003], [0008]). How each
 component is configured, such as its replicas, storage, and resources, isn't
-in this version ([open question 2](#9-open-questions)). The pipeline it
+in this version ([§9](#9-later-versions)). The pipeline it
 deploys reads filings from the U.S. Securities and Exchange Commission's
 EDGAR system, but nothing here depends on how EDGAR behaves.
 
@@ -180,22 +180,23 @@ document.
 | PG-1 | invariant | tests | One image catalog, of major version 18, names the database's image. |
 | PG-2 | rule | kind | Every database instance reports PostgreSQL 18. |
 
-## 9. Open questions
+## 9. Later versions
 
-Each has a proposed default, which stands until the owner decides
-otherwise.
+The owner has decided what later versions of this document will say on two
+questions this version leaves open.
 
-1. **The pipeline's own images.** How images built from this repository
-   are named, and how they reach kind. Proposed default: each is tagged
-   with the commit it is built from and loaded into kind with
-   `kind load docker-image`, never pushed to or pulled from a registry; the
-   version of this document that adds the first service says so.
+1. **The pipeline's own images.** Each image built from this repository is
+   tagged with the commit it is built from and loaded into kind with
+   `kind load docker-image`, never pushed to or pulled from a registry. The
+   owner decided this on October 11, 2026. The version of this document
+   that adds the first service says so in statements.
 2. **The components' configuration.** The decision records describe each
    component's replicas, storage, Secrets, and placement, such as three
    Garage nodes with a replication factor of 3 ([0002]) and three
-   PostgreSQL instances ([0004]); none of it is a statement yet. Proposed
-   default: it becomes statements here, in a minor version written before
-   the task that builds the platform, and checked the same way.
+   PostgreSQL instances ([0004]); none of it is a statement yet. The owner
+   decided on October 11, 2026 that it becomes statements in a minor
+   version of this document, written before the platform is built, and
+   checked the same way.
 
 ## 10. Changes to this document
 
