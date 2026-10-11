@@ -76,10 +76,10 @@ investigation/
 - **Every statement has an ID, and its tests carry it.** Mark each test with
   the IDs it checks, as `@pytest.mark.spec("REC-5")`. A new statement gets
   the next unused number in its area; IDs are never reused or renumbered.
-  `tests/test_spec_coverage.py` fails if a statement checked by `verify` or
-  `tests` has no test, or a marker names no statement. It reads only
-  `spec/snapshots.md` so far; the pull request that adds a second spec
-  extends it to every `spec/*.md`.
+  `tests/test_spec_coverage.py` reads every `spec/*.md`, and fails if a
+  statement checked by `verify`, `tests`, or `kind` has no test, or a marker
+  names no statement. A statement whose tests a later task in the plan
+  writes is listed there with that task, until the tests exist.
 - **Investigate the source before specifying the pipeline.** Record how
   EDGAR's feeds and filings behave in
   [`investigation/edgar.md`](investigation/edgar.md), with the stored

@@ -41,5 +41,5 @@ testpaths = ["tests"]
 pythonpath = ["scripts"]
 addopts = ["-ra", "--strict-config", "--strict-markers", "--import-mode=importlib"]
 xfail_strict = true
-markers = ["spec(*ids): the spec/snapshots.md statements a test checks"]
+markers = ["spec(*ids): the spec/*.md statements a test checks"]
 filterwarnings = ["error"]
