@@ -193,6 +193,18 @@ second file, `CIK0000789019-submissions-002.json`, is outside the scope:
 | Walmart | `CIK0000104169-submissions-001.json` | 2012-06-05 to 2023-05-26 | `7a164befa763` 16:57:29.177Z |
 | Walmart | `CIK0000104169-submissions-002.json` | 1994-02-14 to 2012-06-04 | `e162c62bfcae` 16:57:29.338Z |
 
+Each `requested_at` above can be up to 0.2 seconds earlier than its
+request was sent, which is the time
+[§6](../spec/snapshots.md#6-records) gives it. `scripts/snapshot.py`, the
+same at `70ab28b` and `02b4946`, reads the clock before it waits out the
+0.2 seconds it keeps between requests
+([FETCH-6](../spec/snapshots.md#10-fetching)). So Walmart's second further
+file's record, at 16:57:29.338Z, is 161 ms after the one before it, and
+Walmart's `submissions` record, at 17:40:13.971Z, is 142 ms after
+Microsoft's, closer together than the requests could start. The records
+stay as they are ([§1](../spec/snapshots.md#1-guarantees)), and no
+finding relies on a record's time to within a second.
+
 ### Findings so far
 
 - **SRC-1** (Q2) A filing's header gives its acceptance time as
