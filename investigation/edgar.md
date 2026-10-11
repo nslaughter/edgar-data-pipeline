@@ -1,16 +1,18 @@
 # Source investigation: EDGAR
 
 **Status:** Started October 7, 2026. The baseline was fetched October 7;
-seventeen findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
+twenty findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
 and SRC-14 to SRC-17, on restated and repeated values, were read from it
 on October 10. SRC-12 and SRC-13, on `submissions`' further files and its
 acceptance times, were read from them and the baseline once they were
 fetched on October 10. On October 11, SRC-15's rounding matches and their
 `decimals` were read again from the baseline, SRC-16 was read from
 Microsoft's further file as well, and SRC-15 and SRC-17 were checked
-against the further files. Since October 10, how soon each feed shows a
-new filing (Q4) is measured from the pipeline's record. Data here comes
-from the U.S. Securities and Exchange Commission's EDGAR system.
+against the further files. SRC-18 to SRC-20, on sizes and the pace of a
+backfill, were read from the baseline and the further files on October 11.
+Since October 10, how soon each feed shows a new filing (Q4) is measured
+from the pipeline's record. Data here comes from the U.S. Securities and
+Exchange Commission's EDGAR system.
 
 This document records how EDGAR's feeds and filings behave, each finding
 shown by versions in the snapshot store
@@ -153,19 +155,19 @@ CIK padded to ten digits:
 The eight filings in `filings`. Each one's directory is
 `https://www.sec.gov/Archives/edgar/data/CIK/ACCESSION/`, with the
 accession number's dashes removed; the header is
-`ACCESSION-index-headers.html` in that directory, and the listing is
-`index.json`:
+`ACCESSION-index-headers.html` in that directory, the index page
+`ACCESSION-index.html`, and the listing `index.json`:
 
-| Company | Form | Accession number | Header | Directory listing |
-| --- | --- | --- | --- | --- |
-| Apple | 10-K | 0000320193-25-000079 | `4b05064b7b26` 17:41:43.408Z | `d61dde83df2d` 17:41:08.170Z |
-| Apple | 10-Q | 0000320193-26-000020 | `a51cfcf32d03` 17:41:44.124Z | `3e5dde4c0403` 17:41:08.350Z |
-| Apple | 8-K/A | 0001140361-26-035325 | `59fe5a75478c` 17:41:45.120Z | `16e98f070459` 17:41:08.474Z |
-| Microsoft | 10-K | 0001193125-26-323660 | `a4677192c07a` 17:41:45.643Z | `bf17f342b5ff` 17:41:08.680Z |
-| Microsoft | 10-Q | 0001193125-26-191507 | `7b8036685442` 17:41:46.314Z | `10a9ce7f8519` 17:41:09.149Z |
-| Walmart | 10-K | 0000104169-26-000055 | `d310a19046ca` 17:41:47.079Z | `a576f2522e5b` 17:41:09.269Z |
-| Walmart | 10-Q | 0000104169-26-000154 | `0bc822d86b45` 17:41:47.626Z | `dd6bc42dc512` 17:41:09.456Z |
-| Walmart | 8-K/A | 0000104169-26-000028 | `91aa33498ef4` 17:41:48.242Z | `7408a912ac83` 17:41:09.665Z |
+| Company | Form | Accession number | Header | Index page | Directory listing |
+| --- | --- | --- | --- | --- | --- |
+| Apple | 10-K | 0000320193-25-000079 | `4b05064b7b26` 17:41:43.408Z | `6d76ceacb872` 17:41:43.579Z | `d61dde83df2d` 17:41:08.170Z |
+| Apple | 10-Q | 0000320193-26-000020 | `a51cfcf32d03` 17:41:44.124Z | `d4d6d368e74b` 17:41:44.704Z | `3e5dde4c0403` 17:41:08.350Z |
+| Apple | 8-K/A | 0001140361-26-035325 | `59fe5a75478c` 17:41:45.120Z | `c943a9549906` 17:41:45.248Z | `16e98f070459` 17:41:08.474Z |
+| Microsoft | 10-K | 0001193125-26-323660 | `a4677192c07a` 17:41:45.643Z | `3a55aba0e241` 17:41:45.886Z | `bf17f342b5ff` 17:41:08.680Z |
+| Microsoft | 10-Q | 0001193125-26-191507 | `7b8036685442` 17:41:46.314Z | `c03cc6c00853` 17:41:46.630Z | `10a9ce7f8519` 17:41:09.149Z |
+| Walmart | 10-K | 0000104169-26-000055 | `d310a19046ca` 17:41:47.079Z | `317424324fc2` 17:41:47.214Z | `a576f2522e5b` 17:41:09.269Z |
+| Walmart | 10-Q | 0000104169-26-000154 | `0bc822d86b45` 17:41:47.626Z | `8f5ac093ef41` 17:41:47.786Z | `dd6bc42dc512` 17:41:09.456Z |
+| Walmart | 8-K/A | 0000104169-26-000028 | `91aa33498ef4` 17:41:48.242Z | `1347cfa44daf` 17:41:48.625Z | `7408a912ac83` 17:41:09.665Z |
 
 The XBRL instances of the six 10-Ks and 10-Qs and the two 8-K/As, in the
 same directories:
@@ -183,7 +185,15 @@ same directories:
 
 The quarter's daily index listing, in `daily-index` at
 `https://www.sec.gov/Archives/edgar/daily-index/2026/QTR4/index.json`:
-`b2627c1a365d` 17:40:47.727Z.
+`b2627c1a365d` 17:40:47.727Z. The master indexes of the four days it
+held, in the same directory as `master.YYYYMMDD.idx`:
+
+| Day | Record |
+| --- | --- |
+| 2026-10-01 | `529aabd81114` 17:40:59.565Z |
+| 2026-10-02 | `17f223abb09f` 17:40:59.965Z |
+| 2026-10-05 | `53e7bb398705` 17:41:00.233Z |
+| 2026-10-06 | `62a495d44ad9` 17:41:00.610Z |
 
 The further `submissions` files that each company's `submissions` names in
 `filings.files`, fetched on October 10, 2026 by `scripts/snapshot.py` at
@@ -530,3 +540,109 @@ finding relies on a record's time to within a second.
   (method, step 2) can.
   Shown by the three `companyfacts` records, Apple's further file, and
   Apple's 10-K and 10-Q XBRL instances in the records cited.
+- **SRC-18** (Q5) `companyfacts` and the XBRL instances of 10-Ks and 10-Qs
+  are the large bodies, 0.9 MB to 10.9 MB each, and every other body is
+  1.7 KB to 0.6 MB. The store keeps each body as gzip, at a third to a
+  fortieth of its size. Here a KB is 1,000 bytes and an MB 1,000,000; a
+  body's size is its record's `bytes`, and its stored size its object's.
+  The baseline's 43 bodies and the four further files total 41,985,036
+  bytes, stored as 2,205,179 bytes of objects, and their 47 records take
+  27,286 bytes of logs, 581 a record. The largest object, Microsoft's
+  `companyfacts`, is 313,163 bytes, far below the 50 MiB at which GitHub
+  warns ([open question 2](../spec/snapshots.md#13-open-questions)). An
+  object's size is `snapshot.py`'s gzip of the body, not what crossed the
+  network: the records keep neither the response's `Content-Encoding` nor
+  its `Content-Length`.
+
+  | URL | Bodies | Bytes | Stored |
+  | --- | --- | --- | --- |
+  | `companyfacts` | 3 | 3,770,257 to 4,881,196 | 246,663 to 313,163 |
+  | `submissions` | 3 | 157,326 to 185,250 | 19,732 to 27,325 |
+  | `submissions`' further files | 4 | 204,857 to 313,914 | 30,455 to 36,978 |
+  | Daily index listing | 1 | 2,754 | 445 |
+  | A day's master index | 4 | 310,875 to 621,000 | 58,168 to 104,441 |
+  | Filing directory listing | 8 | 1,667 to 12,486 | 369 to 1,214 |
+  | Filing header | 8 | 5,470 to 28,732 | 1,601 to 3,297 |
+  | Filing index page | 8 | 10,028 to 15,117 | 2,967 to 3,350 |
+  | XBRL instance of a 10-K or 10-Q | 6 | 904,157 to 10,948,157 | 37,609 to 310,130 |
+  | XBRL instance of an 8-K/A | 2 | 9,836 to 11,695 | 1,381 to 2,165 |
+
+  Shown by the baseline's 43 records and the four further files' records
+  in the records cited, and their objects.
+- **SRC-19** (Q5) `submissions`' `size` is the size of a filing's complete
+  submission text file, so it gives the bytes of every filing it lists.
+  Each XBRL 10-K and 10-Q is megabytes, and in the six stored, the header,
+  the index page, and the XBRL instance are 15% to 31% of it. In each of
+  the eight filings, `size` equals the size the filing's index page gives
+  `ACCESSION.txt`; the directory listing gives that file, the header, and
+  the index page no size. The index page's sizes are the bodies': each
+  stored instance's `bytes` is the size it gives, and each file that both
+  it and the directory listing give a size has the same size in both. In
+  the stored `submissions` and further files, the three companies' 9,689
+  filings total 4.89 GB. Most are Form 4s, 60% of
+  Apple's, 74% of Microsoft's, and 70% of Walmart's, and the median filing
+  is 12.7 KB for Apple, 6.3 KB for Microsoft, and 6.9 KB for Walmart. The
+  208 10-Ks, 10-Qs, and amendments among them marked `isXBRL` total
+  2.51 GB, 1.8 MB to 82.0 MB each. Five filings are over 50 MiB, and one
+  is over 100 MiB: Walmart's annual report to shareholders, form `ARS`, of
+  2024-04-25, at 158,420,327 bytes. In the eight stored filings, the
+  instance is nearly all of what the three files hold:
+
+  | Filing | `size` | Header, index page, and instance | Instance | Stored |
+  | --- | --- | --- | --- | --- |
+  | Apple 10-K 0000320193-25-000079 | 9,392,337 | 1,451,154 | 1,416,841 | 71,679 |
+  | Apple 10-Q 0000320193-26-000020 | 5,946,811 | 989,594 | 962,405 | 43,059 |
+  | Apple 8-K/A 0001140361-26-035325 | 241,262 | 27,843 | 11,695 | 6,862 |
+  | Microsoft 10-K 0001193125-26-323660 | 36,328,553 | 10,988,765 | 10,948,157 | 316,517 |
+  | Microsoft 10-Q 0001193125-26-191507 | 31,304,294 | 9,709,943 | 9,675,172 | 246,596 |
+  | Walmart 10-K 0000104169-26-000055 | 13,080,322 | 1,975,088 | 1,935,556 | 112,532 |
+  | Walmart 10-Q 0000104169-26-000154 | 6,311,331 | 929,456 | 904,157 | 49,470 |
+  | Walmart 8-K/A 0000104169-26-000028 | 247,054 | 25,334 | 9,836 | 5,949 |
+
+  Shown by the three `submissions` records, the four further files, and
+  the eight filings' headers, index pages, directory listings, and XBRL
+  instances in the records cited.
+- **SRC-20** (Q5) At 5 requests a second, a backfill of every filing a
+  company's `submissions` lists takes from 15.6 minutes for Apple to at
+  least 30.7 for Microsoft, and one of only its XBRL 10-Ks, 10-Qs, and
+  amendments about 40 seconds. Each count takes, for each filing, the
+  requests the method makes for a new one (step 4): its index page and
+  its header, and its XBRL instance if `submissions` marks it `isXBRL`,
+  as it marks 143 of
+  Apple's filings, 158 of Microsoft's, and 183 of Walmart's. Every 10-K,
+  10-Q, and amendment since each company's first in XBRL is marked, except
+  Microsoft's 10-Q of 2012-01-19 (SRC-16). Of the two pages, only the
+  index page marks a filing's instance, as
+  `EXTRACTED XBRL INSTANCE DOCUMENT`, with its size (SRC-19). The header
+  lists the instance's file with the `TYPE` `XML` and the `DESCRIPTION`
+  `IDEA: XBRL DOCUMENT` that it gives 4 to 115 other files of the same
+  filing, such as `FilingSummary.xml`. Both give the same acceptance time:
+  in all eight filings, the index page's `Accepted`, written as
+  `2025-10-31 06:01:26`, is the header's `ACCEPTANCE-DATETIME` (SRC-1).
+
+  | Company | Filings listed | Requests | At 5 a second | XBRL 10-Ks, 10-Qs, and amendments | Requests | At 5 a second |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | Apple | 2,264, from 1994-01-26 | 4,671 | 15.6 minutes | 70 | 210 | 42 seconds |
+  | Microsoft | 3,004, from 2008-08-13 | 6,166 | 20.6 minutes | 68 | 204 | 41 seconds |
+  | Walmart | 4,421, from 1994-02-14 | 9,025 | 30.1 minutes | 70 | 210 | 42 seconds |
+
+  Microsoft's second further file, outside the scope, lists 1,521 more
+  filings, from 1994-02-14 to 2008-08-12, by the `filingCount` that
+  `filings.files` gives it; they add at least 3,042 requests, 10.1
+  minutes. The baseline's fetches were slower than 5 a second.
+  `snapshot.py` sends one request at a time, and where each fetch
+  followed one of the same feed by under a second, in six groups of 3 to
+  24 fetches, it sent one every 0.25 to 0.28 seconds, 3.6 to 4.0 a
+  second. At that pace each backfill above takes 24% to 39% longer. The
+  groups' 40 intervals total 9.894 seconds from each group's first
+  `requested_at` to its last, or up to 1.2 seconds more, since each
+  group's last record can be up to 0.2 seconds early (records cited).
+  Each group's first fetch came over 0.2 seconds after the fetch before
+  it, so it didn't wait. A body's size didn't set the
+  pace: 0.219 seconds passed from the record of Microsoft's 10-K instance,
+  10.9 MB, to the next, and the longest interval, 0.580 seconds, followed
+  Apple's 10-Q header, 15.7 KB. All 47 fetches got a `200` on their first
+  attempt.
+  Shown by the three `submissions` records, the four further files, the
+  eight filings' headers and index pages, and the baseline's 43 records
+  and the further files' four, in the records cited.
