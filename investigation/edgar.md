@@ -181,8 +181,10 @@ The quarter's daily index listing, in `daily-index` at
 The further `submissions` files that each company's `submissions` names in
 `filings.files`, fetched on October 10, 2026 by `scripts/snapshot.py` at
 commit `02b4946`, in `submissions` at
-`https://data.sec.gov/submissions/FILE`. Microsoft's second file,
-`CIK0000789019-submissions-002.json`, is outside the scope:
+`https://data.sec.gov/submissions/FILE`. That commit is pull request #14's,
+which was squash-merged into `main` as `889d5fb`, so `main`'s history
+doesn't hold it; `scripts/snapshot.py` is the same at both. Microsoft's
+second file, `CIK0000789019-submissions-002.json`, is outside the scope:
 
 | Company | File | Filing dates | Record |
 | --- | --- | --- | --- |
