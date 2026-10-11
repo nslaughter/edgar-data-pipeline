@@ -65,7 +65,12 @@ The index says how each statement is checked: by `tests`, by tests on
 `kind`, or in `review` of the pull request that changes what it covers. Every
 statement checked by `tests` or `kind` has at least one test marked with its
 ID, as `@pytest.mark.spec("PG-1")`, and every marker names an ID in a
-specification's index. A test, `tests/test_spec_coverage.py`, enforces both.
+specification's index. A test, `tests/test_spec_coverage.py`, enforces both,
+except for a statement whose tests a later task in the
+[plan](../docs/plan.md) writes. It lists such a statement as awaiting that
+task, and fails if the statement has a test or the plan marks the task done.
+This version's statements come before the chart they describe: T20 builds
+the chart and writes their tests, so until then each awaits T20.
 
 ## 4. Layout
 
