@@ -338,6 +338,9 @@ second file, `CIK0000789019-submissions-002.json`, is outside the scope:
   them: 2010-01-25, 2013-04-24, and 2015-01-28.
   Shown by the three `companyfacts` and `submissions` records in the
   records cited.
+  **Superseded in part by SRC-12:** the further files, stored since
+  October 10, list all 130 accession numbers, so the stored `submissions`
+  now join every value to a filing and its `acceptanceDateTime`.
 - **SRC-11** (Q2) `companyfacts` gives a duration that starts and ends on
   the same day as it gives an instant, with an `end` and no `start`. In
   the six 10-Ks and 10-Qs whose XBRL instances are stored, all but three
