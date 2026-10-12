@@ -1,0 +1,71 @@
+# SecAccess, v1alpha1: whether the pipeline may send requests to the SEC at
+# all, one per cluster, named cluster. spec/controls.md governs it (section 8);
+# changing it changes that spec.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: secaccesses.edgar.nathanslaughter.com
+spec:
+  group: edgar.nathanslaughter.com
+  names:
+    kind: SecAccess
+    listKind: SecAccessList
+    plural: secaccesses
+    singular: secaccess
+  scope: Cluster
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Paused
+          type: boolean
+          jsonPath: .spec.paused
+        - name: Stopped
+          type: string
+          jsonPath: .status.stop.at
+        - name: Acknowledged
+          type: string
+          jsonPath: .spec.acknowledgedStopAt
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          x-kubernetes-validations:
+            - rule: self.metadata.name == 'cluster'
+              message: the SecAccess must be named cluster
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              properties:
+                paused:
+                  type: boolean
+                  default: false
+                acknowledgedStopAt:
+                  type: string
+                  format: date-time
+                  pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$
+            status:
+              type: object
+              properties:
+                stop:
+                  type: object
+                  required: [at, url]
+                  properties:
+                    at:
+                      type: string
+                      format: date-time
+                      pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$
+                    url:
+                      type: string
