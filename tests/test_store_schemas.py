@@ -12,12 +12,15 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
-from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema import Draft202012Validator, FormatChecker, ValidationError
+from jsonschema.protocols import Validator
+from jsonschema.validators import extend
 from referencing import Registry, Resource
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -38,6 +41,26 @@ FORMATS = FormatChecker(formats=())
 @FORMATS.checks("date-time", raises=ValueError)
 def is_date_time(value: object) -> bool:
     return not isinstance(value, str) or datetime.fromisoformat(value).tzinfo is not None
+
+
+def pattern(
+    validator: Validator, pattern: str, instance: Any, schema: dict[str, Any]
+) -> Iterator[ValidationError]:
+    r"""JSON Schema's pattern, read as ECMA-262 reads it, as JSON Schema says.
+
+    ECMA-262's `$` matches only at the end of the input, but Python's also
+    matches before a final newline, so jsonschema's own keyword would let
+    "submissions\n" match a name's pattern. Every `$` in the schemas ends its
+    pattern, and this reads it as Python's `\Z`.
+    """
+    ends = pattern.endswith("$") and not pattern.endswith(r"\$")
+    ecma = pattern[:-1] + r"\Z" if ends else pattern
+    if validator.is_type(instance, "string") and not re.search(ecma, instance):
+        yield ValidationError(f"{instance!r} does not match {pattern!r}")
+
+
+# jsonschema's stubs leave extend untyped.
+SchemaValidator = extend(Draft202012Validator, {"pattern": pattern})  # type: ignore[no-untyped-call]
 
 
 def table_after(marker: str) -> list[str]:
@@ -65,14 +88,15 @@ def schema(name: str) -> dict[str, Any]:
     return loaded
 
 
-def validator(name: str) -> Draft202012Validator:
-    """A validator for the schema, which resolves the others by their $id and
-    asserts formats."""
+def validator(name: str) -> Validator:
+    """A validator for the schema, which resolves the others by their $id,
+    reads patterns as ECMA-262 does, and asserts formats."""
     resources = [Resource.from_contents(schema(path.name)) for path in SCHEMAS.glob("*.json")]
     registry: Registry[Any] = Registry().with_resources(
         (resource.contents["$id"], resource) for resource in resources
     )
-    return Draft202012Validator(schema(name), registry=registry, format_checker=FORMATS)
+    validator: Validator = SchemaValidator(schema(name), registry=registry, format_checker=FORMATS)
+    return validator
 
 
 def records() -> list[dict[str, Any]]:
@@ -181,6 +205,11 @@ def test_the_record_schema_accepts_each_writers_record(changes: dict[str, Any]) 
         {"attempts": 0},
         {"feed": "Submissions"},
         {"date": 1760292252},
+        {"feed": "submissions\n"},
+        {"sha256": "e8" * 32 + "\n"},
+        {"tool": FETCHER + "\n"},
+        {"tool": "scripts/snapshot.py@unknown\n"},
+        {"requested_at": "2026-10-12T18:04:12.345Z\n"},
     ],
 )
 def test_the_record_schema_refuses_a_field_of_the_wrong_form(changes: dict[str, Any]) -> None:
@@ -297,6 +326,11 @@ def test_the_job_schema_accepts_each_kind_of_job(message: dict[str, Any]) -> Non
         job(source="Apple_Submissions"),
         job(feed="Submissions"),
         job(kind="backfill", source=None, backfill="Apple_2025", expires_at=None),
+        job(id="0192f1d2-5b7e-7c3a-9f1e-2d4c6b8a0e13\n"),
+        job(feed="submissions\n"),
+        job(source="apple-submissions\n"),
+        job(kind="backfill", source=None, backfill="apple-2025\n", expires_at=None),
+        job(queued_at="2026-10-12T18:04:12.100Z\n"),
     ],
 )
 def test_the_job_schema_refuses_a_malformed_job(message: dict[str, Any]) -> None:
@@ -305,7 +339,7 @@ def test_the_job_schema_refuses_a_malformed_job(message: dict[str, Any]) -> None
 
 @pytest.mark.spec("JOB-1")
 def test_the_event_schema_accepts_a_record_with_every_field() -> None:
-    event = {"id": 1, "job": job(), "record": new_record()}
+    event: dict[str, Any] = {"id": 1, "job": job(), "record": new_record()}
 
     assert list(validator("event.schema.json").iter_errors(event)) == []
 
