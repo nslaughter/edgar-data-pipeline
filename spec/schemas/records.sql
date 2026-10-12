@@ -29,8 +29,10 @@ CREATE TABLE records (
     CHECK (status IS DISTINCT FROM 200 OR error IS NOT NULL OR sha256 IS NOT NULL),
     -- REC-5: a 304 that names no version has an error.
     CHECK (status IS DISTINCT FROM 304 OR sha256 IS NOT NULL OR error IS NOT NULL),
-    -- REC-6: only a 200 with no error, or a 304, names a body.
-    CHECK (sha256 IS NULL OR (status = 200 AND error IS NULL) OR status = 304),
+    -- REC-6: only a 200 with no error, or a 304, names a body. The comparisons
+    -- are null-safe, so a row with no status can't name one.
+    CHECK (sha256 IS NULL OR (status IS NOT DISTINCT FROM 200 AND error IS NULL)
+           OR status IS NOT DISTINCT FROM 304),
     -- REC-7: no response means an error is recorded.
     CHECK (status IS NOT NULL OR error IS NOT NULL),
     -- REC-11: received_at is set exactly when status is, and date only then.
