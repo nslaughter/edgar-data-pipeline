@@ -50,7 +50,7 @@ spec:
               type: object
             spec:
               type: object
-              required: [feed, url, cadenceSeconds]
+              required: [cadenceSeconds, feed, url]
               properties:
                 feed:
                   type: string
