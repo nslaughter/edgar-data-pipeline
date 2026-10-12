@@ -211,13 +211,14 @@ Its `status`, which the scheduler sets:
 
 | Condition | `True`, with its reason | `False`, with its reason |
 | --- | --- | --- |
-| `Polling` | `Polling`: the scheduler queues its polls. | `Paused`: the Source is paused. `RequestsPaused`: the SecAccess is paused. `RequestsStopped`: the SecAccess has a stop the owner hasn't acknowledged. `NoSecAccess`: there is no SecAccess `cluster`. |
+| `Polling` | `Polling`: the scheduler queues its polls. | The first of these that applies, in this order. `NoSecAccess`: there is no SecAccess `cluster`. `RequestsStopped`: the SecAccess has a stop the owner hasn't acknowledged. `RequestsPaused`: the SecAccess is paused. `Paused`: the Source is paused. |
 | `WithinBudget` | `WithinBudget`: the Sources not paused in the release namespace together poll within the budget. | `OverBudget`: they don't; its message gives their total, in requests a second. |
 
 - **SOURCE-1** (rule) The scheduler queues polls only of Sources in the
   release namespace, and of each only while it's polling: while it isn't
   paused and requests are allowed. Its `Polling` condition says whether it
-  is, and if not, why not.
+  is, and if not, why not: the first reason that applies of `NoSecAccess`,
+  `RequestsStopped`, `RequestsPaused`, and `Paused`, in that order.
 - **SOURCE-2** (rule) A Source's first poll is queued when it begins
   polling: when it's created or unpaused, when requests are allowed again,
   or when a scheduler replica becomes the active one. Each later poll is
