@@ -1,7 +1,7 @@
 # 11. Install the definitions and the operators before the umbrella chart, in four releases
 
-**Status:** Proposed, October 12, 2026. Supersedes, once accepted, the part
-of [0001](0001-deploy-on-kubernetes-with-helm-on-kind.md) that has one
+**Status:** Accepted, October 12, 2026. Supersedes the part of
+[0001](0001-deploy-on-kubernetes-with-helm-on-kind.md) that has one
 umbrella Helm chart install every component.
 
 ## Context
