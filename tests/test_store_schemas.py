@@ -187,6 +187,26 @@ def test_the_record_schema_refuses_a_field_of_the_wrong_form(changes: dict[str, 
     assert list(validator("record.schema.json").iter_errors(new_record(**changes))) != []
 
 
+def wrong_types() -> list[tuple[str, object]]:
+    """For each field of section 6's table, values of JSON types its type
+    excludes: a string for an integer, a number for anything else, and null
+    for a field that can't be null."""
+    wrong: list[tuple[str, object]] = []
+    for field, kind in RECORD_FIELDS:
+        wrong.append((field, "1" if kind.startswith("integer") else 1))
+        if "null" not in kind:
+            wrong.append((field, None))
+    return wrong
+
+
+@pytest.mark.spec("REC-13")
+@pytest.mark.parametrize(
+    ("field", "value"), wrong_types(), ids=[f"{f}={v!r}" for f, v in wrong_types()]
+)
+def test_the_record_schema_refuses_a_field_of_the_wrong_type(field: str, value: object) -> None:
+    assert list(validator("record.schema.json").iter_errors(new_record(**{field: value}))) != []
+
+
 def columns() -> dict[str, str]:
     sql = (SCHEMAS / "records.sql").read_text(encoding="utf-8")
     [table] = re.findall(r"^CREATE TABLE records \((.*?)^\);", sql, re.M | re.S)
@@ -270,10 +290,13 @@ def test_the_job_schema_accepts_each_kind_of_job(message: dict[str, Any]) -> Non
         job(url="https://example.com/"),
         job(id="0192F1D2-5B7E-7C3A-9F1E-2D4C6B8A0E13"),
         job(queued_at=None),
+        job(queued_at="2026-10-12T18:04:12Z"),
         job(queued_at="2026-10-12T24:04:12.100Z"),
         job(expires_at="2026-10-12T18:04:22Z"),
         job(expires_at="2026-02-30T18:04:22.000Z"),
         job(source="Apple_Submissions"),
+        job(feed="Submissions"),
+        job(kind="backfill", source=None, backfill="Apple_2025", expires_at=None),
     ],
 )
 def test_the_job_schema_refuses_a_malformed_job(message: dict[str, Any]) -> None:
