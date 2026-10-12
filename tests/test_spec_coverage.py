@@ -30,7 +30,8 @@ TESTED_BY = {"verify", "tests", "kind"}
 # Statements whose tests a later task in docs/plan.md writes, with that task:
 # T20 builds the umbrella chart that spec/deployment.md's tests check; and of
 # spec/controls.md's, T22 the definitions, the chart's resources, and the
-# scheduler, T23 the fetcher, T24 the discoverer, and T28 the monitoring.
+# scheduler, T23 the fetcher, T24 the discoverer, and T28 the monitoring,
+# after which each ServiceAccount in RBAC-5's table has its grants on kind.
 # Strict, like xfail_strict: a statement listed here that has a test fails
 # too, and so does one whose task the plan marks done.
 AWAITING = {
@@ -65,13 +66,12 @@ AWAITING = {
             "ACCESS-2",
             "RBAC-1",
             "RBAC-4",
-            "RBAC-5",
         ],
         "T22",
     ),
     **dict.fromkeys(["SOURCE-4", "BACKFILL-2", "ACCESS-1", "ACCESS-3", "RBAC-2"], "T23"),
     **dict.fromkeys(["SOURCE-5", "BACKFILL-1", "BACKFILL-3"], "T24"),
-    "RBAC-3": "T28",
+    **dict.fromkeys(["RBAC-3", "RBAC-5"], "T28"),
 }
 
 
