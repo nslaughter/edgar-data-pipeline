@@ -352,11 +352,11 @@ bulk archives of every company stay outside it
   malformed or doesn't cover one of them.
 
 The git store's budget follows GitHub's limits
-([open question 2](#13-open-questions)). The baseline's 47 bodies take
-2,205,179 bytes of objects, the largest 313,163, and its records 581 bytes
-each (SRC-18). A log of polls would near the budget soonest, and the
-transfer's ranges keep it small
-([records the cluster made](#records-the-cluster-made)).
+([open question 2](#13-open-questions)). The baseline's 43 bodies and
+`submissions`' four further files take 2,205,179 bytes of objects, the
+largest 313,163, and their 47 records 581 bytes each on average (SRC-18).
+A log of polls would near the budget soonest, and the transfer's ranges
+keep it small ([records the cluster made](#records-the-cluster-made)).
 
 - **SCOPE-4** (invariant) No file under `data/` is larger than 50 MiB, the
   size at which GitHub warns, so none nears the 100 MiB GitHub refuses.
