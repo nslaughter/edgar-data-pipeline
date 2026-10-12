@@ -252,11 +252,14 @@ def test_a_timestamps_pattern_alone_holds_each_part_to_its_range(
 
 def wrong_types() -> list[tuple[str, object]]:
     """For each field of section 6's table, values of JSON types its type
-    excludes: a string for an integer, a number for anything else, and null
-    for a field that can't be null."""
+    excludes: a string or a fraction for an integer, a number for anything
+    else, and null for a field that can't be null."""
     wrong: list[tuple[str, object]] = []
     for field, kind in RECORD_FIELDS:
-        wrong.append((field, "1" if kind.startswith("integer") else 1))
+        if kind.startswith("integer"):
+            wrong += [(field, "1"), (field, 1.5)]
+        else:
+            wrong.append((field, 1))
         if "null" not in kind:
             wrong.append((field, None))
     return wrong
@@ -390,6 +393,7 @@ def test_the_event_schema_accepts_a_record_with_every_field() -> None:
             "record": {k: v for k, v in new_record().items() if k != "received_at"},
         },
         {"id": 0, "job": job(), "record": new_record()},
+        {"id": 1.5, "job": job(), "record": new_record()},
         {"id": 1, "job": job(source=None), "record": new_record()},
         {"id": 1, "record": new_record()},
     ],
