@@ -28,9 +28,9 @@ CHECKS = {"verify", "tests", "kind", "review", "operator", "first import"}
 # The checks a statement can't pass without a test that carries its ID.
 TESTED_BY = {"verify", "tests", "kind"}
 # Statements whose tests a later task in docs/plan.md writes, with that task:
-# T20 builds the umbrella chart that spec/deployment.md's tests check; of
-# spec/controls.md's, T22 the definitions, the chart's resources, and the
-# scheduler, T23 the fetcher, T24 the discoverer, and T28 the monitoring,
+# of spec/deployment.md's, T20 builds the charts that most of its tests
+# check, and T21 the first of the pipeline's images; of spec/controls.md's,
+# T22 the definitions, the chart's resources, and the scheduler, T23 the fetcher, T24 the discoverer, and T28 the monitoring,
 # after which each ServiceAccount in RBAC-5's table has its grants on kind;
 # and of spec/snapshots.md's, T35 brings snapshot.py and verify.py to its
 # version 1.0.0, T22 the scheduler's jobs, T23 the fetcher and the cluster
@@ -44,6 +44,7 @@ AWAITING = {
             "CHART-1",
             "CHART-2",
             "CHART-3",
+            "CHART-4",
             "PIN-1",
             "PIN-2",
             "PIN-3",
@@ -53,9 +54,38 @@ AWAITING = {
             "PIN-7",
             "PG-1",
             "PG-2",
+            "PG-3",
+            "PG-4",
+            "PG-5",
+            "CRD-1",
+            "CRD-2",
+            "CRD-3",
+            "CRD-4",
+            "CRD-5",
+            "CRD-6",
+            "KIND-1",
+            "KIND-2",
+            "VOL-1",
+            "VOL-2",
+            "VOL-3",
+            "PLACE-1",
+            "PLACE-2",
+            "NATS-1",
+            "NATS-2",
+            "GARAGE-1",
+            "GARAGE-2",
+            "GARAGE-3",
+            "MON-1",
+            "MON-2",
+            "MON-3",
+            "MON-4",
+            "SECRET-1",
+            "SECRET-2",
+            "SECRET-3",
         ],
         "T20",
     ),
+    **dict.fromkeys(["IMG-1", "IMG-2", "IMG-3"], "T21"),
     **dict.fromkeys(
         [
             "API-2",

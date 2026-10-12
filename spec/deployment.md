@@ -1,157 +1,421 @@
 # Specification: deployment
 
-**Status:** Version 0.1.0, draft, October 11, 2026. This document governs
-what the pipeline's umbrella Helm chart installs and at which versions: the
-charts, operators, and images it pins, the tools that install it, and the
-tests that check them. Where the chart and this document disagree, the chart
-is wrong or this document needs a new version; say which before changing
-either.
+**Status:** Version 1.0.0, draft, October 12, 2026. This document governs
+what the pipeline's Helm charts install, in which order and at which
+versions, and how they configure what they install: the charts, operators,
+and images they pin; the custom resource definitions they install; each
+component's replicas, storage, credentials, and placement; the kind cluster
+they're installed on; the tools that install them; and the tests that check
+them. Where a chart and this document disagree, the chart is wrong or this
+document needs a new version; say which before changing either.
 
 It rests on the decisions to deploy on Kubernetes with Helm, on kind
-([0001]), and to keep the record in PostgreSQL 18 ([0004]), and on the
-decisions that chose the other components ([0002], [0003], [0008]). How each
-component is configured, such as its replicas, storage, and resources, isn't
-in this version ([§9](#9-later-versions)). The pipeline it
-deploys reads filings from the U.S. Securities and Exchange Commission's
-EDGAR system, but nothing here depends on how EDGAR behaves.
+([0001]); to install the definitions and the operators before the umbrella
+chart, in four releases ([0011]); and to keep the record in PostgreSQL 18
+([0004]); and on the decisions that chose the other components ([0002],
+[0003], [0008]). Each component's resource requests and limits, which are
+measured on kind, aren't in this version ([§9](#9-later-versions)). The
+pipeline it deploys reads filings from the U.S. Securities and Exchange
+Commission's EDGAR system, but nothing here depends on how EDGAR behaves.
 
 ## 1. Guarantees
 
 Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)).
 
 1. **The same commit installs the same software.** Every chart is committed
-   at an exact version, and every third-party image is named by its digest.
-   [PIN-1], [PIN-2], [PIN-3], [PIN-4], [PIN-5], [PIN-6], [PIN-7].
-2. **An upgrade is a reviewed change** to the chart, the kind
-   configuration, or CI, since nothing is resolved at install time.
-   [PIN-1], [PIN-4], [PIN-6], [PIN-7].
+   at an exact version, every third-party image is named by its digest, and
+   each of the pipeline's own images by the commit it's built from.
+   [PIN-1], [PIN-2], [PIN-3], [PIN-4], [PIN-5], [PIN-6], [PIN-7], [IMG-1],
+   [IMG-3].
+2. **An upgrade is a reviewed change** to a chart, the kind configuration,
+   or CI, since nothing is resolved or generated at install time. [PIN-1],
+   [PIN-4], [PIN-6], [PIN-7], [SECRET-2].
 3. **Each component comes from the project that maintains it,** never from
    Bitnami. [CHART-2], [CHART-3].
 4. **The database is PostgreSQL 18.** [PG-1], [PG-2].
-5. **The chart renders without the network,** so its tests never reach it.
-   [PIN-2], [PIN-3].
+5. **The charts render without the network,** so their tests never reach
+   it. [PIN-2], [PIN-3].
+6. **Every definition is on the cluster before any resource of its kind,
+   and is upgraded with the chart that installs it.** [CHART-4], [CRD-1],
+   [CRD-2], [CRD-3], [CRD-4], [CRD-5], [CRD-6].
+7. **NATS, Garage, and the database keep running when one worker node is
+   lost:** each keeps three replicas, one on each worker node, and Garage a
+   copy of every object on each. [KIND-1], [PLACE-1], [PLACE-2], [NATS-1],
+   [GARAGE-1], [GARAGE-3], [PG-3].
+8. **Stored data outlives the cluster.** Garage's objects, the database's
+   backups among them, NATS's streams, and Prometheus's and Alertmanager's
+   data are kept in a directory of the host, where a cluster recreated with
+   it finds them. [KIND-2], [VOL-1], [VOL-2], [VOL-3], [PG-4], [PG-5].
+9. **No credential is committed, generated at install time, or shown
+   outside a Secret.** [SECRET-1], [SECRET-2], [SECRET-3], [SECRET-4].
 
 ## 2. Terms
 
-- **Umbrella chart:** the one Helm chart that installs the pipeline
-  ([0001]).
-- **Dependency:** a chart the umbrella chart installs as a subchart, listed
-  in its `Chart.yaml`.
+- **The charts:** the four Helm charts under `deploy/` that install the
+  pipeline, each as a release of its own, in [§5](#5-dependencies)'s order
+  ([0011]).
+- **Umbrella chart:** the last of them, which installs the platform's
+  components, the database, and later the pipeline's own services and
+  controls ([0001], [0011]).
+- **Dependency:** a chart that one of the charts installs as a subchart,
+  listed in its `Chart.yaml`.
+- **Definition:** a `CustomResourceDefinition`. A custom resource can be
+  created only once its kind's definition is on the cluster.
 - **Image:** a container image. An image built from this repository is the
   pipeline's own; any other is third-party.
 - **Pin:** a reference that names one artifact and no other: a chart's exact
   version, committed; an image's digest; a tool's exact version.
-- **The installed chart:** the umbrella chart as CI installs it on kind,
-  with the values it installs it with.
+- **The installed charts:** the charts as CI installs them on kind, in
+  order, with the values it installs them with.
+- **Worker node:** a node of the kind cluster other than its control plane.
+- **The host directory:** the directory of the machine kind runs on that
+  kind's configuration mounts into every worker node ([KIND-2]).
+- **Credential:** a password, token, key, or shared secret by which one
+  component proves itself to another, or that guards an administrative
+  interface.
 
 ## 3. Statement IDs
 
 Every normative statement in this document has an ID, such as `PG-1`: an
-area and a number. The areas `CHART`, `PIN`, and `PG` belong to this
+area and a number. The areas `CHART`, `PIN`, `PG`, `CRD`, `IMG`, `KIND`,
+`VOL`, `PLACE`, `NATS`, `GARAGE`, `MON`, and `SECRET` belong to this
 document. An ID is assigned once and never reused or renumbered. A statement
 that is dropped stays in the [index](#8-index), marked retired.
 
 Each statement is one of two kinds:
 
-- An **invariant** is a property of the chart as committed, and of what it
-  renders. Tests check it by rendering the chart with `helm template`, with
-  the values CI installs it with, without a cluster or the network. They run
-  with the other tests, wherever those run, and need Helm.
-- A **rule** is how the installed chart behaves on a cluster. Tests check it
-  against the installed chart, in the CI job that installs it on kind, and
-  are skipped where no cluster is installed.
+- An **invariant** is a property of the charts and the kind configuration
+  as committed, and of what the charts render. Tests check it by rendering
+  each chart with `helm template`, with the values CI installs it with,
+  apart from the credentials, for which tests give values of their own
+  ([SECRET-4]). They run without a cluster or the network, with the other
+  tests, wherever those run, and need Helm.
+- A **rule** is how the installed charts, or the tools around them, behave.
+  Tests check the installed charts in the CI job that installs them on
+  kind, and are skipped where no cluster is installed. A rule on a tool,
+  such as [IMG-2]'s command, is checked by tests of that tool.
 
 The index says how each statement is checked: by `tests`, by tests on
-`kind`, or in `review` of the pull request that changes what it covers. Every
-statement checked by `tests` or `kind` has at least one test marked with its
-ID, as `@pytest.mark.spec("PG-1")`, and every marker names an ID in a
-specification's index. A test, `tests/test_spec_coverage.py`, enforces both,
-except for a statement whose tests a later task in the
+`kind`, in `review` of the pull request that changes what it covers, or by
+the `operator`, the owner, who keeps it. Every statement checked by `tests`
+or `kind` has at least one test marked with its ID, as
+`@pytest.mark.spec("PG-1")`, and every marker names an ID in a
+specification's index. A test, `tests/test_spec_coverage.py`, enforces
+both, except for a statement whose tests a later task in the
 [plan](../docs/plan.md) writes. It lists such a statement as awaiting that
-task, and fails if the statement has a test or the plan marks the task done.
-This version's statements come before the chart they describe: T20 builds
-the chart and writes their tests, so until then each awaits T20.
+task, and fails if the statement has a test or the plan marks the task
+done. This version's statements come before the charts they describe: T20
+builds the charts and writes their tests, apart from [IMG-1] to [IMG-3]'s,
+which T21 writes with the first of the pipeline's images. Until then each
+awaits its task.
 
 ## 4. Layout
 
 ```text
 deploy/
-  chart/                       the umbrella chart
-    Chart.yaml                 its dependencies, each at an exact version
-    Chart.lock                 the same dependencies, as Helm resolved them
-    charts/NAME-VERSION.tgz    each dependency from a chart repository
+  prometheus-crds/             release 1: the Prometheus operator's definitions
+  cert-manager/                release 2: cert-manager
+  operators/                   release 3: the operators, and the other definitions
+    files/garagenodes.deuxfleurs.fr.yaml
+                               Garage's definition, from its source tree
+  chart/                       release 4: the umbrella chart
     charts/garage/             Garage's chart, from its source tree
-    values.yaml
-    templates/
+    values.schema.json         what its values must hold
   kind.yaml                    the kind cluster's configuration
 ```
 
-- **CHART-1** (invariant) The umbrella chart is at `deploy/chart/`, and the
+Each of the four charts holds:
+
+```text
+CHART/
+  Chart.yaml                   its dependencies, each at an exact version
+  Chart.lock                   the same dependencies, as Helm resolved them
+  charts/NAME-VERSION.tgz      each dependency from a chart repository
+  values.yaml
+  templates/
+```
+
+- **CHART-1** (invariant) The four charts are at the paths the tree gives,
+  each with a `Chart.yaml`, a `Chart.lock`, and a `values.yaml`, and the
   kind cluster's configuration is at `deploy/kind.yaml`.
+
+### The kind cluster
+
+kind runs each node as a container on one machine ([0001]). Garage, NATS,
+and the database each run three replicas, one on each worker node, so the
+loss of a node can be shown ([0002]).
+
+- **KIND-1** (invariant) `deploy/kind.yaml` names one control-plane node
+  and three worker nodes.
+- **KIND-2** (invariant) `deploy/kind.yaml` mounts one host directory into
+  every worker node at `/var/local-path-provisioner`, where kind's storage
+  provisioner keeps each volume, so every volume's data is kept on the
+  host ([0001]). Which directory is the configuration's to say: one that
+  git ignores, or one outside the repository.
+
+### Volumes
+
+kind's default StorageClass, `standard`, deletes a volume's data when its
+claim is deleted, and names the volume's directory with a name generated
+for it, so a cluster recreated with the same host directory can't find the
+data. The umbrella chart adds a class of its own that keeps a volume's data
+and names its directory after its claim.
+
+- **VOL-1** (invariant) The umbrella chart renders one StorageClass,
+  `edgar-retained`, of kind's provisioner, `rancher.io/local-path`, with
+  `reclaimPolicy: Retain`, `volumeBindingMode: WaitForFirstConsumer`, and a
+  `pathPattern` that names each volume's directory by its claim's namespace
+  and name.
+- **VOL-2** (invariant) Each claim the umbrella chart renders, or asks a
+  StatefulSet or an operator to create, for NATS, Garage, Prometheus, or
+  Alertmanager names `edgar-retained`. The database's claims name kind's
+  `standard` class ([PG-3]).
+- **VOL-3** (rule) When a claim of `edgar-retained` is deleted, its data
+  stays in the host directory, and a new claim of the same namespace and
+  name finds it there, in the same cluster or in one recreated with the
+  same host directory.
+
+The database's volumes are on kind's class because a data directory left by
+an earlier cluster would stop a new one from initializing. What outlives
+the cluster for the database is its backups in Garage ([PG-4]), from which
+it is restored ([0004]).
 
 ## 5. Dependencies
 
-In this version, the umbrella chart installs the platform: each component
-from the chart its own project maintains ([0001]).
+The charts are installed as four releases, in this order, each once the
+release before it is ready ([0011]). Each installs its components from the
+charts their own projects maintain ([0001]).
 
-| Dependency | Installs | Repository |
+| Order | Chart | Release | Namespace | Installs |
+| --- | --- | --- | --- | --- |
+| 1 | `deploy/prometheus-crds/` | `prometheus-crds` | `edgar` | The Prometheus operator's definitions ([0008]) |
+| 2 | `deploy/cert-manager/` | `cert-manager` | `cert-manager` | cert-manager, with its definitions, which the Barman Cloud plugin requires for its certificates |
+| 3 | `deploy/operators/` | `operators` | `cnpg-system` | The CloudNativePG operator ([0004]) and its Barman Cloud plugin, which backs the database up to Garage ([0002]), with their definitions; Garage's definition; and the pipeline's own ([`controls.md`](controls.md#4-the-resources)) |
+| 4 | `deploy/chart/` | `edgar` | `edgar` | NATS, with JetStream ([0003]); Garage ([0002]); kube-prometheus-stack ([0008]); the database ([§7](#7-postgresql)); and later the pipeline's services and controls |
+
+Their dependencies:
+
+| Chart | Dependency | Repository |
 | --- | --- | --- |
-| `cert-manager` | cert-manager, which the Barman Cloud plugin requires for its certificates | `oci://quay.io/jetstack/charts` |
-| `cloudnative-pg` | The CloudNativePG operator ([0004]) | `https://cloudnative-pg.github.io/charts` |
-| `plugin-barman-cloud` | CloudNativePG's Barman Cloud plugin, which backs the database up to Garage ([0002], [0004]) | `https://cloudnative-pg.github.io/charts` |
-| `nats` | NATS, with JetStream ([0003]) | `https://nats-io.github.io/k8s/helm/charts/` |
-| `garage` | Garage ([0002]) | None: `script/helm/garage` in Garage's source tree, `https://git.deuxfleurs.fr/Deuxfleurs/garage`, committed ([PIN-3]) |
-| `kube-prometheus-stack` | The Prometheus operator, Prometheus, Alertmanager, Grafana, kube-state-metrics, and node-exporter ([0008]) | `oci://ghcr.io/prometheus-community/charts` |
+| `deploy/prometheus-crds/` | `prometheus-operator-crds` | `oci://ghcr.io/prometheus-community/charts` |
+| `deploy/cert-manager/` | `cert-manager` | `oci://quay.io/jetstack/charts` |
+| `deploy/operators/` | `cloudnative-pg` | `https://cloudnative-pg.github.io/charts` |
+| `deploy/operators/` | `plugin-barman-cloud` | `https://cloudnative-pg.github.io/charts` |
+| `deploy/chart/` | `nats` | `https://nats-io.github.io/k8s/helm/charts/` |
+| `deploy/chart/` | `garage` | None: `script/helm/garage` in Garage's source tree, `https://git.deuxfleurs.fr/Deuxfleurs/garage`, committed ([PIN-3]) |
+| `deploy/chart/` | `kube-prometheus-stack` | `oci://ghcr.io/prometheus-community/charts` |
 
 The database itself, a CloudNativePG `Cluster` and its `ImageCatalog`, is
 in the umbrella chart's own templates ([§7](#7-postgresql)). Tempo, Loki,
-Alloy, and the pipeline's own services arrive in later versions.
+Alloy, and the pipeline's own services arrive in later versions. The
+operators run as their charts deploy them by default, one replica each:
+while one restarts, its resources wait in the API server.
 
-- **CHART-2** (invariant) The umbrella chart's dependencies are those in the
-  table, each under its name and from its repository, and no others.
+- **CHART-2** (invariant) Each chart's dependencies are those the table
+  gives it, each under its name and from its repository, and no others.
 - **CHART-3** (invariant) Nothing comes from Bitnami ([0001]): no
   dependency's repository, no repository of a chart a dependency includes,
-  and no image the chart renders contains `bitnami`.
+  and no image a chart renders contains `bitnami`.
+- **CHART-4** (rule) CI installs and upgrades the charts as the first
+  table's releases, each in its namespace, in the table's order, and each
+  with `--wait`, so that a release starts only once the release before it
+  is ready. The owner installs and upgrades them the same way.
+
+### Definitions
+
+Helm installs a chart's `crds/` directory on the first install only, and
+never upgrades it. It also checks a release against the cluster's API
+before it creates anything, so a resource can't be in the release that
+installs its definition ([0011]). So each definition is a template of a
+release before the first that needs it, and Helm upgrades it with that
+release.
+
+- **CRD-1** (invariant) Every definition the charts install is rendered
+  from a template: each chart renders the same manifests with
+  `helm template --include-crds` as without it, so none comes from a
+  `crds/` directory.
+- **CRD-2** (invariant) Each definition is rendered by one chart: the
+  Prometheus operator's by `deploy/prometheus-crds/`; cert-manager's by
+  `deploy/cert-manager/`; and CloudNativePG's, the Barman Cloud plugin's,
+  and Garage's by `deploy/operators/`, which also renders the pipeline's
+  own ([API-2](controls.md#4-the-resources)). The umbrella chart renders
+  none.
+- **CRD-3** (invariant) Each custom resource a chart renders is of a kind
+  whose definition an earlier chart in the table's order renders. No
+  admission webhook that a chart renders with `failurePolicy: Fail` admits
+  a resource that the same chart renders.
+- **CRD-4** (invariant) Every definition the charts render carries the
+  annotation `helm.sh/resource-policy: keep`, so Helm never deletes it, and
+  with it every resource of its kind, when a release is uninstalled or an
+  upgrade drops it.
+- **CRD-5** (invariant) Each definition is of the version of what uses it.
+  cert-manager's, CloudNativePG's, and the plugin's come in the charts of
+  the operators that use them, and the pipeline's own are those in
+  `spec/schemas/`. Two come apart from what uses them, and match it:
+  - `prometheus-operator-crds`'s `appVersion` is the tag of the Prometheus
+    operator's image that kube-prometheus-stack renders;
+  - Garage's definition is the file
+    `script/k8s/crd/garagenodes.deuxfleurs.fr.yaml` from Garage's source
+    tree, at the tag [PIN-3] names for Garage's chart, committed unchanged
+    at `deploy/operators/files/`, and rendered with only [CRD-4]'s
+    annotation added.
+- **CRD-6** (rule) Every definition on the cluster of the installed charts
+  belongs to one of the four releases, as Helm's annotations on it say. No
+  component creates one.
+
+### Placement
+
+- **PLACE-1** (invariant) NATS's servers, Garage's nodes, and the
+  database's instances each need a worker node of their own. NATS's and
+  Garage's pods carry, against the other pods of their component, a
+  required pod anti-affinity, or a topology spread constraint with
+  `whenUnsatisfiable: DoNotSchedule`, on `kubernetes.io/hostname`. The
+  `Cluster` sets `affinity.podAntiAffinityType: required`, with that
+  topology key.
+- **PLACE-2** (rule) In the installed charts, each of the three runs its
+  three replicas on the three worker nodes, one on each.
+
+### NATS
+
+- **NATS-1** (invariant) NATS runs as one cluster of three servers with
+  JetStream, each keeping JetStream's file store on a claim of its own
+  ([VOL-2]) ([0003]).
+- **NATS-2** (rule) In the installed charts, the three servers form one
+  cluster, and JetStream reports all three in its meta group, with a
+  leader.
+
+### Garage
+
+- **GARAGE-1** (invariant) Garage runs as a StatefulSet of three, with a
+  replication factor of 3, each node keeping its metadata and its data on
+  claims of its own ([VOL-2]) ([0002]). It finds its peers through
+  Kubernetes, with its chart's values `garage.kubernetesSkipCrd` and
+  `garage.noClusterRole` set to `true`, so it creates no definition
+  ([CRD-6]) and holds only a Role in its namespace.
+- **GARAGE-2** (invariant) The umbrella chart renders a Job, a Helm hook run
+  after each install and upgrade, that sets Garage up as the umbrella
+  chart's values describe ([0002]). It:
+  - assigns each of the three nodes a zone of its own and a capacity in the
+    layout, and applies it;
+  - imports each key, with the ID and secret [SECRET-1] describes;
+  - creates each bucket;
+  - grants each key its buckets.
+
+  It reaches Garage's admin API with the admin token, and succeeds when
+  what it would create already exists. In this version, the values list
+  one bucket, `database-backups`, and one key, which may read and write
+  only that bucket, for the database's backups ([PG-4]).
+- **GARAGE-3** (rule) In the installed charts, Garage's layout holds its
+  three nodes, in three zones, each node holding a copy of every object.
+  Each bucket and key the values list exists, with the grants they give,
+  and the Job succeeds when it runs again.
+
+### Monitoring
+
+- **MON-1** (invariant) kube-prometheus-stack scrapes nothing kind doesn't
+  expose: it renders no monitor or rule group for the controller manager,
+  the scheduler, etcd, or kube-proxy ([0008]).
+- **MON-2** (invariant) Grafana is read-only ([0008]). It admits anonymous
+  viewers with the `Viewer` role only, with its login form, basic
+  authentication, and sign-up turned off, so no one signs in to change
+  anything. Its dashboards and data sources come only from the charts,
+  through its sidecars, and a provisioned dashboard can't be saved from its
+  interface.
+- **MON-3** (invariant) Alertmanager sends nothing outside the cluster: its
+  configuration's only receiver is `null`, with no integration ([0008]).
+- **MON-4** (invariant) Prometheus, Alertmanager, and Grafana each run one
+  replica. Prometheus and Alertmanager keep their data on claims
+  ([VOL-2]). Grafana keeps none, since what it shows is provisioned.
+
+### Credentials
+
+Each component keeps its own credentials in Secrets ([0001]). An operator
+that generates one in the cluster, such as CloudNativePG for the database's
+owner, keeps it there. Every other credential comes from the owner's
+values, so the same values render the same chart.
+
+- **SECRET-1** (invariant) Every credential the umbrella chart's
+  components use, apart from those an operator generates in the cluster, is
+  a value of the umbrella chart. Its `values.schema.json` requires it, and
+  none of its committed values files sets it, so `helm template` fails
+  without it. In this version: Garage's RPC secret and admin token, the ID
+  and secret of each Garage key, and Grafana's admin password. The chart
+  renders each into a Secret, from which its component reads it.
+- **SECRET-2** (invariant) The charts render the same manifests from the
+  same values: nothing they render is generated as they render it, such as
+  a random credential.
+- **SECRET-3** (invariant) A credential appears in what the charts render
+  only in a Secret. It never appears in a ConfigMap, in a container's
+  arguments or literal environment values, or in a custom resource's
+  `spec`.
+- **SECRET-4** (rule) CI generates new credentials for each cluster it
+  creates. The owner keeps theirs in a values file git ignores, and never
+  puts one in a commit, a pull request, or a log.
 
 ## 6. Pins
 
-Which version each pin names is for the chart, the kind configuration, and
+Which version each pin names is for the charts, the kind configuration, and
 CI to say, not this document. An upgrade changes one of them and is reviewed
 there, without a new version of this document. The exceptions are
 PostgreSQL's major version ([PG-1]) and Helm's ([PIN-7]).
 
-- **PIN-1** (invariant) Each dependency in `Chart.yaml` names one exact
-  version: a semantic version, with or without a leading `v`, without a
-  range, a wildcard, or a constraint. `Chart.lock` lists the same
-  dependencies, with the same versions and repositories.
+- **PIN-1** (invariant) Each dependency in each chart's `Chart.yaml` names
+  one exact version: a semantic version, with or without a leading `v`,
+  without a range, a wildcard, or a constraint. The chart's `Chart.lock`
+  lists the same dependencies, with the same versions and repositories.
 - **PIN-2** (invariant) Each dependency from a chart repository is
   committed as the packaged chart `helm dependency update` downloads, at
-  `deploy/chart/charts/NAME-VERSION.tgz`, so `helm template` renders the
-  chart without the network.
+  `deploy/CHART/charts/NAME-VERSION.tgz` in the chart that depends on it,
+  so `helm template` renders each chart without the network.
 - **PIN-3** (invariant) Garage's chart, which no chart repository publishes
   ([0002]), is committed as the directory `deploy/chart/charts/garage/`,
   unchanged from `script/helm/garage` in Garage's source tree at a release
   tag. The umbrella chart's dependency on it names the version in that
   directory's `Chart.yaml`, and the commit that adds or upgrades it names
   the tag.
-- **PIN-4** (invariant) Every third-party image the chart renders, as the
+- **PIN-4** (invariant) Every third-party image the charts render, as the
   value of a field named `image` anywhere in a rendered manifest, whether
   in a container or in a custom resource, is named as
   `REPOSITORY:TAG@sha256:DIGEST`, where `DIGEST` is 64 lower-case
   hexadecimal digits: the tag for readers, and the digest for the runtime.
   An image an operator chooses without such a field is held to [PIN-5].
-- **PIN-5** (rule) In every pod of the installed chart, each container and
+- **PIN-5** (rule) In every pod of the installed charts, each container and
   init container that runs a third-party image names it by digest, as
-  [PIN-4] has it. The chart's pods are those of the resources it renders,
-  and those its operators create for them, such as the database's
+  [PIN-4] has it. The charts' pods are those of the resources they render,
+  and those their operators create for them, such as the database's
   instances, in whichever namespace they run. Kind's own pods, such as its
   control plane, CoreDNS, kindnet, and its storage provisioner, aren't the
-  chart's: their images come with the node image that [PIN-6] pins.
+  charts': their images come with the node image that [PIN-6] pins.
 - **PIN-6** (invariant) `deploy/kind.yaml` names every node's image as
   `kindest/node:TAG@sha256:DIGEST`, which also pins the cluster's Kubernetes
   version.
 - **PIN-7** (invariant) CI installs Helm and kind at exact versions, and
   Helm at major version 4.
+
+### The pipeline's own images
+
+An image built from this repository has no registry, and so no digest. Each
+is built from a commit, tagged with it, and loaded into kind's nodes, as the
+owner decided ([§9](#9-later-versions)).
+
+- **IMG-1** (invariant) Every image the umbrella chart renders is either
+  third-party, named as [PIN-4] has it, or the pipeline's own, named as
+  `REPOSITORY:COMMIT` without a digest, where `COMMIT` is the value
+  `images.commit`. Every container that runs one of the pipeline's own has
+  `imagePullPolicy: Never`. The chart's `values.schema.json` requires
+  `images.commit`, 40 lower-case hexadecimal digits, which its default
+  values don't set.
+- **IMG-2** (rule) One command builds the pipeline's images. It refuses a
+  working tree with uncommitted changes, tags each image with the
+  40-character hash of the commit checked out, and loads it into each node
+  of the kind cluster with `kind load docker-image`. No image of the
+  pipeline's own is pushed to, or pulled from, a registry.
+- **IMG-3** (rule) In the installed charts, each container that runs one of
+  the pipeline's images runs the image built from the commit CI installs
+  the charts from.
+- **IMG-4** (rule) The owner installs and upgrades the umbrella chart with
+  `images.commit` set to the commit checked out, after building and loading
+  its images with [IMG-2]'s command.
 
 ## 7. PostgreSQL
 
@@ -159,69 +423,158 @@ The pipeline's record and facts are kept in PostgreSQL 18 ([0004]). Which
 image of 18 the catalog names, its minor version, its type, and its
 operating system, is the chart's to say, like any other pin.
 
-- **PG-1** (invariant) The chart renders one CloudNativePG `ImageCatalog`.
-  Its only entry has `major: 18` and names an image from
-  `ghcr.io/cloudnative-pg/postgresql` whose tag begins with `18.`, by digest
-  ([PIN-4]). Every `Cluster` names its image through that catalog, with
-  `major: 18`, and sets no `imageName`.
-- **PG-2** (rule) Every instance of every `Cluster` in the installed chart
+- **PG-1** (invariant) The charts render one CloudNativePG `ImageCatalog`,
+  in the umbrella chart. Its only entry has `major: 18` and names an image
+  from `ghcr.io/cloudnative-pg/postgresql` whose tag begins with `18.`, by
+  digest ([PIN-4]). Every `Cluster` names its image through that catalog,
+  with `major: 18`, and sets no `imageName`.
+- **PG-2** (rule) Every instance of every `Cluster` in the installed charts
   reports a `server_version_num` from 180000 to 189999: PostgreSQL 18.
 
 A new minor version changes only the catalog's image. A new major version
 takes a decision record that supersedes [0004], and a major version of this
 document.
 
+### Instances and backups
+
+- **PG-3** (invariant) The umbrella chart renders one CloudNativePG
+  `Cluster`, with three instances ([0004]), its volumes on kind's `standard`
+  class ([VOL-2]).
+- **PG-4** (invariant) The `Cluster` archives its WAL and takes base
+  backups through the Barman Cloud plugin, as its WAL archiver. They go to
+  one `ObjectStore`, which the umbrella chart renders, whose destination
+  is Garage's `database-backups` bucket, reached with that bucket's key
+  from its Secret ([GARAGE-2]). A `ScheduledBackup` with `method: plugin`
+  takes a base backup of the `Cluster` at least once a day ([0002],
+  [0004]).
+- **PG-5** (rule) In the installed charts, the `Cluster` reports that
+  continuous archiving to Garage works, and a base backup to Garage
+  completes.
+
+The backup plugin has been tested against MinIO, not Garage, so a restore
+from these backups is shown on kind before they're relied on ([0002]), by
+the drills in the [plan](../docs/plan.md).
+
 ## 8. Index
 
 | ID | Kind | Checked by | Statement |
 | --- | --- | --- | --- |
-| CHART-1 | invariant | tests | The chart is at `deploy/chart/`, and kind's configuration at `deploy/kind.yaml`. |
-| CHART-2 | invariant | tests | The dependencies are the table's, from its repositories. |
+| CHART-1 | invariant | tests | The four charts are at their paths under `deploy/`, and kind's configuration at `deploy/kind.yaml`. |
+| CHART-2 | invariant | tests | Each chart's dependencies are the table's, from its repositories. |
 | CHART-3 | invariant | tests | No chart or image comes from Bitnami. |
+| CHART-4 | rule | kind, operator | The four releases are installed and upgraded in order, each once the one before it is ready. |
 | PIN-1 | invariant | tests | Each dependency names an exact version, which `Chart.lock` repeats. |
 | PIN-2 | invariant | tests | Each dependency from a repository is committed, packaged. |
 | PIN-3 | invariant | tests, review | Garage's chart is committed unchanged from a release tag. |
-| PIN-4 | invariant | tests | Each third-party image the chart renders is named by tag and digest. |
-| PIN-5 | rule | kind | Each third-party image in the installed chart's pods is named by digest. |
+| PIN-4 | invariant | tests | Each third-party image the charts render is named by tag and digest. |
+| PIN-5 | rule | kind | Each third-party image in the installed charts' pods is named by digest. |
 | PIN-6 | invariant | tests | Each kind node's image is named by digest. |
 | PIN-7 | invariant | tests | CI installs Helm and kind at exact versions, Helm at major version 4. |
 | PG-1 | invariant | tests | One image catalog, of major version 18, names the database's image. |
 | PG-2 | rule | kind | Every database instance reports PostgreSQL 18. |
+| PG-3 | invariant | tests | One database `Cluster`, of three instances, on kind's `standard` class. |
+| PG-4 | invariant | tests | The database archives its WAL and backs up daily to Garage, through the plugin. |
+| PG-5 | rule | kind | The database's archiving works, and a backup completes. |
+| CRD-1 | invariant | tests | Every definition is a template, none from a `crds/` directory. |
+| CRD-2 | invariant | tests | Each definition is rendered by the chart the table gives it; the umbrella chart renders none. |
+| CRD-3 | invariant | tests | Each resource's definition, and any webhook that fails closed on it, comes from an earlier chart. |
+| CRD-4 | invariant | tests | Every definition is kept when a release is uninstalled. |
+| CRD-5 | invariant | tests, review | The Prometheus operator's and Garage's definitions match the versions that use them. |
+| CRD-6 | rule | kind | Every definition on the cluster belongs to one of the four releases. |
+| IMG-1 | invariant | tests | The pipeline's images are tagged with `images.commit`, and never pulled. |
+| IMG-2 | rule | tests | One command builds the images from a clean commit, tags them with it, and loads them into kind. |
+| IMG-3 | rule | kind | The installed charts run the images built from the commit CI installs. |
+| IMG-4 | rule | operator | The owner installs the umbrella chart with the commit checked out, after building its images. |
+| KIND-1 | invariant | tests | kind has one control-plane node and three workers. |
+| KIND-2 | invariant | tests | Every worker node keeps its volumes in one host directory. |
+| VOL-1 | invariant | tests | The `edgar-retained` class keeps a volume's data, at a path named by its claim. |
+| VOL-2 | invariant | tests | NATS, Garage, Prometheus, and Alertmanager claim `edgar-retained`; the database claims `standard`. |
+| VOL-3 | rule | kind | A new claim of the same namespace and name finds a deleted claim's data. |
+| PLACE-1 | invariant | tests | NATS's, Garage's, and the database's replicas each need a worker node of their own. |
+| PLACE-2 | rule | kind | Their replicas run one on each worker node. |
+| NATS-1 | invariant | tests | NATS is a cluster of three servers, with JetStream on claims. |
+| NATS-2 | rule | kind | The three servers form one JetStream cluster, with a leader. |
+| GARAGE-1 | invariant | tests | Garage is three nodes, replication factor 3, on claims, with no definition or ClusterRole of its own. |
+| GARAGE-2 | invariant | tests | A hook Job sets the layout, keys, buckets, and grants, and can run again. |
+| GARAGE-3 | rule | kind | Garage's layout, buckets, keys, and grants are as the values say. |
+| MON-1 | invariant | tests | Nothing kind doesn't expose is scraped. |
+| MON-2 | invariant | tests | Grafana is read-only, with provisioned dashboards and data sources only. |
+| MON-3 | invariant | tests | Alertmanager sends nothing outside the cluster. |
+| MON-4 | invariant | tests | Prometheus, Alertmanager, and Grafana run one replica each. |
+| SECRET-1 | invariant | tests | Each credential is a required value, set by no committed file, rendered into a Secret. |
+| SECRET-2 | invariant | tests | The same values render the same manifests. |
+| SECRET-3 | invariant | tests | A credential appears only in a Secret. |
+| SECRET-4 | rule | review, operator | CI generates credentials per cluster, and the owner commits none. |
 
 ## 9. Later versions
 
-The owner has decided what later versions of this document will say on two
-questions this version leaves open.
+Later versions of this document will add:
 
-1. **The pipeline's own images.** Each image built from this repository is
-   tagged with the commit it is built from and loaded into kind with
-   `kind load docker-image`, never pushed to or pulled from a registry. The
-   owner decided this on October 11, 2026, and decided on October 12, 2026
-   that the minor version item 2 describes says so in statements, before
-   the first service is built.
-2. **The components' configuration.** The decision records describe each
-   component's replicas, storage, Secrets, and placement, such as three
-   Garage nodes with a replication factor of 3 ([0002]) and three
-   PostgreSQL instances ([0004]); none of it is a statement yet. The owner
-   decided on October 11, 2026 that it becomes statements in a minor
-   version of this document, written before the platform is built, and
-   checked the same way.
+1. **The pipeline's own services,** as each is built, with their replicas,
+   credentials, and placement, such as the fetcher's two replicas and its
+   Lease ([0005]).
+2. **Each component's resource requests and limits,** measured on kind
+   ([0001]), and its probes.
+3. **Tempo, Loki, and Alloy** ([0008]).
+
+The owner decided on October 11, 2026 that each image built from this
+repository is tagged with the commit it's built from and loaded into kind
+with `kind load docker-image`, never pushed to or pulled from a registry,
+and decided on October 12, 2026 that this version states it before the
+first service is built: [IMG-1] to [IMG-4]. The owner decided on October
+11, 2026 that the components' configuration becomes statements before the
+platform is built, checked the same way as the pins: this version's
+sections 4, 5, and 7.
 
 ## 10. Changes to this document
 
 Versions follow semantic versioning. Adding a statement, a dependency, or a
 check is a minor version. Changing the meaning of a statement, removing or
-replacing a dependency, moving one to another repository, or changing
-PostgreSQL's or Helm's major version is a major version. IDs are never
-reused, and a retired statement stays in the index.
+replacing a dependency, moving one to another repository or chart, or
+changing PostgreSQL's or Helm's major version is a major version. IDs are
+never reused, and a retired statement stays in the index.
+
+### From version 0.1.0
+
+Version 0.1.0 had one umbrella chart install every component. Version 1.0.0
+moves cert-manager, CloudNativePG, and the Barman Cloud plugin to charts
+installed before it, and adds the Prometheus operator's definitions as a
+chart of their own ([0011]). So [CHART-1], [CHART-2], [PIN-1], [PIN-2],
+[PIN-4], [PIN-5], [PG-1], and [PG-2] now speak of every chart. Nothing was
+built under version 0.1.0, so nothing installed changes.
 
 [0001]: ../docs/decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
 [0002]: ../docs/decisions/0002-store-bodies-in-garage.md
 [0003]: ../docs/decisions/0003-queue-work-in-nats-jetstream.md
 [0004]: ../docs/decisions/0004-keep-the-record-in-postgresql-18.md
+[0005]: ../docs/decisions/0005-send-sec-requests-through-one-active-fetcher.md
 [0008]: ../docs/decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md
+[0011]: ../docs/decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md
+[CHART-1]: #4-layout
 [CHART-2]: #5-dependencies
 [CHART-3]: #5-dependencies
+[CHART-4]: #5-dependencies
+[CRD-1]: #definitions
+[CRD-2]: #definitions
+[CRD-3]: #definitions
+[CRD-4]: #definitions
+[CRD-5]: #definitions
+[CRD-6]: #definitions
+[GARAGE-1]: #garage
+[GARAGE-2]: #garage
+[GARAGE-3]: #garage
+[IMG-1]: #the-pipelines-own-images
+[IMG-2]: #the-pipelines-own-images
+[IMG-3]: #the-pipelines-own-images
+[IMG-4]: #the-pipelines-own-images
+[KIND-1]: #the-kind-cluster
+[KIND-2]: #the-kind-cluster
+[NATS-1]: #nats
+[PG-1]: #7-postgresql
+[PG-2]: #7-postgresql
+[PG-3]: #instances-and-backups
+[PG-4]: #instances-and-backups
+[PG-5]: #instances-and-backups
 [PIN-1]: #6-pins
 [PIN-2]: #6-pins
 [PIN-3]: #6-pins
@@ -229,5 +582,12 @@ reused, and a retired statement stays in the index.
 [PIN-5]: #6-pins
 [PIN-6]: #6-pins
 [PIN-7]: #6-pins
-[PG-1]: #7-postgresql
-[PG-2]: #7-postgresql
+[PLACE-1]: #placement
+[PLACE-2]: #placement
+[SECRET-1]: #credentials
+[SECRET-2]: #credentials
+[SECRET-3]: #credentials
+[SECRET-4]: #credentials
+[VOL-1]: #volumes
+[VOL-2]: #volumes
+[VOL-3]: #volumes
