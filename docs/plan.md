@@ -1,8 +1,8 @@
 # Plan: the EDGAR data pipeline
 
-**Status:** October 12, 2026. T1 to T3, T13, and T14 are done. The next is
-T4, a run against the SEC that waits for the owner to ask for it; the first
-task ready without the owner is T15.
+**Status:** October 12, 2026. T1 to T3 and T13 to T15 are done. The next
+is T4, a run against the SEC that waits for the owner to ask for it; the
+first task ready without the owner is T35.
 
 The tasks that build the pipeline, in the order they're to be done, and
 which are done. When the owner asks for the next item, an agent takes the
@@ -72,7 +72,7 @@ into smaller tasks once its specifications are written.
 | --- | --- | --- | --- |
 | T13 | **Deployment, `spec/deployment.md`.** The pinned charts, operators, and images, PostgreSQL's major version 18 among them, and the chart tests that check them ([0001](decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md), [0004](decisions/0004-keep-the-record-in-postgresql-18.md)). As the second specification, it extends `tests/test_spec_coverage.py` to every `spec/*.md`. | — | October 11, 2026: version 0.1.0, whose tests T20 writes |
 | T14 | **Controls, `spec/controls.md`.** The `Source`, `Backfill`, and `SecAccess` resources, their `v1alpha1` schemas in `spec/schemas/`, including each `Source`'s cadence and its bounds, which the chart checks before it applies them, and who may change what ([0007](decisions/0007-control-the-pipeline-through-custom-resources.md), [0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)). | 0010 | October 12, 2026: version 0.1.0, whose tests T22, T23, T24, and T28 write, apart from API-1's |
-| T15 | **The snapshot store's version 1.0.0.** A major version of [`spec/snapshots.md`](../spec/snapshots.md): its guarantees on Garage and PostgreSQL as well as git, the rate limit and one process through the Lease (FETCH-6, FETCH-7), the user agent from a Secret (FETCH-2, ID-1), how `data/scope.json` relates to `Source` resources, each response's `Date` and arrival time, how the records of the git store's scope reach `data/` so findings can cite them, how `edgar-asof`'s cache relates to the store, and how data written under version 0.2.0 is read. | T14, 0010 | |
+| T15 | **The snapshot store's version 1.0.0.** A major version of [`spec/snapshots.md`](../spec/snapshots.md): its guarantees on Garage and PostgreSQL as well as git, the rate limit and one process through the Lease (FETCH-6, FETCH-7), the user agent from a Secret (FETCH-2, ID-1), how `data/scope.json` relates to `Source` resources, each response's `Date` and arrival time, how the records of the git store's scope reach `data/` so findings can cite them, how `edgar-asof`'s cache relates to the store, and how data written under version 0.2.0 is read. | T14, 0010 | October 12, 2026: version 1.0.0, whose tests T22, T23, T24, T35, and T36 write, apart from STORE-1's, REC-13's, and JOB-1's |
 | T35 | **The scripts at the store's version 1.0.0.** `snapshot.py` records each response's arrival as `received_at` and its `Date` as `date` (REC-10), and `verify.py` checks them (REC-1, REC-11), accepts the fetcher's `tool` (REC-1), leaves a `304` the transfer copied to the cluster store's check (REC-5), finds a record held twice (REC-12), and holds `data/` to its budget (SCOPE-4, SCOPE-5) ([`spec/snapshots.md`](../spec/snapshots.md)). | T15 | |
 | T16 | **Notices, `spec/notices.md`.** The discoverer's messages; each filing's times, raw, with the polls that bound when each source first showed it; coverage and gaps; and the queries that give each lag. | T15, 0010 | |
 | T19 | **Telemetry for observing filings, `spec/telemetry.md`.** The metrics and traces the scheduler, the fetcher, and the discoverer emit; the views of the record that show coverage, gaps, and each source's lag; and the alerts on a `403`, on a gap longer than its source's cadence, and on a backup more than a day old ([0008](decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md)). | T16 | |
