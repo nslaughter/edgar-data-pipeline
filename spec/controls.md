@@ -157,9 +157,10 @@ controls:
   Source, Backfill, or SecAccess, and no `status`.
 - **VAL-2** (invariant) The chart refuses values from which it would render
   a resource that the API server refuses, by its definition ([API-3]) or by
-  its name: `helm template`, `helm install`, and `helm upgrade` fail. Its
-  `values.schema.json` requires each Source's `cadenceSeconds`, an integer
-  of at least 1 ([0010]).
+  its name, apart from a change to a Backfill's `spec`, which depends on the
+  `spec` the cluster holds: `helm template`, `helm install`, and
+  `helm upgrade` fail. Its `values.schema.json` requires each Source's
+  `cadenceSeconds`, an integer of at least 1 ([0010]).
 - **VAL-3** (invariant) The chart refuses values whose Sources not paused
   would together poll faster than the budget: those whose sum of
   `1 / cadenceSeconds` is more than 5/2. A sum of exactly 5/2 passes: 25
@@ -174,6 +175,11 @@ pass [VAL-3] and together exceed the budget ([0010]). Nothing reaches the
 cluster another way ([RBAC-6]), so no admission webhook checks the
 resources. Should anything, the definition still refuses a cadence under a
 second, and the scheduler reports a total over the budget ([SOURCE-3]).
+
+The chart renders without the cluster, so it can't see that a Backfill's
+`spec` differs from the one the cluster holds. The API server refuses that
+change ([API-3]), so `helm upgrade` fails then, though `helm template`
+passes.
 
 The chart's values start with a Source for each company's `submissions`, at
 10 seconds ([0010]); a cadence is changed there, and isn't a statement.
@@ -357,7 +363,7 @@ annotations, so none needs to change a resource itself.
 | API-2 | invariant | tests | The chart's definitions and those generated from Go are those in `spec/schemas/`. |
 | API-3 | rule | tests | The API server refuses a resource its definition refuses. |
 | VAL-1 | invariant | tests | The chart renders the resources from `controls` in its values, and no others. |
-| VAL-2 | invariant | tests | The chart refuses values that would render a resource the API server refuses. |
+| VAL-2 | invariant | tests | The chart refuses values that would render a resource the API server refuses, but for a changed Backfill. |
 | VAL-3 | invariant | tests | The chart refuses Sources that together would poll faster than the budget. |
 | VAL-4 | invariant | tests | The chart's default values pause the SecAccess. |
 | SOURCE-1 | rule | tests | Only a Source that's polling is polled, and its condition says so. |
