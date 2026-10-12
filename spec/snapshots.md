@@ -545,14 +545,15 @@ An event's fields:
   ([VAL-3](controls.md#5-the-charts-values)), leave the other half to the
   rest.
 - **JOB-5** (rule) The fetcher acknowledges a job whose `expires_at` has
-  passed when it takes the job, without a request or a record.
+  passed when it takes the job, without a request or a record, unless the
+  table already holds the job's record, which [JOB-6] covers.
 - **JOB-6** (rule) For each job it fetches, the fetcher adds the record,
   then publishes its event, then acknowledges the job, each once the step
   before has succeeded. Given a job whose record the table already holds,
   as after a redelivery, it publishes that record's event again and
-  acknowledges the job, without a request. So a job is fetched again only
-  if its fetch wasn't recorded, and an event can arrive twice, with the
-  same `id`.
+  acknowledges the job, without a request, even if the job's `expires_at`
+  has passed ([JOB-5]). So a job is fetched again only if its fetch wasn't
+  recorded, and an event can arrive twice, with the same `id`.
 - **JOB-7** (rule) A consumer of jobs or events ignores fields it doesn't
   know, as readers of records do ([REC-9]). The fetcher acknowledges a job
   that doesn't validate against
@@ -652,7 +653,7 @@ the bucket, and keeps its manifest as the facts specification will say
 | JOB-2 | rule | tests | The scheduler queues each poll as a job that expires when the next is due. |
 | JOB-3 | rule | tests | Filings' and Backfills' fetches are queued as jobs of their kinds, without expiry. |
 | JOB-4 | rule | kind | The fetcher takes polls first, then filings', then Backfills'. |
-| JOB-5 | rule | kind | An expired job is acknowledged without a request. |
+| JOB-5 | rule | kind | An expired job without a record is acknowledged without a request. |
 | JOB-6 | rule | kind | Record, then event, then acknowledgement; a recorded job isn't fetched again. |
 | JOB-7 | rule | kind | Consumers ignore unknown fields; a malformed job is acknowledged without a request. |
 | IMP-1 | invariant | verify | A manifest has its fields and its file's name. |
@@ -780,6 +781,8 @@ this version's in three ways:
 [FETCH-18]: #the-fetcher
 [JOB-3]: #jobs-and-events
 [JOB-4]: #jobs-and-events
+[JOB-5]: #jobs-and-events
+[JOB-6]: #jobs-and-events
 [IMP-1]: #11-imports
 [IMP-2]: #11-imports
 [IMP-3]: #11-imports
