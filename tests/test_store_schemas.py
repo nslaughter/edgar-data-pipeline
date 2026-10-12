@@ -12,11 +12,12 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -28,6 +29,15 @@ FIELD_ROW = re.compile(r"^\| `(\w+)` \| ([^|]+) \|")
 # indented line, which no constraint or comment begins with, and its type.
 COLUMN = re.compile(r"^    ([a-z_][a-z0-9_]*) +(.+?),?$", re.M)
 FETCHER = "fetcher@" + "0123456789abcdef" * 2 + "01234567"
+# A timestamp's format, "date-time", holds each day to its month when a
+# validator asserts it, as these tests' validators do. jsonschema checks
+# that format only with a package the tests don't install, so this parses it.
+FORMATS = FormatChecker(formats=())
+
+
+@FORMATS.checks("date-time", raises=ValueError)
+def is_date_time(value: object) -> bool:
+    return not isinstance(value, str) or datetime.fromisoformat(value).tzinfo is not None
 
 
 def table_after(marker: str) -> list[str]:
@@ -56,12 +66,13 @@ def schema(name: str) -> dict[str, Any]:
 
 
 def validator(name: str) -> Draft202012Validator:
-    """A validator for the schema, which resolves the others by their $id."""
+    """A validator for the schema, which resolves the others by their $id and
+    asserts formats."""
     resources = [Resource.from_contents(schema(path.name)) for path in SCHEMAS.glob("*.json")]
     registry: Registry[Any] = Registry().with_resources(
         (resource.contents["$id"], resource) for resource in resources
     )
-    return Draft202012Validator(schema(name), registry=registry)
+    return Draft202012Validator(schema(name), registry=registry, format_checker=FORMATS)
 
 
 def records() -> list[dict[str, Any]]:
@@ -144,6 +155,7 @@ def test_every_record_in_the_store_validates() -> None:
         {"tool": "scripts/snapshot.py@" + "a" * 40 + "+dirty"},
         {"tool": "scripts/snapshot.py@unknown"},
         {"status": None, "received_at": None, "date": None, "error": "no response: timeout"},
+        {"requested_at": "2028-02-29T23:59:59.999Z", "received_at": "2028-03-01T00:00:00.000Z"},
     ],
 )
 def test_the_record_schema_accepts_each_writers_record(changes: dict[str, Any]) -> None:
@@ -156,6 +168,12 @@ def test_the_record_schema_accepts_each_writers_record(changes: dict[str, Any]) 
     [
         {"received_at": "2026-10-12T18:04:12Z"},
         {"requested_at": "2026-10-12 18:04:12.345Z"},
+        {"requested_at": "2026-02-30T25:61:61.000Z"},
+        {"requested_at": "2026-02-30T18:04:12.345Z"},
+        {"requested_at": "2026-02-29T18:04:12.345Z"},
+        {"received_at": "2026-13-12T18:04:12.512Z"},
+        {"received_at": "2026-10-12T24:00:00.000Z"},
+        {"received_at": "2026-12-31T23:59:60.000Z"},
         {"tool": "fetcher@0123456"},
         {"tool": "edgar-asof@0.1.0"},
         {"sha256": "E8" * 32},
@@ -232,6 +250,7 @@ def test_the_job_kinds_are_the_subjects_ends() -> None:
         job(kind="filing", source=None, expires_at=None),
         job(kind="backfill", source=None, backfill="apple-2025", expires_at=None),
         job(url="https://www.sec.gov/Archives/edgar/data/320193/"),
+        job(queued_at="2028-02-29T23:59:59.999Z", expires_at="2028-03-01T00:00:09.999Z"),
     ],
 )
 def test_the_job_schema_accepts_each_kind_of_job(message: dict[str, Any]) -> None:
@@ -251,7 +270,9 @@ def test_the_job_schema_accepts_each_kind_of_job(message: dict[str, Any]) -> Non
         job(url="https://example.com/"),
         job(id="0192F1D2-5B7E-7C3A-9F1E-2D4C6B8A0E13"),
         job(queued_at=None),
+        job(queued_at="2026-10-12T24:04:12.100Z"),
         job(expires_at="2026-10-12T18:04:22Z"),
+        job(expires_at="2026-02-30T18:04:22.000Z"),
         job(source="Apple_Submissions"),
     ],
 )
