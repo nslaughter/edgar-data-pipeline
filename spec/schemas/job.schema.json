@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nslaughter/edgar-data-pipeline/blob/main/spec/schemas/job.schema.json",
+  "$comment": "A job: one fetch the fetcher is asked to make. spec/snapshots.md governs it (section 10); changing it changes that spec.",
+  "title": "Job",
+  "type": "object",
+  "required": ["id", "kind", "feed", "url", "queued_at"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "kind": {"enum": ["poll", "filing", "backfill"]},
+    "feed": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+    "url": {"type": "string", "pattern": "^https://(www|data)\\.sec\\.gov/"},
+    "source": {"$ref": "#/$defs/name"},
+    "backfill": {"$ref": "#/$defs/name"},
+    "queued_at": {"$ref": "#/$defs/timestamp"},
+    "expires_at": {"$ref": "#/$defs/timestamp"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "poll"}}},
+      "then": {"required": ["source"]},
+      "else": {"not": {"required": ["source"]}}
+    },
+    {
+      "if": {"properties": {"kind": {"const": "backfill"}}},
+      "then": {"required": ["backfill"]},
+      "else": {"not": {"required": ["backfill"]}}
+    }
+  ],
+  "$defs": {
+    "name": {
+      "$comment": "A Kubernetes object's name, as a Source's and a Backfill's are.",
+      "type": "string",
+      "maxLength": 253,
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    }
+  }
+}

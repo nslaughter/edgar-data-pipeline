@@ -28,12 +28,16 @@ CHECKS = {"verify", "tests", "kind", "review", "operator", "first import"}
 # The checks a statement can't pass without a test that carries its ID.
 TESTED_BY = {"verify", "tests", "kind"}
 # Statements whose tests a later task in docs/plan.md writes, with that task:
-# T20 builds the umbrella chart that spec/deployment.md's tests check; and of
+# T20 builds the umbrella chart that spec/deployment.md's tests check; of
 # spec/controls.md's, T22 the definitions, the chart's resources, and the
 # scheduler, T23 the fetcher, T24 the discoverer, and T28 the monitoring,
-# after which each ServiceAccount in RBAC-5's table has its grants on kind.
-# Strict, like xfail_strict: a statement listed here that has a test fails
-# too, and so does one whose task the plan marks done.
+# after which each ServiceAccount in RBAC-5's table has its grants on kind;
+# and of spec/snapshots.md's, T35 brings snapshot.py and verify.py to its
+# version 1.0.0, T22 the scheduler's jobs, T23 the fetcher and the cluster
+# store, T24 the discoverer's jobs and its use of edgar-asof, and T36 the
+# transfer. Strict, like xfail_strict: a statement listed here that has a
+# test fails too, and so does one whose task the plan marks done, or one
+# checked by verify that verify.py already reports.
 AWAITING = {
     **dict.fromkeys(
         [
@@ -69,9 +73,33 @@ AWAITING = {
         ],
         "T22",
     ),
-    **dict.fromkeys(["SOURCE-4", "BACKFILL-2", "ACCESS-1", "ACCESS-3", "RBAC-2"], "T23"),
-    **dict.fromkeys(["SOURCE-5", "BACKFILL-1", "BACKFILL-3"], "T24"),
+    **dict.fromkeys(["JOB-2"], "T22"),
+    **dict.fromkeys(
+        [
+            "SOURCE-4",
+            "BACKFILL-2",
+            "ACCESS-1",
+            "ACCESS-3",
+            "RBAC-2",
+            "STORE-2",
+            "STORE-3",
+            "OBJ-4",
+            "LOG-3",
+            "LOG-4",
+            "FETCH-16",
+            "FETCH-17",
+            "ID-2",
+            "JOB-4",
+            "JOB-5",
+            "JOB-6",
+            "JOB-7",
+        ],
+        "T23",
+    ),
+    **dict.fromkeys(["SOURCE-5", "BACKFILL-1", "BACKFILL-3", "FETCH-18", "JOB-3"], "T24"),
     **dict.fromkeys(["RBAC-3", "RBAC-5"], "T28"),
+    **dict.fromkeys(["REC-10", "REC-11", "REC-12", "SCOPE-4", "SCOPE-5"], "T35"),
+    **dict.fromkeys(["XFER-1", "XFER-2", "XFER-3"], "T36"),
 }
 
 
@@ -174,4 +202,4 @@ def test_every_problem_verify_reports_names_an_invariant_it_checks() -> None:
     checked = {id for id, (kind, by) in index().items() if kind == "invariant" and "verify" in by}
 
     assert reported - checked == set()
-    assert checked - reported == set()
+    assert checked - reported == checked & set(AWAITING)

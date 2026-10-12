@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nslaughter/edgar-data-pipeline/blob/main/spec/schemas/record.schema.json",
+  "$comment": "A record: one fetch. spec/snapshots.md governs it (section 6); changing it changes that spec.",
+  "title": "Record",
+  "type": "object",
+  "required": [
+    "feed",
+    "url",
+    "requested_at",
+    "attempts",
+    "status",
+    "error",
+    "final_url",
+    "etag",
+    "last_modified",
+    "content_type",
+    "sha256",
+    "bytes",
+    "object",
+    "tool"
+  ],
+  "properties": {
+    "feed": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+    "url": {"type": "string"},
+    "requested_at": {"$ref": "#/$defs/timestamp"},
+    "received_at": {"anyOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]},
+    "attempts": {"type": "integer", "minimum": 1},
+    "status": {"type": ["integer", "null"]},
+    "error": {"type": ["string", "null"]},
+    "final_url": {"type": ["string", "null"]},
+    "date": {"type": ["string", "null"]},
+    "etag": {"type": ["string", "null"]},
+    "last_modified": {"type": ["string", "null"]},
+    "content_type": {"type": ["string", "null"]},
+    "sha256": {"anyOf": [{"type": "string", "pattern": "^[0-9a-f]{64}$"}, {"type": "null"}]},
+    "bytes": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
+    "object": {"type": ["string", "null"]},
+    "tool": {
+      "type": "string",
+      "pattern": "^(scripts/snapshot\\.py@([0-9a-f]{40}(\\+dirty)?|unknown)|fetcher@[0-9a-f]{40})$"
+    }
+  },
+  "$defs": {
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"
+    }
+  }
+}

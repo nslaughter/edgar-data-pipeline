@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nslaughter/edgar-data-pipeline/blob/main/spec/schemas/event.schema.json",
+  "$comment": "An event: the record of a fetch, with its job. spec/snapshots.md governs it (section 10); changing it changes that spec.",
+  "title": "Event",
+  "type": "object",
+  "required": ["id", "job", "record"],
+  "properties": {
+    "id": {"type": "integer", "minimum": 1},
+    "job": {"$ref": "job.schema.json"},
+    "record": {
+      "$ref": "record.schema.json",
+      "required": ["received_at", "date"]
+    }
+  }
+}

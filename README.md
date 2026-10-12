@@ -69,7 +69,9 @@ every object against its SHA-256, every record, and, with `--since`, that
 nothing committed was changed. `-v` lists each URL's versions.
 [`spec/snapshots.md`](spec/snapshots.md) specifies the store: the layout,
 each record's fields, what a version is, the scope, how fetches are made,
-and the manifest each import writes to pin its inputs.
+and the manifest each import writes to pin its inputs. It also specifies the
+pipeline's store in the cluster, whose records of the scope's URLs the owner
+copies into `data/`.
 
 Both scripts use only Python's standard library.
 
