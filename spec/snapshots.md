@@ -396,11 +396,14 @@ ranges that hold them.
   its start up to and not including its end, and whose `url` `scope.json`
   covers, with its object, and nothing else. It reads only the cluster
   store, never the SEC, and copies nothing if `scope.json` is malformed.
-- **XFER-2** (rule) The transfer copies each record unchanged: the table's
-  fields, in its order ([REC-9]), with the values the cluster store holds,
-  and its timestamps in the table's form. It places the record's object
-  first, as [OBJ-2] says, unless the object is there already, then appends
-  the record to its feed's log, in the order of the records' `id`s.
+- **XFER-2** (rule) The transfer copies each record unchanged: the fields
+  of [§6](#6-records)'s table, in that table's order ([REC-9]), with the
+  values the cluster store holds, and `requested_at` and `received_at` in
+  [§2](#2-terms)'s form of a timestamp, such as
+  `2026-10-06T18:04:12.345Z`. A row's `id` and `job` aren't fields of a
+  record, and aren't copied. It places the record's object first, as
+  [OBJ-2] says, unless the object is there already, then appends the record
+  to its feed's log, in the order of the records' `id`s.
 - **XFER-3** (rule) The transfer skips a record that `data/` already holds,
   one with the same `url`, `requested_at`, and `tool` ([REC-12]), so a range
   copied twice adds nothing.
