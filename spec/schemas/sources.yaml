@@ -1,0 +1,112 @@
+# Source, v1alpha1: one URL the pipeline polls, and how often.
+# spec/controls.md governs it (section 6); changing it changes that spec.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: sources.edgar.nathanslaughter.com
+spec:
+  group: edgar.nathanslaughter.com
+  names:
+    kind: Source
+    listKind: SourceList
+    plural: sources
+    singular: source
+  scope: Namespaced
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Feed
+          type: string
+          jsonPath: .spec.feed
+        - name: Cadence
+          type: integer
+          jsonPath: .spec.cadenceSeconds
+        - name: Paused
+          type: boolean
+          jsonPath: .spec.paused
+        - name: Polling
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Polling")].status
+        - name: Succeeded
+          type: date
+          jsonPath: .status.lastSuccessfulPollTime
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required: [feed, url, cadenceSeconds]
+              properties:
+                feed:
+                  type: string
+                  pattern: ^[a-z0-9][a-z0-9-]*$
+                url:
+                  type: string
+                  pattern: ^https://(www|data)\.sec\.gov/
+                cadenceSeconds:
+                  type: integer
+                  format: int32
+                  minimum: 1
+                paused:
+                  type: boolean
+                  default: false
+            status:
+              type: object
+              properties:
+                lastPollTime:
+                  type: string
+                  format: date-time
+                  pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$
+                lastSuccessfulPollTime:
+                  type: string
+                  format: date-time
+                  pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$
+                openGapSince:
+                  type: string
+                  format: date-time
+                  pattern: ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$
+                conditions:
+                  type: array
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys: [type]
+                  items:
+                    type: object
+                    required: [lastTransitionTime, message, reason, status, type]
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      message:
+                        type: string
+                        maxLength: 32768
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                        minimum: 0
+                      reason:
+                        type: string
+                        minLength: 1
+                        maxLength: 1024
+                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      type:
+                        type: string
+                        maxLength: 316
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$

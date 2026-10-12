@@ -28,26 +28,51 @@ CHECKS = {"verify", "tests", "kind", "review", "operator", "first import"}
 # The checks a statement can't pass without a test that carries its ID.
 TESTED_BY = {"verify", "tests", "kind"}
 # Statements whose tests a later task in docs/plan.md writes, with that task:
-# T20 builds the umbrella chart that spec/deployment.md's tests check. Strict,
-# like xfail_strict: a statement listed here that has a test fails too, and so
-# does one whose task the plan marks done.
-AWAITING = dict.fromkeys(
-    [
-        "CHART-1",
-        "CHART-2",
-        "CHART-3",
-        "PIN-1",
-        "PIN-2",
-        "PIN-3",
-        "PIN-4",
-        "PIN-5",
-        "PIN-6",
-        "PIN-7",
-        "PG-1",
-        "PG-2",
-    ],
-    "T20",
-)
+# T20 builds the umbrella chart that spec/deployment.md's tests check; and of
+# spec/controls.md's, T22 the definitions, the chart's resources, and the
+# scheduler, T23 the fetcher, T24 the discoverer, and T28 the monitoring.
+# Strict, like xfail_strict: a statement listed here that has a test fails
+# too, and so does one whose task the plan marks done.
+AWAITING = {
+    **dict.fromkeys(
+        [
+            "CHART-1",
+            "CHART-2",
+            "CHART-3",
+            "PIN-1",
+            "PIN-2",
+            "PIN-3",
+            "PIN-4",
+            "PIN-5",
+            "PIN-6",
+            "PIN-7",
+            "PG-1",
+            "PG-2",
+        ],
+        "T20",
+    ),
+    **dict.fromkeys(
+        [
+            "API-2",
+            "API-3",
+            "VAL-1",
+            "VAL-2",
+            "VAL-3",
+            "VAL-4",
+            "SOURCE-1",
+            "SOURCE-2",
+            "SOURCE-3",
+            "ACCESS-2",
+            "RBAC-1",
+            "RBAC-4",
+            "RBAC-5",
+        ],
+        "T22",
+    ),
+    **dict.fromkeys(["SOURCE-4", "BACKFILL-2", "ACCESS-1", "ACCESS-3", "RBAC-2"], "T23"),
+    **dict.fromkeys(["SOURCE-5", "BACKFILL-1", "BACKFILL-3"], "T24"),
+    "RBAC-3": "T28",
+}
 
 
 def spec_index(spec: str) -> dict[str, tuple[str, set[str]]]:
