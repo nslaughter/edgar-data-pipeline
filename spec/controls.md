@@ -1,6 +1,6 @@
 # Specification: controls
 
-**Status:** Version 0.1.0, draft, October 12, 2026. This document governs
+**Status:** Version 1.0.0, draft, October 12, 2026. This document governs
 the pipeline's controls: the custom resources `Source`, `Backfill`, and
 `SecAccess`, whose definitions are in [`schemas/`](schemas/); the values the
 umbrella chart renders them from, and the checks it makes before anything
@@ -43,6 +43,9 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
 - **The chart:** the umbrella Helm chart that installs the pipeline
   ([`deployment.md`](deployment.md)). **Its values** are those it's
   installed or upgraded with.
+- **The charts:** the four Helm charts that install the pipeline, in order,
+  the umbrella chart last; **the operators' chart** is the third, which
+  installs the definitions ([§5 of `deployment.md`](deployment.md#5-dependencies)).
 - **The release namespace:** the namespace the chart is installed in.
 - **Control:** a field of a resource's `spec`. The owner sets controls; the
   pipeline's services set `status`.
@@ -102,7 +105,9 @@ comes with T23, and kube-state-metrics gets its grants with T28.
 The three resources are in the API group `edgar.nathanslaughter.com`, at
 version `v1alpha1` ([0007]). Each definition is a
 `CustomResourceDefinition`, written here first; the scheduler's Go types are
-written to generate the same.
+written to generate the same. The operators' chart installs and upgrades
+them, before the chart renders any resource of theirs
+([`deployment.md`](deployment.md#definitions)).
 
 | Kind | Plural | Scope | Definition | One for each |
 | --- | --- | --- | --- | --- |
@@ -120,9 +125,9 @@ the cluster. A second release of the chart would render a second SecAccess
   named `PLURAL.edgar.nathanslaughter.com`, with the table's kind, plural,
   and scope, and one version, `v1alpha1`, served and stored, with the
   status subresource.
-- **API-2** (invariant) The definitions the chart installs, and those
-  generated from the scheduler's Go types, are the ones in `spec/schemas/`,
-  apart from `description` fields and annotations.
+- **API-2** (invariant) The definitions the operators' chart installs, and
+  those generated from the scheduler's Go types, are the ones in
+  `spec/schemas/`, apart from `description` fields and annotations.
 - **API-3** (rule) The API server refuses a resource that its definition
   refuses: one without a `spec`, or without a field the tables below mark
   required, or with a value outside a field's type or form; a Source whose `cadenceSeconds` is
@@ -346,12 +351,12 @@ annotations, so none needs to change a resource itself.
   verbs in its row, and no others.
 - **RBAC-3** (invariant) The chart grants kube-state-metrics'
   ServiceAccount the verbs in its row, and no others.
-- **RBAC-4** (invariant) No Role or ClusterRole the chart renders, its
+- **RBAC-4** (invariant) No Role or ClusterRole the charts render, their
   dependencies' included, grants any verb on the three resources or their
   `status`, by name or by a wildcard, except as the table says. None grants
   `create`, `update`, `patch`, `delete`, or `deletecollection` on the
   resources themselves.
-- **RBAC-5** (rule) In the installed chart, each of the chart's
+- **RBAC-5** (rule) In the installed charts, each of the charts'
   ServiceAccounts can do with the three resources exactly what the table
   grants it, and those not in the table nothing, as the API server's
   access reviews answer, whatever binding grants it.
@@ -365,7 +370,7 @@ annotations, so none needs to change a resource itself.
 | ID | Kind | Checked by | Statement |
 | --- | --- | --- | --- |
 | API-1 | invariant | tests | The three definitions are in `spec/schemas/`, in one group, at `v1alpha1`. |
-| API-2 | invariant | tests | The chart's definitions and those generated from Go are those in `spec/schemas/`. |
+| API-2 | invariant | tests | The operators' chart's definitions and those generated from Go are those in `spec/schemas/`. |
 | API-3 | rule | tests | The API server refuses a resource its definition refuses. |
 | VAL-1 | invariant | tests | The chart renders the resources from `controls` in its values, and no others. |
 | VAL-2 | invariant | tests | The chart refuses values that would render a resource the API server refuses, but for a changed Backfill. |
@@ -385,7 +390,7 @@ annotations, so none needs to change a resource itself.
 | RBAC-1 | invariant | tests | The scheduler may read the resources, and change only Sources' and Backfills' status. |
 | RBAC-2 | invariant | tests | The fetcher may read the SecAccess, and change only its status. |
 | RBAC-3 | invariant | tests | kube-state-metrics may only read the resources. |
-| RBAC-4 | invariant | tests | No other role grants access, and none lets a service change a `spec`. |
+| RBAC-4 | invariant | tests | No other role in the charts grants access, and none lets a service change a `spec`. |
 | RBAC-5 | rule | kind | On the cluster, each ServiceAccount can do exactly what the table grants. |
 | RBAC-6 | rule | operator | The owner changes the resources only through the chart's values. |
 
@@ -402,7 +407,10 @@ This version leaves to others what the controls rely on:
   EDGAR's content ([0006]).
 - **Telemetry:** the metrics kube-state-metrics exports from status, and
   the alerts on them.
-- **Deployment:** how the chart installs and upgrades the definitions.
+
+The deployment's version 1.0.0 says how the definitions are installed and
+upgraded: as templates of the operators' chart, which is released before
+the chart ([CRD-2](deployment.md#definitions)).
 
 ## 12. Changes to this document
 
@@ -414,10 +422,20 @@ cluster holds. The definitions in `spec/schemas/` are part of this
 document, so changing one changes it. IDs are never reused, and a retired
 statement stays in the index.
 
+### From version 0.1.0
+
+Version 0.1.0 had the umbrella chart install the definitions. The
+deployment's version 1.0.0 installs them from the operators' chart instead,
+released before it ([0011]). So [API-2] now names the operators' chart, and
+[RBAC-4] and [RBAC-5] cover every chart's roles and ServiceAccounts, not
+only the umbrella chart's. No resource of these kinds was created under
+version 0.1.0, so none the cluster holds changes.
+
 [0005]: ../docs/decisions/0005-send-sec-requests-through-one-active-fetcher.md
 [0006]: ../docs/decisions/0006-write-the-services-in-go-and-python.md
 [0007]: ../docs/decisions/0007-control-the-pipeline-through-custom-resources.md
 [0010]: ../docs/decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
+[0011]: ../docs/decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md
 [API-1]: #4-the-resources
 [API-2]: #4-the-resources
 [API-3]: #4-the-resources
