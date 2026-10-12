@@ -1,6 +1,6 @@
 # Design: the EDGAR data pipeline
 
-**Status:** Draft, October 10, 2026. This document explains the pipeline's
+**Status:** Draft, October 12, 2026. This document explains the pipeline's
 architecture and the reasons for it. It makes no rules: the specifications
 under [`spec/`](../spec/) govern, the records under
 [`docs/decisions/`](decisions/) record each significant choice, and
@@ -97,8 +97,14 @@ Services that read what EDGAR publishes are written in Python, and services
 that move bytes or keep the rules for talking to the SEC in Go
 ([0006](decisions/0006-write-the-services-in-go-and-python.md)).
 
-Everything is installed by one umbrella Helm chart on kind
-([0001](decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md)).
+Everything is installed with Helm on kind
+([0001](decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md)), by four
+charts in order: the Prometheus operator's definitions, cert-manager, the
+operators with the other definitions, and last the umbrella chart, with
+everything else
+([0011](decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md)).
+Each definition is on the cluster before any resource of its kind, and Helm
+upgrades it with its chart.
 
 ## One filing, end to end
 
@@ -253,8 +259,9 @@ The normative parts become specifications, one per component or boundary:
   chart checks before it applies them, and who may change what.
 - **Telemetry:** the metrics and traces each service emits, which the
   dashboards and alerts rely on, and the alerts themselves.
-- **Deployment:** pinned versions, such as PostgreSQL's major version 18,
-  checked by chart tests.
+- **Deployment:** the charts and the order they're installed in; pinned
+  versions, such as PostgreSQL's major version 18; and each component's
+  replicas, storage, credentials, and placement; checked by chart tests.
 
 ## What waits on the investigation
 
