@@ -271,9 +271,10 @@ times in UTC; time zones are interpreted when the record is read
 - **REC-10** (rule) A writer writes every field in the table, `received_at`
   and `date` among them.
 - **REC-11** (invariant) `received_at` is set exactly when `status` is, and
-  `date` is null whenever `status` is. A record that has no `received_at`,
-  as one written under version 0.2.0 has none
-  ([§14](#14-changes-to-this-document)), is held only to the second.
+  `date` is null whenever `status` is. A record without the field
+  `received_at`, as each written under version 0.2.0 is
+  ([§14](#14-changes-to-this-document)), is held only to the second; one
+  whose `received_at` is null is held to both.
 - **REC-12** (invariant) No two records in the git store have the same
   `url`, `requested_at`, and `tool`.
 - **REC-13** (invariant) [`schemas/record.schema.json`](schemas/record.schema.json)
@@ -615,7 +616,7 @@ the bucket, and keeps its manifest as the facts specification will say
 | REC-8 | invariant | verify | `bytes` is the object's decompressed length. |
 | REC-9 | rule | tests | Readers ignore unknown fields; writers keep the table's order. |
 | REC-10 | rule | tests | Writers write every field, `received_at` and `date` among them. |
-| REC-11 | invariant | verify | A record's `received_at`, if it has one, is set exactly when there's a status, and `date` only then. |
+| REC-11 | invariant | verify | A record's `received_at`, if the field is present, is set exactly when there's a status, and `date` only then. |
 | REC-12 | invariant | verify | No two records in `data/` share a URL, `requested_at`, and `tool`. |
 | REC-13 | invariant | tests | `schemas/record.schema.json` describes a record, and every record in `data/` validates. |
 | VER-1 | rule | tests | Versions are distinct bodies per URL, numbered by first appearance. |
@@ -719,9 +720,9 @@ had them, so a store written under it is a store under this version, and
 nothing in it is rewritten ([§1](#1-guarantees)). Its records differ from
 this version's in three ways:
 
-- **They have no `received_at` or `date`,** which a reader takes as null:
-  not recorded ([REC-1]). So [REC-11] doesn't require a `received_at` of a
-  record with a status.
+- **They lack the fields `received_at` and `date`,** which a reader takes
+  as null: not recorded ([REC-1]). So [REC-11] holds them only to its part
+  on `date`, and doesn't require a `received_at` of a record with a status.
 - **`snapshot.py` wrote every one,** so [REC-5] reads each `304` against its
   log.
 - **A record written by `snapshot.py` at a commit before `8de33cd`** read the
