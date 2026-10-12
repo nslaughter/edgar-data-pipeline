@@ -586,10 +586,12 @@ the bucket, and keeps its manifest as the facts specification will say
 - **IMP-2** (invariant) Each input has a `feed`, a `url`, and a `sha256` that
   a record of that feed and URL holds.
 - **IMP-3** (rule) An import writes its manifest before reading its inputs,
-  and reads them only from its store's objects, never from the network. A
-  rerun with the same inputs and the same `tool` commit therefore reads the
-  same bytes. What its output is, and how two outputs are compared, is for
-  the pipeline's specification ([open question 3](#13-open-questions)).
+  and reads them only from its store's objects: in the git store, from
+  `objects/`, and in the cluster, from the bucket, over Garage's S3 API
+  ([0002]). It never reads an input from the live source. A rerun with the
+  same inputs and the same `tool` commit therefore reads the same bytes.
+  What its output is, and how two outputs are compared, is for the
+  pipeline's specification ([open question 3](#13-open-questions)).
 
 ## 12. Index
 
