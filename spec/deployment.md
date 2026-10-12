@@ -196,8 +196,9 @@ questions this version leaves open.
 1. **The pipeline's own images.** Each image built from this repository is
    tagged with the commit it is built from and loaded into kind with
    `kind load docker-image`, never pushed to or pulled from a registry. The
-   owner decided this on October 11, 2026. The version of this document
-   that adds the first service says so in statements.
+   owner decided this on October 11, 2026, and decided on October 12, 2026
+   that the minor version item 2 describes says so in statements, before
+   the first service is built.
 2. **The components' configuration.** The decision records describe each
    component's replicas, storage, Secrets, and placement, such as three
    Garage nodes with a replication factor of 3 ([0002]) and three
