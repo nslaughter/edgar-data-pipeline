@@ -260,12 +260,12 @@ Its `status`, which the scheduler sets:
 | `filingsFetched` | An integer ≥ 0 | Of those, the filings whose fetches all succeeded, or were already held ([BACKFILL-1]). |
 | `filingsFailed` | An integer ≥ 0 | Of those, the filings with a fetch that ended without a version. |
 | `startTime` | A timestamp | When its first fetch was queued. |
-| `completionTime` | A timestamp | When its last filing was fetched or failed. |
+| `completionTime` | A timestamp | When its last filing was fetched or failed, or, in a range with no filings, when they were listed. |
 | `conditions` | A list of Kubernetes conditions | `Complete`, below. |
 
 | Condition | `True`, with its reason | `False`, with its reason |
 | --- | --- | --- |
-| `Complete` | `Complete`: every filing in the range is fetched or failed. | `InProgress`: some aren't yet. |
+| `Complete` | `Complete`: the filings in the range are listed, and each is fetched or failed. | `InProgress`: they aren't listed yet, or some aren't fetched or failed yet. |
 
 - **BACKFILL-1** (rule) For each Backfill in the release namespace, the
   pipeline fetches each filing that the company's `submissions` lists,
@@ -281,7 +281,8 @@ Its `status`, which the scheduler sets:
   backfill never delays the record of new filings ([0007]).
 - **BACKFILL-3** (rule) The scheduler keeps each Backfill's `status` as the
   table says: its `Complete` condition is `True`, with `completionTime`
-  set, once every filing in the range is fetched or failed.
+  set, once the filings in the range are listed and each is fetched or
+  failed. So a range with no filings is complete once they're listed.
 
 ## 8. SecAccess
 
