@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -33,8 +33,9 @@ FIELD_ROW = re.compile(r"^\| `(\w+)` \| ([^|]+) \|")
 COLUMN = re.compile(r"^    ([a-z_][a-z0-9_]*) +(.+?),?$", re.M)
 FETCHER = "fetcher@" + "0123456789abcdef" * 2 + "01234567"
 # A timestamp's format, "date-time", holds each day to its month when a
-# validator asserts it, as these tests' validators do. jsonschema checks
-# that format only with a package the tests don't install, so this parses it.
+# validator asserts it, as these tests' validators do but where a test is of
+# a pattern alone. jsonschema checks that format only with a package the
+# tests don't install, so this parses it.
 FORMATS = FormatChecker(formats=())
 
 
@@ -88,14 +89,15 @@ def schema(name: str) -> dict[str, Any]:
     return loaded
 
 
-def validator(name: str) -> Validator:
+def validator(name: str, *, formats: bool = True) -> Validator:
     """A validator for the schema, which resolves the others by their $id,
-    reads patterns as ECMA-262 does, and asserts formats."""
+    reads patterns as ECMA-262 does, and asserts formats unless told not to."""
     resources = [Resource.from_contents(schema(path.name)) for path in SCHEMAS.glob("*.json")]
     registry: Registry[Any] = Registry().with_resources(
         (resource.contents["$id"], resource) for resource in resources
     )
-    validator: Validator = SchemaValidator(schema(name), registry=registry, format_checker=FORMATS)
+    checker = FORMATS if formats else None
+    validator: Validator = SchemaValidator(schema(name), registry=registry, format_checker=checker)
     return validator
 
 
@@ -214,6 +216,38 @@ def test_the_record_schema_accepts_each_writers_record(changes: dict[str, Any]) 
 )
 def test_the_record_schema_refuses_a_field_of_the_wrong_form(changes: dict[str, Any]) -> None:
     assert list(validator("record.schema.json").iter_errors(new_record(**changes))) != []
+
+
+@pytest.mark.spec("REC-13", "JOB-1")
+@pytest.mark.parametrize(
+    "value",
+    [
+        "2026-00-12T18:04:12.345Z",
+        "2026-13-12T18:04:12.345Z",
+        "2026-10-00T18:04:12.345Z",
+        "2026-10-32T18:04:12.345Z",
+        "2026-10-12T24:00:00.000Z",
+        "2026-10-12T18:60:12.345Z",
+        "2026-10-12T18:04:61.345Z",
+        "2026-12-31T23:59:60.000Z",
+        "2026-10-12T18:04:12.345Z\n",
+    ],
+)
+@pytest.mark.parametrize(
+    ("name", "message"),
+    [
+        ("record.schema.json", lambda value: new_record(requested_at=value)),
+        ("job.schema.json", lambda value: job(queued_at=value)),
+        ("job.schema.json", lambda value: job(expires_at=value)),
+    ],
+    ids=["requested_at", "queued_at", "expires_at"],
+)
+def test_a_timestamps_pattern_alone_holds_each_part_to_its_range(
+    name: str, message: Callable[[str], dict[str, Any]], value: str
+) -> None:
+    errors = validator(name, formats=False).iter_errors(message(value))
+
+    assert {error.validator for error in errors} == {"pattern"}
 
 
 def wrong_types() -> list[tuple[str, object]]:
