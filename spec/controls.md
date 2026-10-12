@@ -385,8 +385,10 @@ This version leaves to others what the controls rely on:
 - **The store's version 1.0.0:** how a poll or a fetch is queued to the
   fetcher; the records it writes, whose times set a Source's status; and
   whether a Source's URL must be in `data/scope.json`.
-- **Notices:** what a gap is, and which files a filing's fetches include,
-  which a Backfill fetches too.
+- **Notices:** what a gap is; which files a filing's fetches include,
+  which a Backfill fetches too; and which service lists a Backfill's
+  filings and queues their fetches, since the scheduler doesn't read
+  EDGAR's content ([0006]).
 - **Telemetry:** the metrics kube-state-metrics exports from status, and
   the alerts on them.
 - **Deployment:** how the chart installs and upgrades the definitions.
