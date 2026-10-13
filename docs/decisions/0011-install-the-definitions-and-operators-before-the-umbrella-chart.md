@@ -46,7 +46,8 @@ kube-prometheus-stack's are in a subchart's `crds/` directory, which it
 offers to upgrade through a pre-upgrade Job it calls a preview. Garage
 creates its own CRD at startup, through a ClusterRole that may create any
 CRD, unless its chart is told to skip it. cert-manager's documentation says
-never to embed it as a subchart of another chart.
+never to embed it as a subchart of another chart, since it manages
+cluster-scoped resources and must be installed exactly once.
 
 Helm keeps each release in a Secret, which can hold 1 MiB. The CRDs of the
 four operators come to about 940 KiB there, the Prometheus operator's alone
@@ -80,8 +81,12 @@ Four releases, installed and upgraded in this order, each with `--wait`:
 
 1. **The Prometheus operator's CRDs,** from the Prometheus community's
    `prometheus-operator-crds` chart, which renders them as templates.
-2. **cert-manager,** with its CRDs as templates, installed once in the
-   cluster, as its documentation asks.
+2. **cert-manager,** with its CRDs as templates. Its chart,
+   `deploy/cert-manager/`, only pins and commits cert-manager's packaged
+   chart, with the values it's installed with, and holds nothing else. It
+   installs cert-manager once in the cluster, in its own release and
+   namespace, which is the reason cert-manager's documentation gives for
+   not embedding it in another chart.
 3. **The operators:** CloudNativePG and the Barman Cloud plugin, with their
    CRDs, in the namespace the plugin must share with the operator; Garage's
    CRD; and the pipeline's own CRDs, those in `spec/schemas/`.

@@ -153,7 +153,7 @@ CHART/
   Chart.lock                   the same dependencies, as Helm resolved them
   charts/NAME-VERSION.tgz      each dependency from a chart repository
   values.yaml
-  templates/
+  templates/                   its own templates, if it has any
 ```
 
 - **CHART-1** (invariant) The four charts are at the paths the tree gives,
