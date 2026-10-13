@@ -1032,6 +1032,8 @@ def test_verify_finds_a_record_the_schema_refuses(changes: dict[str, Any], store
         ('{"properties": {"url": {"format": "uri"}}}', "uses format uri"),
         ('{"$ref": "https://example.com/record.json"}', "uses $ref https://example.com/"),
         ('{"type": "list"}', "uses type list"),
+        ('{"$defs": {"timestamp": {"maxLength": 24}}}', "uses maxLength"),
+        ('{"anyOf": [{"type": "integer", "maximum": 1}]}', "uses maximum"),
     ],
 )
 def test_verify_reports_a_schema_it_cant_read(
