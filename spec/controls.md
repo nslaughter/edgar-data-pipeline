@@ -1,6 +1,6 @@
 # Specification: controls
 
-**Status:** Version 1.0.0, draft, October 12, 2026. This document governs
+**Status:** Version 1.0.0, draft, October 13, 2026. This document governs
 the pipeline's controls: the custom resources `Source`, `Backfill`, and
 `SecAccess`, whose definitions are in [`schemas/`](schemas/); the values the
 umbrella chart renders them from, and the checks it makes before anything
@@ -94,11 +94,12 @@ tests a later task in the [plan](../docs/plan.md) writes. It lists such a
 statement as awaiting that task, and fails if the statement has a test or
 the plan marks the task done. API-1's tests come with this version; the
 other statements await the tasks that build what they describe: T22 the
-definitions, the chart's resources, and the scheduler; T23 the fetcher;
-T24 the discoverer; and T28 the monitoring, which grants kube-state-metrics
-its access. [RBAC-5] waits for T28 too, since it checks every
-ServiceAccount in [§9](#9-who-may-change-what)'s table: the fetcher's
-comes with T23, and kube-state-metrics gets its grants with T28.
+Go types that generate the definitions, the chart's resources, and the
+scheduler; T23 the fetcher; T24 the discoverer; and T28 the monitoring,
+which grants kube-state-metrics its access. [RBAC-5] waits for T28 too,
+since it checks every ServiceAccount in [§9](#9-who-may-change-what)'s
+table: the fetcher's comes with T23, and kube-state-metrics gets its
+grants with T28.
 
 ## 4. The resources
 

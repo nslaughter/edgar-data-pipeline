@@ -30,13 +30,14 @@ TESTED_BY = {"verify", "tests", "kind"}
 # Statements whose tests a later task in docs/plan.md writes, with that task:
 # of spec/deployment.md's, T20 builds the charts that most of its tests
 # check, T21 the first of the pipeline's images, and T23 the fetcher, with
-# its Lease; of spec/controls.md's, T22 the definitions, the chart's
-# resources, and the scheduler, T23 the fetcher, T24 the discoverer, and
-# T28 the monitoring, after which each ServiceAccount in RBAC-5's table has
-# its grants on kind; and of spec/snapshots.md's, T35 brings snapshot.py
-# and verify.py to its version 1.0.0, T22 the scheduler's jobs, T23 the
-# fetcher and the cluster store, T24 the discoverer's jobs and its use of
-# edgar-asof, and T36 the transfer. Strict, like xfail_strict: a statement listed here that has a
+# its Lease; of spec/controls.md's, T22 the Go types that generate the
+# definitions, the chart's resources, and the scheduler, T23 the fetcher,
+# T24 the discoverer, and T28 the monitoring, after which each
+# ServiceAccount in RBAC-5's table has its grants on kind; and of
+# spec/snapshots.md's, T35 brings snapshot.py and verify.py to its version
+# 1.0.0, T22 the scheduler's jobs, T23 the fetcher and the cluster store,
+# T24 the discoverer's jobs and its use of edgar-asof, and T36 the
+# transfer. Strict, like xfail_strict: a statement listed here that has a
 # test fails too, and so does one whose task the plan marks done, or one
 # checked by verify that verify.py already reports.
 AWAITING = {
