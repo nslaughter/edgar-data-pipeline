@@ -940,9 +940,30 @@ def test_verify_finds_a_copied_304_that_names_nothing_without_an_error(stored: P
     assert ids(verify.verify(stored)) == ["REC-5"]
 
 
+@pytest.mark.spec("FETCH-4", "REC-5")
+def test_snapshots_304_after_a_copied_record_names_the_copied_version(
+    server: Server, tmp_path: Path
+) -> None:
+    """snapshot.py asks about the latest earlier line of the log with a
+    version, whoever wrote it, so its 304 names the version copied there."""
+    for body, etag in ((b"<rss>A</rss>", '"a"'), (b"<rss>B</rss>", '"b"')):
+        server.routes["/feed.xml"] = with_etag(body, etag)
+        fetch(server, tmp_path)
+    first, second = log(tmp_path)
+    copied = second | {"tool": FETCHER}
+    write_log(tmp_path, [first, copied])
+
+    confirmed = fetch(server, tmp_path)
+
+    assert server.requests[-1][1].get("if-none-match") == '"b"'
+    assert (confirmed["status"], confirmed["tool"]) == (304, TOOL)
+    assert naming(confirmed) == naming(copied)
+    assert verify.verify(tmp_path) == []
+
+
 @pytest.mark.spec("REC-5")
 @pytest.mark.parametrize(("names", "found"), [("copied", []), ("earlier", ["REC-5"])])
-def test_snapshots_304_after_a_copied_record_names_the_copied_version(
+def test_verify_holds_snapshots_304_after_a_copied_record_to_the_copied_version(
     names: str, found: list[str], server: Server, tmp_path: Path
 ) -> None:
     """The latest earlier line of the log with a version, whoever wrote it."""
