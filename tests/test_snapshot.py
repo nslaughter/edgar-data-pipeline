@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 import gzip
 import hashlib
+import itertools
 import json
 import subprocess
 import tempfile
@@ -17,7 +18,7 @@ import threading
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,7 @@ from hypothesis import strategies as st
 
 UA = "Test Runner test@example.com"
 TOOL = "scripts/snapshot.py@" + "0" * 40
+FETCHER = "fetcher@" + "0123456789abcdef" * 2 + "01234567"
 
 Reply = tuple[int, dict[str, str], bytes]
 Route = Callable[[dict[str, str]], Reply]
@@ -41,6 +43,8 @@ class Server:
     routes: dict[str, Route] = field(default_factory=dict)
     requests: list[tuple[str, dict[str, str]]] = field(default_factory=list)
     delay: float = 0.0
+    body_delay: float = 0.0  # between the headers and the body
+    dates: list[str] = field(default_factory=list)  # the next responses' Date, in turn
 
     def url(self, path: str = "/feed.xml") -> str:
         return self.base + path
@@ -64,9 +68,14 @@ def server() -> Iterator[Server]:
                 if "Content-Length" not in reply_headers:
                     self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
+                if state.body_delay:
+                    time.sleep(state.body_delay)
                 self.wfile.write(body)
             except (BrokenPipeError, ConnectionResetError):
                 pass  # the client gave up first, as FETCH-5's test intends
+
+        def date_time_string(self, timestamp: float | None = None) -> str:
+            return state.dates.pop(0) if state.dates else super().date_time_string(timestamp)
 
         def log_message(self, format: str, *args: Any) -> None:
             pass
@@ -88,12 +97,23 @@ def env_file(monkeypatch: pytest.MonkeyPatch, tmp_path_factory: pytest.TempPathF
     return path
 
 
+# The tests' fetchers send requests without FETCH-6's interval, so two could
+# be sent within a millisecond, and their records share a requested_at, which
+# REC-12 forbids. Their wall clock moves a millisecond at each reading instead.
+TICKS = itertools.count()
+
+
+def wall() -> str:
+    when = datetime(2026, 10, 3, tzinfo=UTC) + timedelta(milliseconds=next(TICKS))
+    return when.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
 def fetcher(sleeps: list[float] | None = None) -> snapshot.Fetcher:
     def sleep(seconds: float) -> None:
         if sleeps is not None:
             sleeps.append(seconds)
 
-    return snapshot.Fetcher(UA, min_interval=0, sleep=sleep)
+    return snapshot.Fetcher(UA, min_interval=0, sleep=sleep, wall=wall)
 
 
 def allow(data: Path, *urls: str) -> None:
@@ -149,6 +169,16 @@ def write_log(data: Path, records: list[dict[str, Any]], feed: str = "notices") 
     path = data / "feeds" / feed / "versions.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("".join(json.dumps(r) + "\n" for r in records))
+
+
+def later(record: dict[str, Any], **changes: Any) -> dict[str, Any]:
+    """Another fetch of the record's URL, a second later, so not a copy (REC-12)."""
+    when = datetime.fromisoformat(record["requested_at"]) + timedelta(seconds=1)
+    requested_at = when.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    return record | {"requested_at": requested_at, "received_at": requested_at} | changes
+
+
+NOTHING = {"sha256": None, "bytes": None, "object": None}
 
 
 def sha(body: bytes) -> str:
@@ -239,6 +269,45 @@ def test_readers_ignore_fields_they_dont_know(stored: Path) -> None:
     assert verify.verify(stored) == []
 
 
+@pytest.mark.spec("REC-10")
+def test_a_record_keeps_each_responses_date_as_received(server: Server, tmp_path: Path) -> None:
+    dates = ["Tue, 13 Oct 2026 01:04:12 +0700", "Tuesday, 13-Oct-26 01:04:13 GMT"]
+    server.dates = list(dates)
+    server.routes["/feed.xml"] = with_etag(b"<rss/>", '"v1"')
+
+    first = fetch(server, tmp_path)
+    second = fetch(server, tmp_path)
+
+    assert [first["status"], second["status"]] == [200, 304]
+    assert [first["date"], second["date"]] == dates
+    assert verify.verify(tmp_path) == []
+
+
+@pytest.mark.spec("REC-10", "FETCH-8")
+def test_a_retried_fetch_keeps_its_final_responses_date(server: Server, tmp_path: Path) -> None:
+    server.dates = ["Tue, 13 Oct 2026 01:04:12 GMT", "Tue, 13 Oct 2026 01:04:14 GMT"]
+    server.routes["/feed.xml"] = replies((503, {}, b""), (200, {}, b"<rss/>"))
+
+    record = fetch(server, tmp_path, [])
+
+    assert (record["attempts"], record["date"]) == (2, "Tue, 13 Oct 2026 01:04:14 GMT")
+
+
+@pytest.mark.spec("REC-10")
+def test_received_at_is_when_the_status_and_headers_arrived(server: Server, tmp_path: Path) -> None:
+    """After the server's wait before its headers, and before its body."""
+    server.delay, server.body_delay = 0.2, 1.0
+    server.routes["/feed.xml"] = plain(b"<rss>slow</rss>")
+    scoped(server, tmp_path)
+    clocked = snapshot.Fetcher(UA, min_interval=0)  # with snapshot.py's own wall clock
+
+    record = snapshot.snapshot(clocked, tmp_path, "notices", server.url(), tool=TOOL)
+
+    sent, arrived = (datetime.fromisoformat(record[f]) for f in ("requested_at", "received_at"))
+    assert record["sha256"] == sha(b"<rss>slow</rss>")
+    assert 0.15 <= (arrived - sent).total_seconds() < 0.8
+
+
 # Versions
 
 
@@ -309,7 +378,7 @@ def test_the_users_agent_is_sent_and_no_request_header_is_stored(
             assert b"if-none-match" not in content.lower()
 
 
-@pytest.mark.spec("FETCH-5", "FETCH-8")
+@pytest.mark.spec("FETCH-5", "FETCH-8", "REC-10")
 def test_an_attempt_that_times_out_counts_as_no_response(
     server: Server, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -320,6 +389,7 @@ def test_an_attempt_that_times_out_counts_as_no_response(
     record = fetch(server, tmp_path, [])
 
     assert (record["status"], record["attempts"], record["sha256"]) == (None, 4, None)
+    assert (record["received_at"], record["date"]) == (None, None)
     assert record["error"].startswith("no response")
     assert verify.verify(tmp_path) == []
 
@@ -722,23 +792,50 @@ def test_verify_finds_unnamed_objects_and_unfinished_writes(stored: Path) -> Non
     assert sum("may be deleted" in p for p in problems) == 2
 
 
-@pytest.mark.spec("REC-1")
-def test_verify_finds_a_malformed_field(stored: Path) -> None:
+@pytest.mark.spec("REC-1", "REC-14")
+@pytest.mark.parametrize(
+    ("changes", "fields"),
+    [
+        ({"requested_at": "2026-10-06 12:00", "attempts": 0}, "requested_at, attempts"),
+        ({"received_at": "2026-10-06 12:00", "date": 1791000000}, "received_at, date"),
+        ({"tool": "fetcher@0123456"}, "tool"),
+        ({"tool": "edgar-asof@0.1.0"}, "tool"),
+    ],
+)
+def test_verify_finds_a_malformed_field(changes: dict[str, Any], fields: str, stored: Path) -> None:
     [record] = log(stored)
-    write_log(stored, [record | {"requested_at": "2026-10-06 12:00", "attempts": 0}])
+    write_log(stored, [record | changes])
 
-    [problem] = verify.verify(stored)
+    problems = verify.verify(stored)
 
-    assert problem.startswith("REC-1 ")
-    assert "requested_at, attempts" in problem
+    assert sorted(ids(problems)) == ["REC-1", "REC-14"]
+    [problem] = [p for p in problems if p.startswith("REC-1 ")]
+    assert problem.endswith(f"missing or malformed {fields}")
 
 
-@pytest.mark.spec("REC-1")
+@pytest.mark.spec("REC-1", "REC-14")
 def test_verify_finds_a_line_that_isnt_a_record(stored: Path) -> None:
     path = stored / "feeds" / "notices" / "versions.jsonl"
     path.write_text(path.read_text() + "[1, 2]\nnot json\n")
 
-    assert ids(verify.verify(stored)) == ["REC-1", "REC-1"]
+    assert sorted(ids(verify.verify(stored))) == ["REC-1", "REC-1", "REC-14"]
+
+
+@pytest.mark.spec("REC-1", "REC-11")
+def test_verify_accepts_a_record_written_under_version_0_2_0(stored: Path) -> None:
+    """Without received_at and date, which a reader takes as null (section 14)."""
+    [record] = log(stored)
+    write_log(stored, [{f: v for f, v in record.items() if f not in ("received_at", "date")}])
+
+    assert verify.verify(stored) == []
+
+
+@pytest.mark.spec("REC-1")
+def test_verify_accepts_a_record_the_fetcher_wrote(stored: Path) -> None:
+    [record] = log(stored)
+    write_log(stored, [record | {"tool": FETCHER}])
+
+    assert verify.verify(stored) == []
 
 
 @pytest.mark.spec("REC-2")
@@ -768,7 +865,7 @@ def test_verify_finds_a_missing_object(stored: Path) -> None:
 @pytest.mark.spec("REC-4")
 def test_verify_finds_a_200_that_names_nothing(stored: Path) -> None:
     [record] = log(stored)
-    write_log(stored, [record, record | {"sha256": None, "bytes": None, "object": None}])
+    write_log(stored, [record, later(record, **NOTHING)])
 
     assert ids(verify.verify(stored)) == ["REC-4"]
 
@@ -778,7 +875,7 @@ def test_verify_finds_a_304_naming_the_wrong_version(stored: Path) -> None:
     [record] = log(stored)
     other = sha(b"other")
     wrong = {"status": 304, "sha256": other, "object": f"objects/{other[:2]}/{other}.gz"}
-    write_log(stored, [record, record | wrong])
+    write_log(stored, [record, later(record, **wrong)])
 
     assert "REC-5" in ids(verify.verify(stored))
 
@@ -786,7 +883,7 @@ def test_verify_finds_a_304_naming_the_wrong_version(stored: Path) -> None:
 @pytest.mark.spec("REC-6")
 def test_verify_finds_a_failure_that_names_a_body(stored: Path) -> None:
     [record] = log(stored)
-    write_log(stored, [record, record | {"status": 404}])
+    write_log(stored, [record, later(record, status=404)])
 
     assert ids(verify.verify(stored)) == ["REC-6"]
 
@@ -794,8 +891,8 @@ def test_verify_finds_a_failure_that_names_a_body(stored: Path) -> None:
 @pytest.mark.spec("REC-7")
 def test_verify_finds_a_missing_response_without_an_error(stored: Path) -> None:
     [record] = log(stored)
-    empty = {"sha256": None, "bytes": None, "object": None}
-    write_log(stored, [record, record | empty | {"status": None, "error": None}])
+    nothing = later(record, **NOTHING, status=None, error=None, received_at=None, date=None)
+    write_log(stored, [record, nothing])
 
     assert ids(verify.verify(stored)) == ["REC-7"]
 
@@ -806,6 +903,209 @@ def test_verify_finds_a_wrong_length(stored: Path) -> None:
     write_log(stored, [record | {"bytes": record["bytes"] + 1}])
 
     assert ids(verify.verify(stored)) == ["REC-8"]
+
+
+def two_versions(server: Server, data: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Two records of one URL, each with its own body."""
+    for body in (b"<rss>A</rss>", b"<rss>B</rss>"):
+        server.routes["/feed.xml"] = plain(body)
+        fetch(server, data)
+    first, second = log(data)
+    return first, second
+
+
+def naming(record: dict[str, Any]) -> dict[str, Any]:
+    return {field: record[field] for field in ("sha256", "bytes", "object")}
+
+
+@pytest.mark.spec("REC-5")
+@pytest.mark.parametrize(("tool", "found"), [(TOOL, ["REC-5"]), (FETCHER, [])])
+def test_verify_leaves_the_version_a_copied_304_names_to_the_cluster_store(
+    tool: str, found: list[str], server: Server, tmp_path: Path
+) -> None:
+    """The fetcher's 304, which the transfer copied, names a version of the
+    cluster store, which STORE-3 checks there, not the log's latest."""
+    first, second = two_versions(server, tmp_path)
+    confirmed = later(second, status=304, tool=tool, **naming(first))
+    write_log(tmp_path, [first, second, confirmed])
+
+    assert ids(verify.verify(tmp_path)) == found
+
+
+@pytest.mark.spec("REC-5")
+def test_verify_finds_a_copied_304_that_names_nothing_without_an_error(stored: Path) -> None:
+    [record] = log(stored)
+    write_log(stored, [record, later(record, **NOTHING, status=304, tool=FETCHER)])
+
+    assert ids(verify.verify(stored)) == ["REC-5"]
+
+
+@pytest.mark.spec("FETCH-4", "REC-5")
+def test_snapshots_304_after_a_copied_record_names_the_copied_version(
+    server: Server, tmp_path: Path
+) -> None:
+    """snapshot.py asks about the latest earlier line of the log with a
+    version, whoever wrote it, so its 304 names the version copied there."""
+    for body, etag in ((b"<rss>A</rss>", '"a"'), (b"<rss>B</rss>", '"b"')):
+        server.routes["/feed.xml"] = with_etag(body, etag)
+        fetch(server, tmp_path)
+    first, second = log(tmp_path)
+    copied = second | {"tool": FETCHER}
+    write_log(tmp_path, [first, copied])
+
+    confirmed = fetch(server, tmp_path)
+
+    assert server.requests[-1][1].get("if-none-match") == '"b"'
+    assert (confirmed["status"], confirmed["tool"]) == (304, TOOL)
+    assert naming(confirmed) == naming(copied)
+    assert verify.verify(tmp_path) == []
+
+
+@pytest.mark.spec("REC-5")
+@pytest.mark.parametrize(("names", "found"), [("copied", []), ("earlier", ["REC-5"])])
+def test_verify_holds_snapshots_304_after_a_copied_record_to_the_copied_version(
+    names: str, found: list[str], server: Server, tmp_path: Path
+) -> None:
+    """The latest earlier line of the log with a version, whoever wrote it."""
+    first, second = two_versions(server, tmp_path)
+    copied = second | {"tool": FETCHER}
+    confirmed = later(
+        copied, status=304, tool=TOOL, **naming(copied if names == "copied" else first)
+    )
+    write_log(tmp_path, [first, copied, confirmed])
+
+    assert ids(verify.verify(tmp_path)) == found
+
+
+NO_RESPONSE = {**NOTHING, "status": None, "error": "no response: timeout"}
+
+
+@pytest.mark.spec("REC-11")
+@pytest.mark.parametrize(
+    ("changes", "without"),
+    [
+        ({"received_at": None}, ()),
+        (NO_RESPONSE | {"date": None}, ()),
+        (NO_RESPONSE | {"received_at": None}, ()),
+        (NO_RESPONSE, ("received_at",)),
+    ],
+    ids=[
+        "status-without-received_at",
+        "received_at-without-status",
+        "date-without-status",
+        "0.2.0",
+    ],
+)
+def test_verify_finds_received_at_or_date_that_its_status_doesnt_match(
+    changes: dict[str, Any], without: tuple[str, ...], stored: Path
+) -> None:
+    [record] = log(stored)
+    mismatched = {f: v for f, v in later(record, **changes).items() if f not in without}
+    write_log(stored, [record, mismatched])
+
+    assert ids(verify.verify(stored)) == ["REC-11"]
+
+
+@pytest.mark.spec("REC-12")
+@pytest.mark.parametrize(
+    ("again", "found"),
+    [
+        (lambda record: record, ["REC-12"]),
+        (lambda record: record | {"tool": FETCHER}, []),
+        (later, []),
+    ],
+    ids=["same", "other-tool", "later"],
+)
+def test_verify_finds_a_record_held_twice(
+    again: Callable[[dict[str, Any]], dict[str, Any]], found: list[str], stored: Path
+) -> None:
+    """In any two logs, since the URL, requested_at, and tool identify a fetch."""
+    [record] = log(stored)
+    write_log(stored, [again(record) | {"feed": "submissions"}], feed="submissions")
+
+    problems = verify.verify(stored)
+
+    assert ids(problems) == found
+    assert all(p.endswith("as feeds/notices/versions.jsonl:1") for p in problems)
+
+
+@pytest.mark.spec("REC-14")
+@pytest.mark.parametrize(
+    "changes",
+    [{"requested_at": "2026-02-30T18:04:12.345Z"}, {"received_at": "2026-10-12T24:00:00.000Z"}],
+)
+def test_verify_finds_a_record_the_schema_refuses(changes: dict[str, Any], stored: Path) -> None:
+    """Of REC-1's form, but not the schema's: a day its month lacks, or the hour 24."""
+    [record] = log(stored)
+    write_log(stored, [record | changes])
+
+    [problem] = verify.verify(stored)
+
+    assert problem.startswith("REC-14 feeds/notices/versions.jsonl:1: against record.schema.json, ")
+
+
+@pytest.mark.spec("REC-14")
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        (None, "can't be read"),
+        ('{"type": "object", "additionalProperties": false}', "uses additionalProperties"),
+        ('{"properties": {"url": {"format": "uri"}}}', "uses format uri"),
+        ('{"$ref": "https://example.com/record.json"}', "uses $ref https://example.com/"),
+        ('{"type": "list"}', "uses type list"),
+        ('{"$defs": {"timestamp": {"maxLength": 24}}}', "uses maxLength"),
+        ('{"anyOf": [{"type": "integer", "maximum": 1}]}', "uses maximum"),
+    ],
+)
+def test_verify_reports_a_schema_it_cant_read(
+    text: str | None,
+    message: str,
+    stored: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """So the schema can't gain a keyword that verify.py would ignore."""
+    path = tmp_path_factory.mktemp("schemas") / "record.schema.json"
+    if text is not None:
+        path.write_text(text)
+    monkeypatch.setattr(verify, "SCHEMA", path)
+
+    [problem] = verify.verify(stored)
+
+    assert problem.startswith(f"REC-14 record.schema.json: {message}")
+
+
+def sparse(path: Path, size: int) -> None:
+    """A file of size bytes that takes next to no space on disk."""
+    with path.open("wb") as file:
+        file.truncate(size)
+
+
+MIB_50 = 50 * 2**20
+
+
+@pytest.mark.spec("SCOPE-4")
+@pytest.mark.parametrize(("size", "found"), [(MIB_50, []), (MIB_50 + 1, ["SCOPE-4"])])
+def test_verify_finds_a_file_over_50_mib(size: int, found: list[str], stored: Path) -> None:
+    sparse(stored / "README.md", size)
+
+    assert ids(verify.verify(stored)) == found
+
+
+@pytest.mark.spec("SCOPE-5")
+def test_verify_finds_a_store_over_1_gb(stored: Path) -> None:
+    """Every file under data/ counts, hidden ones too."""
+    held = sum(path.stat().st_size for path in stored.rglob("*") if path.is_file())
+    whole, rest = divmod(1_000_000_000 - held, MIB_50)
+    for number in range(whole):
+        sparse(stored / f".part-{number}", MIB_50)
+    sparse(stored / ".rest", rest)
+
+    assert verify.verify(stored) == []
+
+    sparse(stored / ".rest", rest + 1)
+
+    assert ids(verify.verify(stored)) == ["SCOPE-5"]
 
 
 def manifest(data: Path, name: str, inputs: list[dict[str, str]], **fields: str) -> Path:
@@ -950,6 +1250,7 @@ def contents(data: Path) -> dict[Path, bytes]:
 @pytest.mark.spec(
     "LAY-1", "OBJ-1", "OBJ-3",
     "REC-1", "REC-2", "REC-3", "REC-4", "REC-5", "REC-6", "REC-7", "REC-8",
+    "REC-10", "REC-11", "REC-12", "REC-14",
     "LOG-1", "LOG-2",
 )  # fmt: skip
 @settings(
@@ -975,3 +1276,5 @@ def test_the_invariants_hold_after_any_sequence_of_fetches(
                     assert after[name].startswith(old)
                 else:
                     assert after[name] == old
+        for record in snapshot.records(data / "feeds" / "notices" / "versions.jsonl"):
+            assert list(record) == list(verify.FIELDS)

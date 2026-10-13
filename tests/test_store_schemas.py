@@ -1,11 +1,13 @@
 """The store's schemas in spec/schemas/ against spec/snapshots.md's tables.
 
 The record's JSON Schema has the fields of section 6's table, and accepts
-every record in data/; the table in records.sql has a column for each; and
-the job's and the event's JSON Schemas have the fields of section 10's
-tables. Each test carries the IDs of the statements it checks, as
-@pytest.mark.spec(...); tests/test_spec_coverage.py requires every statement
-checked by `tests` or `kind` to have one, or to await a later task.
+every record in data/; verify.py knows the table's fields in its order,
+and reads the schema as these tests' validator does; the table in
+records.sql has a column for each; and the job's and the event's JSON
+Schemas have the fields of section 10's tables. Each test carries the IDs
+of the statements it checks, as @pytest.mark.spec(...);
+tests/test_spec_coverage.py requires every statement checked by `verify`,
+`tests`, or `kind` to have one, or to await a later task.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import verify
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 from jsonschema.protocols import Validator
 from jsonschema.validators import extend
@@ -182,9 +185,15 @@ def test_the_record_schema_has_the_tables_fields_in_order() -> None:
     ]
 
 
+# The tests of snapshot.py's records compare their order with verify.FIELDS,
+# so it must be the table's (REC-9).
+@pytest.mark.spec("REC-9")
+def test_verify_knows_the_tables_fields_in_order() -> None:
+    assert list(verify.FIELDS) == [field for field, _ in RECORD_FIELDS]
+
+
 # The stored records are real ones, so the schema must accept each (REC-13).
-# REC-14, that every record in data/ validates, is verify.py's to check, and
-# awaits T35.
+# REC-14, that every record in data/ validates, is verify.py's to check.
 @pytest.mark.spec("REC-13")
 def test_the_record_schema_accepts_every_stored_record() -> None:
     record = validator("record.schema.json")
@@ -194,66 +203,63 @@ def test_the_record_schema_accepts_every_stored_record() -> None:
     assert [list(record.iter_errors(each)) for each in stored] == [[] for _ in stored]
 
 
+ACCEPTED: list[dict[str, Any]] = [
+    {},
+    {"tool": "scripts/snapshot.py@" + "a" * 40 + "+dirty"},
+    {"tool": "scripts/snapshot.py@unknown"},
+    {"status": None, "received_at": None, "date": None, "error": "no response: timeout"},
+    {"requested_at": "2028-02-29T23:59:59.999Z", "received_at": "2028-03-01T00:00:00.000Z"},
+]
+REFUSED: list[dict[str, Any]] = [
+    {"received_at": "2026-10-12T18:04:12Z"},
+    {"requested_at": "2026-10-12 18:04:12.345Z"},
+    {"requested_at": "2026-02-30T25:61:61.000Z"},
+    {"requested_at": "2026-02-30T18:04:12.345Z"},
+    {"requested_at": "2026-02-29T18:04:12.345Z"},
+    {"received_at": "2026-13-12T18:04:12.512Z"},
+    {"received_at": "2026-10-12T24:00:00.000Z"},
+    {"received_at": "2026-12-31T23:59:60.000Z"},
+    {"tool": "fetcher@0123456"},
+    {"tool": "edgar-asof@0.1.0"},
+    {"sha256": "E8" * 32},
+    {"bytes": -1},
+    {"attempts": 0},
+    {"feed": "Submissions"},
+    {"date": 1760292252},
+    {"feed": "submissions\n"},
+    {"sha256": "e8" * 32 + "\n"},
+    {"tool": FETCHER + "\n"},
+    {"tool": "scripts/snapshot.py@unknown\n"},
+    {"requested_at": "2026-10-12T18:04:12.345Z\n"},
+]
+# Each timestamp's pattern refuses these by itself.
+OUT_OF_RANGE = [
+    "2026-00-12T18:04:12.345Z",
+    "2026-13-12T18:04:12.345Z",
+    "2026-10-00T18:04:12.345Z",
+    "2026-10-32T18:04:12.345Z",
+    "2026-10-12T24:00:00.000Z",
+    "2026-10-12T18:60:12.345Z",
+    "2026-10-12T18:04:61.345Z",
+    "2026-12-31T23:59:60.000Z",
+    "2026-10-12T18:04:12.345Z\n",
+]
+
+
 @pytest.mark.spec("REC-13")
-@pytest.mark.parametrize(
-    "changes",
-    [
-        {},
-        {"tool": "scripts/snapshot.py@" + "a" * 40 + "+dirty"},
-        {"tool": "scripts/snapshot.py@unknown"},
-        {"status": None, "received_at": None, "date": None, "error": "no response: timeout"},
-        {"requested_at": "2028-02-29T23:59:59.999Z", "received_at": "2028-03-01T00:00:00.000Z"},
-    ],
-)
+@pytest.mark.parametrize("changes", ACCEPTED)
 def test_the_record_schema_accepts_each_writers_record(changes: dict[str, Any]) -> None:
     assert list(validator("record.schema.json").iter_errors(new_record(**changes))) == []
 
 
 @pytest.mark.spec("REC-13")
-@pytest.mark.parametrize(
-    "changes",
-    [
-        {"received_at": "2026-10-12T18:04:12Z"},
-        {"requested_at": "2026-10-12 18:04:12.345Z"},
-        {"requested_at": "2026-02-30T25:61:61.000Z"},
-        {"requested_at": "2026-02-30T18:04:12.345Z"},
-        {"requested_at": "2026-02-29T18:04:12.345Z"},
-        {"received_at": "2026-13-12T18:04:12.512Z"},
-        {"received_at": "2026-10-12T24:00:00.000Z"},
-        {"received_at": "2026-12-31T23:59:60.000Z"},
-        {"tool": "fetcher@0123456"},
-        {"tool": "edgar-asof@0.1.0"},
-        {"sha256": "E8" * 32},
-        {"bytes": -1},
-        {"attempts": 0},
-        {"feed": "Submissions"},
-        {"date": 1760292252},
-        {"feed": "submissions\n"},
-        {"sha256": "e8" * 32 + "\n"},
-        {"tool": FETCHER + "\n"},
-        {"tool": "scripts/snapshot.py@unknown\n"},
-        {"requested_at": "2026-10-12T18:04:12.345Z\n"},
-    ],
-)
+@pytest.mark.parametrize("changes", REFUSED)
 def test_the_record_schema_refuses_a_field_of_the_wrong_form(changes: dict[str, Any]) -> None:
     assert list(validator("record.schema.json").iter_errors(new_record(**changes))) != []
 
 
 @pytest.mark.spec("REC-13", "JOB-1")
-@pytest.mark.parametrize(
-    "value",
-    [
-        "2026-00-12T18:04:12.345Z",
-        "2026-13-12T18:04:12.345Z",
-        "2026-10-00T18:04:12.345Z",
-        "2026-10-32T18:04:12.345Z",
-        "2026-10-12T24:00:00.000Z",
-        "2026-10-12T18:60:12.345Z",
-        "2026-10-12T18:04:61.345Z",
-        "2026-12-31T23:59:60.000Z",
-        "2026-10-12T18:04:12.345Z\n",
-    ],
-)
+@pytest.mark.parametrize("value", OUT_OF_RANGE)
 @pytest.mark.parametrize(
     ("name", "message"),
     [
@@ -292,6 +298,38 @@ def wrong_types() -> list[tuple[str, object]]:
 )
 def test_the_record_schema_refuses_a_field_of_the_wrong_type(field: str, value: object) -> None:
     assert list(validator("record.schema.json").iter_errors(new_record(**{field: value}))) != []
+
+
+def cases() -> list[Any]:
+    """Records the schema accepts and records it refuses, and other JSON."""
+    without = [{f: v for f, v in new_record().items() if f != field} for field, _ in RECORD_FIELDS]
+    return [
+        *records(),
+        *(new_record(**changes) for changes in ACCEPTED + REFUSED),
+        *(new_record(requested_at=value) for value in OUT_OF_RANGE),
+        *(new_record(**{field: value}) for field, value in wrong_types()),
+        *without,
+        new_record(added_later=True),
+        [new_record()],
+        "a record",
+        None,
+    ]
+
+
+# verify.py checks REC-14 with a reader of the schema's keywords of its own,
+# since the scripts use only the standard library, so it must accept and
+# refuse what these tests' validator does.
+@pytest.mark.spec("REC-14")
+def test_verify_reads_the_record_schema_as_these_tests_do() -> None:
+    record, problems = verify.read_schema(verify.SCHEMA)
+    tests = validator("record.schema.json")
+
+    assert (record, problems) == (schema("record.schema.json"), [])
+    assert record is not None
+    accepted = [not verify.schema_errors(case, record) for case in cases()]
+    assert accepted == [not list(tests.iter_errors(case)) for case in cases()]
+    assert True in accepted
+    assert False in accepted
 
 
 def columns() -> dict[str, str]:

@@ -8,7 +8,9 @@ Implements the rules in spec/snapshots.md. Each fetch appends one record to
 data/feeds/FEED/versions.jsonl (FETCH-14). A body is stored once, gzipped,
 at data/objects/AA/SHA256.gz, named by the SHA-256 of its decoded bytes
 (OBJ-1, OBJ-2), so an unchanged feed adds a record but no copy, and changed
-content becomes a new version (VER-1). Nothing stored is overwritten.
+content becomes a new version (VER-1). Nothing stored is overwritten. Each
+record keeps when its request was sent and its response arrived, and the
+response's Date as received (REC-10).
 
 Each user supplies their own SEC_USER_AGENT, a name and a contact address,
 in the environment or in .env.dev at the repository's root, which git
@@ -84,6 +86,7 @@ class Response:
     headers: dict[str, str]  # names lower-cased
     final_url: str
     body: Body
+    received_at: str  # when the status and headers arrived, by the fetcher's wall clock
 
 
 def now() -> str:
@@ -94,7 +97,8 @@ class Fetcher:
     """Sends requests no closer together than min_interval (FETCH-6).
 
     sent_at is when the latest request was sent, read after the wait, as a
-    record's requested_at gives it.
+    record's requested_at gives it. A response's received_at is read from the
+    same clock once its status and headers have arrived, before its body.
     """
 
     def __init__(
@@ -133,6 +137,7 @@ class Fetcher:
             headers={k.lower(): v for k, v in raw.headers.items()},
             final_url=str(raw.geturl()),
             body=cast(Body, raw),
+            received_at=self.wall(),
         )
 
 
@@ -310,10 +315,12 @@ def snapshot(fetcher: Fetcher, data: Path, feed: str, url: str, *, tool: str) ->
             "feed": feed,
             "url": url,
             "requested_at": fetcher.sent_at,
+            "received_at": response.received_at if response else None,
             "attempts": attempt,
             "status": response.status if response else None,
             "error": error,
             "final_url": None,
+            "date": None,
             "etag": None,
             "last_modified": None,
             "content_type": None,
@@ -327,6 +334,7 @@ def snapshot(fetcher: Fetcher, data: Path, feed: str, url: str, *, tool: str) ->
             try:
                 if response.final_url != url:
                     record["final_url"] = response.final_url
+                record["date"] = response.headers.get("date")
                 record["etag"] = response.headers.get("etag")
                 record["last_modified"] = response.headers.get("last-modified")
                 record["content_type"] = response.headers.get("content-type")

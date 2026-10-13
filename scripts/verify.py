@@ -7,10 +7,11 @@
 Checks every invariant in the specification's index that `verify` checks:
 the layout (LAY-1), the scope in data/scope.json (SCOPE-1), the objects
 (OBJ-1, OBJ-3), every record in data/feeds/*/versions.jsonl (REC-1 to REC-8,
-SCOPE-2), and every import manifest (IMP-1, IMP-2). With --since REF it also
-checks that, since the commit REF, logs were only appended to (LOG-1) and
-objects and manifests only added (LOG-2). Each problem starts with the ID it
-breaks. Exits 1 on any problem.
+REC-11, REC-12, SCOPE-2), each against spec/schemas/record.schema.json
+(REC-14), every import manifest (IMP-1, IMP-2), and the store's budget
+(SCOPE-4, SCOPE-5). With --since REF it also checks that, since the commit
+REF, logs were only appended to (LOG-1) and objects and manifests only added
+(LOG-2). Each problem starts with the ID it breaks. Exits 1 on any problem.
 
     uv run scripts/verify.py                 # -v lists each URL's versions
     uv run scripts/verify.py --since origin/main
@@ -27,14 +28,21 @@ import subprocess
 import sys
 import zlib
 from collections.abc import Callable
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
+SCHEMA = ROOT / "spec" / "schemas" / "record.schema.json"  # REC-14
 NAME = re.compile(r"[a-z0-9][a-z0-9-]*")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z")
-TOOL = re.compile(r"scripts/snapshot\.py@(?:[0-9a-f]{40}(?:\+dirty)?|unknown)")
+FETCHER = "fetcher@"  # the fetcher's records, which only the transfer copies here
+TOOL = re.compile(
+    r"scripts/snapshot\.py@(?:[0-9a-f]{40}(?:\+dirty)?|unknown)|" + FETCHER + r"[0-9a-f]{40}"
+)
+FILE_LIMIT = 50 * 1024 * 1024  # SCOPE-4: GitHub warns of a file over 50 MiB
+TOTAL_LIMIT = 1_000_000_000  # SCOPE-5: GitHub recommends a repository under 1 GB
 
 
 def is_int(value: Any) -> bool:
@@ -58,10 +66,12 @@ FIELDS: dict[str, Callable[[Any], bool]] = {
     "feed": matches(NAME),
     "url": is_str,
     "requested_at": matches(TIMESTAMP),
+    "received_at": optional(matches(TIMESTAMP)),
     "attempts": lambda v: is_int(v) and v >= 1,
     "status": optional(is_int),
     "error": optional(is_str),
     "final_url": optional(is_str),
+    "date": optional(is_str),
     "etag": optional(is_str),
     "last_modified": optional(is_str),
     "content_type": optional(is_str),
@@ -70,6 +80,8 @@ FIELDS: dict[str, Callable[[Any], bool]] = {
     "object": optional(is_str),
     "tool": matches(TOOL),
 }
+# REC-1: the fields a record written under version 0.2.0 lacks, read as null.
+ADDED = ("received_at", "date")
 STORED = ("sha256", "bytes", "object")
 
 
@@ -116,10 +128,139 @@ def covers(scope: list[str], url: str) -> bool:
     return any(url == entry or (entry.endswith("/") and url.startswith(entry)) for entry in scope)
 
 
+# REC-14: the keywords of JSON Schema's draft 2020-12 that schema_errors reads,
+# those the record's schema uses. A schema with any other fails the check, so
+# the schema can't outgrow it unnoticed.
+ANNOTATIONS = frozenset({"$schema", "$id", "$comment", "$defs", "title", "description"})
+KEYWORDS = ANNOTATIONS | {
+    "$ref",
+    "type",
+    "anyOf",
+    "required",
+    "properties",
+    "pattern",
+    "minimum",
+    "format",
+}
+TYPES: dict[str, Callable[[Any], bool]] = {
+    "null": lambda v: v is None,
+    "boolean": lambda v: isinstance(v, bool),
+    "integer": lambda v: is_int(v) or (isinstance(v, float) and v.is_integer()),
+    "number": lambda v: is_int(v) or isinstance(v, float),
+    "string": is_str,
+    "array": lambda v: isinstance(v, list),
+    "object": lambda v: isinstance(v, dict),
+}
+
+
+def unread(schema: Any) -> list[str]:
+    """What in schema and its subschemas schema_errors doesn't read."""
+    if not isinstance(schema, dict):
+        return [f"the schema {json.dumps(schema)}"]
+    found = [keyword for keyword in schema if keyword not in KEYWORDS]
+    types = schema.get("type", [])
+    found += [
+        f"type {t}" for t in (types if isinstance(types, list) else [types]) if t not in TYPES
+    ]
+    if schema.get("format", "date-time") != "date-time":
+        found.append(f"format {schema['format']}")
+    if not str(schema.get("$ref", "#/")).startswith("#/"):
+        found.append(f"$ref {schema['$ref']}")
+    for sub in [
+        *schema.get("properties", {}).values(),
+        *schema.get("$defs", {}).values(),
+        *schema.get("anyOf", []),
+    ]:
+        found += unread(sub)
+    return found
+
+
+def read_schema(path: Path) -> tuple[dict[str, Any] | None, list[str]]:
+    """The record's JSON Schema, or None if schema_errors can't read it, and why (REC-14)."""
+    try:
+        schema = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as err:
+        return None, [f"can't be read ({err})"]
+    if found := unread(schema):
+        return None, [f"uses {', '.join(found)}, which verify.py doesn't read"]
+    assert isinstance(schema, dict)  # unread found nothing
+    return schema, []
+
+
+def pointer(root: dict[str, Any], ref: str) -> Any:
+    """The subschema of root that a $ref of the form #/a/b names."""
+    found: Any = root
+    for part in ref.removeprefix("#/").split("/"):
+        found = found[part.replace("~1", "/").replace("~0", "~")]
+    return found
+
+
+def ecma(pattern: str) -> str:
+    r"""A pattern's final $ as ECMA-262 reads it, at the end of the input only.
+
+    Python's $ also matches before a final newline, so it becomes \Z, as the
+    tests' validator reads it (tests/test_store_schemas.py).
+    """
+    ends = pattern.endswith("$") and not pattern.endswith(r"\$")
+    return pattern[:-1] + r"\Z" if ends else pattern
+
+
+def is_date_time(value: str) -> bool:
+    """The format date-time: a time with its offset, on a day its month has."""
+    try:
+        return datetime.fromisoformat(value).tzinfo is not None
+    except ValueError:
+        return False
+
+
+def schema_errors(
+    instance: Any, schema: dict[str, Any], root: dict[str, Any] | None = None, at: str = ""
+) -> list[str]:
+    """How instance fails schema, as JSON Schema's draft 2020-12 reads it (REC-14).
+
+    It asserts formats, and reads a pattern as ECMA-262 does. root is the
+    schema each $ref points into, and at is where instance is in the record.
+    """
+    root = schema if root is None else root
+    what = f"{at} {json.dumps(instance, ensure_ascii=False)}" if at else "the record"
+    errors: list[str] = []
+    if "$ref" in schema:
+        errors += schema_errors(instance, pointer(root, schema["$ref"]), root, at)
+    if "type" in schema:
+        types = schema["type"] if isinstance(schema["type"], list) else [schema["type"]]
+        if not any(TYPES[t](instance) for t in types):
+            errors.append(f"{what} isn't of type {' or '.join(types)}")
+    if "anyOf" in schema:
+        failed = [schema_errors(instance, sub, root, at) for sub in schema["anyOf"]]
+        if all(failed):
+            alternatives = "; ".join(error for each in failed for error in each)
+            errors.append(f"{what} matches none of anyOf: {alternatives}")
+    if isinstance(instance, dict):
+        errors += [
+            f"{what} lacks {field}" for field in schema.get("required", []) if field not in instance
+        ]
+        for name, sub in schema.get("properties", {}).items():
+            if name in instance:
+                errors += schema_errors(instance[name], sub, root, f"{at}.{name}" if at else name)
+    if isinstance(instance, str):
+        if "pattern" in schema and not re.search(ecma(schema["pattern"]), instance):
+            errors.append(f"{what} doesn't match {schema['pattern']}")
+        if "format" in schema and not is_date_time(instance):
+            errors.append(f"{what} isn't a {schema['format']}")
+    if TYPES["number"](instance) and "minimum" in schema and instance < schema["minimum"]:
+        errors.append(f"{what} is under its minimum, {schema['minimum']}")
+    return errors
+
+
 def outcome_problems(record: dict[str, Any], latest: str | None) -> list[tuple[str, str]]:
-    """REC-3 to REC-7 for one well-formed record; latest is the URL's latest earlier version."""
+    """REC-3 to REC-7 and REC-11 for one well-formed record.
+
+    latest is the URL's latest earlier version in the log. A 304 the transfer
+    copied names one in the cluster store, which STORE-3 checks there (REC-5).
+    """
     problems = []
     status, error, sha256 = record["status"], record["error"], record["sha256"]
+    copied = record["tool"].startswith(FETCHER)
     stored = [record[field] is not None for field in STORED]
     if any(stored) and not all(stored):
         problems.append(("REC-3", "sha256, bytes, and object must all be set or all null"))
@@ -127,7 +268,7 @@ def outcome_problems(record: dict[str, Any], latest: str | None) -> list[tuple[s
         problems.append(("REC-3", f"object should be {object_path(sha256)}"))
     if status == 200 and error is None and not sha256:
         problems.append(("REC-4", "a 200 without an error must name its body"))
-    if status == 304 and sha256 and sha256 != latest:
+    if status == 304 and sha256 and sha256 != latest and not copied:
         problems.append(("REC-5", "a 304 must name the URL's latest earlier version"))
     if status == 304 and not sha256 and error is None:
         problems.append(("REC-5", "a 304 that names no version must have an error"))
@@ -135,6 +276,12 @@ def outcome_problems(record: dict[str, Any], latest: str | None) -> list[tuple[s
         problems.append(("REC-6", f"a {status} with error {error!r} can't name a body"))
     if status is None and error is None:
         problems.append(("REC-7", "a fetch with no response must have an error"))
+    # A record without received_at, as each written under version 0.2.0, is
+    # held only to the second part.
+    if "received_at" in record and (record["received_at"] is None) != (status is None):
+        problems.append(("REC-11", "received_at must be set exactly when status is"))
+    if status is None and record.get("date") is not None:
+        problems.append(("REC-11", "a fetch with no response can't have a date"))
     return problems
 
 
@@ -146,6 +293,8 @@ class Checker:
         self.named: set[Path] = set()
         self.held: set[tuple[str, str, str]] = set()  # (feed, url, sha256), for IMP-2
         self.scope: list[str] | None = None  # for SCOPE-2; None if scope.json can't be read
+        self.schema: dict[str, Any] | None = None  # for REC-14; None if it can't be read
+        self.fetches: dict[tuple[str, str, str], str] = {}  # (url, requested_at, tool), for REC-12
         self.versions: dict[str, dict[str, dict[str, list[str]]]] = {}  # for -v
 
     def report(self, id: str, where: str, message: str) -> None:
@@ -187,6 +336,9 @@ class Checker:
             self.report("SCOPE-1", "scope.json", problem)
 
     def check_logs(self) -> None:
+        self.schema, problems = read_schema(SCHEMA)
+        for problem in problems:
+            self.report("REC-14", SCHEMA.name, problem)
         for log in sorted((self.data / "feeds").glob("*/versions.jsonl")):
             latest: dict[str, str] = {}
             versions = self.versions.setdefault(log.parent.name, {})
@@ -209,10 +361,14 @@ class Checker:
         except json.JSONDecodeError as err:
             self.report("REC-1", where, f"not JSON ({err})")
             return
+        if self.schema is not None and (errors := schema_errors(record, self.schema)):
+            self.report("REC-14", where, f"against {SCHEMA.name}, {'; '.join(errors)}")
         if not isinstance(record, dict):
             self.report("REC-1", where, "not a JSON object")
             return
-        wrong = [f for f, ok in FIELDS.items() if f not in record or not ok(record[f])]
+        wrong = [
+            f for f, ok in FIELDS.items() if not (ok(record[f]) if f in record else f in ADDED)
+        ]
         sha256 = record.get("sha256") if "sha256" not in wrong else None
         if sha256:
             # Still the record that names this object, so OBJ-3 shouldn't call it unnamed.
@@ -227,6 +383,12 @@ class Checker:
             self.report("SCOPE-2", where, f"{url} is outside the scope in scope.json")
         for id, message in outcome_problems(record, latest.get(url)):
             self.report(id, where, message)
+        fetch = (url, record["requested_at"], record["tool"])
+        if fetch in self.fetches:
+            self.report(
+                "REC-12", where, f"the same url, requested_at, and tool as {self.fetches[fetch]}"
+            )
+        self.fetches.setdefault(fetch, where)
         if not sha256:
             return
         latest[url] = sha256
@@ -252,6 +414,21 @@ class Checker:
                 self.report("OBJ-1", str(relative), f"decompresses to SHA-256 {found[0]}")
             if path not in self.named:
                 self.report("OBJ-3", str(relative), "no record names it; it may be deleted")
+
+    def check_budget(self) -> None:
+        """SCOPE-4 and SCOPE-5, over every file under data/, hidden ones too."""
+        total = 0
+        for path in sorted(self.data.rglob("*")):
+            if path.is_file():
+                size = path.stat().st_size
+                total += size
+                if size > FILE_LIMIT:
+                    where = str(path.relative_to(self.data))
+                    self.report("SCOPE-4", where, f"{size:,} bytes, over {FILE_LIMIT:,}")
+        if total > TOTAL_LIMIT:
+            self.report(
+                "SCOPE-5", "data/", f"its files total {total:,} bytes, over {TOTAL_LIMIT:,}"
+            )
 
     def check_manifests(self) -> None:
         """IMP-1 and IMP-2."""
@@ -331,6 +508,7 @@ def verify(data: Path, *, since: str | None = None, verbose: bool = False) -> li
     checker.check_logs()
     checker.check_objects()
     checker.check_manifests()
+    checker.check_budget()
     if since:
         checker.check_history(since)
     if verbose:
