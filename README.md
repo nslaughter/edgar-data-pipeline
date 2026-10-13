@@ -56,8 +56,9 @@ uv run scripts/verify.py -v
 ```
 
 [`scripts/snapshot.py`](scripts/snapshot.py) fetches each URL and appends a
-record to `data/feeds/FEED/versions.jsonl`: the request time, the HTTP status
-and validators, and the SHA-256 and length of the body. The body is stored
+record to `data/feeds/FEED/versions.jsonl`: when the request was sent and
+when its response arrived, the HTTP status, the response's `Date` and
+validators, and the SHA-256 and length of the body. The body is stored
 once, gzipped, under `data/objects/` by its SHA-256. A refetch sends the last
 version's validators, so an unchanged feed costs the SEC little and adds a
 record without a copy. Nothing stored is overwritten. The store is committed

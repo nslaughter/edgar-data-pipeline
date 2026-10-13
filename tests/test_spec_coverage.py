@@ -138,7 +138,7 @@ AWAITING = {
     ),
     **dict.fromkeys(["SOURCE-5", "BACKFILL-1", "BACKFILL-3", "FETCH-18", "JOB-3"], "T24"),
     **dict.fromkeys(["RBAC-3", "RBAC-5"], "T28"),
-    **dict.fromkeys(["REC-10", "REC-11", "REC-12", "REC-14", "SCOPE-4", "SCOPE-5"], "T35"),
+    **dict.fromkeys(["REC-11", "REC-12", "REC-14", "SCOPE-4", "SCOPE-5"], "T35"),
     **dict.fromkeys(["XFER-1", "XFER-2", "XFER-3"], "T36"),
 }
 

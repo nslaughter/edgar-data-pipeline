@@ -41,6 +41,8 @@ class Server:
     routes: dict[str, Route] = field(default_factory=dict)
     requests: list[tuple[str, dict[str, str]]] = field(default_factory=list)
     delay: float = 0.0
+    body_delay: float = 0.0  # between the headers and the body
+    dates: list[str] = field(default_factory=list)  # the next responses' Date, in turn
 
     def url(self, path: str = "/feed.xml") -> str:
         return self.base + path
@@ -64,9 +66,14 @@ def server() -> Iterator[Server]:
                 if "Content-Length" not in reply_headers:
                     self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
+                if state.body_delay:
+                    time.sleep(state.body_delay)
                 self.wfile.write(body)
             except (BrokenPipeError, ConnectionResetError):
                 pass  # the client gave up first, as FETCH-5's test intends
+
+        def date_time_string(self, timestamp: float | None = None) -> str:
+            return state.dates.pop(0) if state.dates else super().date_time_string(timestamp)
 
         def log_message(self, format: str, *args: Any) -> None:
             pass
@@ -239,6 +246,45 @@ def test_readers_ignore_fields_they_dont_know(stored: Path) -> None:
     assert verify.verify(stored) == []
 
 
+@pytest.mark.spec("REC-10")
+def test_a_record_keeps_each_responses_date_as_received(server: Server, tmp_path: Path) -> None:
+    dates = ["Tue, 13 Oct 2026 01:04:12 +0700", "Tuesday, 13-Oct-26 01:04:13 GMT"]
+    server.dates = list(dates)
+    server.routes["/feed.xml"] = with_etag(b"<rss/>", '"v1"')
+
+    first = fetch(server, tmp_path)
+    second = fetch(server, tmp_path)
+
+    assert [first["status"], second["status"]] == [200, 304]
+    assert [first["date"], second["date"]] == dates
+    assert verify.verify(tmp_path) == []
+
+
+@pytest.mark.spec("REC-10", "FETCH-8")
+def test_a_retried_fetch_keeps_its_final_responses_date(server: Server, tmp_path: Path) -> None:
+    server.dates = ["Tue, 13 Oct 2026 01:04:12 GMT", "Tue, 13 Oct 2026 01:04:14 GMT"]
+    server.routes["/feed.xml"] = replies((503, {}, b""), (200, {}, b"<rss/>"))
+
+    record = fetch(server, tmp_path, [])
+
+    assert (record["attempts"], record["date"]) == (2, "Tue, 13 Oct 2026 01:04:14 GMT")
+
+
+@pytest.mark.spec("REC-10")
+def test_received_at_is_when_the_status_and_headers_arrived(server: Server, tmp_path: Path) -> None:
+    """After the server's wait before its headers, and before its body."""
+    server.delay, server.body_delay = 0.2, 1.0
+    server.routes["/feed.xml"] = plain(b"<rss>slow</rss>")
+    scoped(server, tmp_path)
+    clocked = snapshot.Fetcher(UA, min_interval=0)  # with snapshot.py's own wall clock
+
+    record = snapshot.snapshot(clocked, tmp_path, "notices", server.url(), tool=TOOL)
+
+    sent, arrived = (datetime.fromisoformat(record[f]) for f in ("requested_at", "received_at"))
+    assert record["sha256"] == sha(b"<rss>slow</rss>")
+    assert 0.15 <= (arrived - sent).total_seconds() < 0.8
+
+
 # Versions
 
 
@@ -309,7 +355,7 @@ def test_the_users_agent_is_sent_and_no_request_header_is_stored(
             assert b"if-none-match" not in content.lower()
 
 
-@pytest.mark.spec("FETCH-5", "FETCH-8")
+@pytest.mark.spec("FETCH-5", "FETCH-8", "REC-10")
 def test_an_attempt_that_times_out_counts_as_no_response(
     server: Server, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -320,6 +366,7 @@ def test_an_attempt_that_times_out_counts_as_no_response(
     record = fetch(server, tmp_path, [])
 
     assert (record["status"], record["attempts"], record["sha256"]) == (None, 4, None)
+    assert (record["received_at"], record["date"]) == (None, None)
     assert record["error"].startswith("no response")
     assert verify.verify(tmp_path) == []
 
@@ -741,6 +788,26 @@ def test_verify_finds_a_line_that_isnt_a_record(stored: Path) -> None:
     assert ids(verify.verify(stored)) == ["REC-1", "REC-1"]
 
 
+@pytest.mark.spec("REC-1")
+def test_verify_finds_a_malformed_received_at_or_date(stored: Path) -> None:
+    [record] = log(stored)
+    write_log(stored, [record | {"received_at": "2026-10-06 12:00", "date": 1791000000}])
+
+    [problem] = verify.verify(stored)
+
+    assert problem.startswith("REC-1 ")
+    assert "received_at, date" in problem
+
+
+@pytest.mark.spec("REC-1")
+def test_verify_accepts_a_record_written_under_version_0_2_0(stored: Path) -> None:
+    """Without received_at and date, which a reader takes as null (section 14)."""
+    [record] = log(stored)
+    write_log(stored, [{f: v for f, v in record.items() if f not in ("received_at", "date")}])
+
+    assert verify.verify(stored) == []
+
+
 @pytest.mark.spec("REC-2")
 def test_verify_finds_a_record_in_another_feeds_log(stored: Path) -> None:
     [record] = log(stored)
@@ -950,6 +1017,7 @@ def contents(data: Path) -> dict[Path, bytes]:
 @pytest.mark.spec(
     "LAY-1", "OBJ-1", "OBJ-3",
     "REC-1", "REC-2", "REC-3", "REC-4", "REC-5", "REC-6", "REC-7", "REC-8",
+    "REC-10",
     "LOG-1", "LOG-2",
 )  # fmt: skip
 @settings(
@@ -975,3 +1043,5 @@ def test_the_invariants_hold_after_any_sequence_of_fetches(
                     assert after[name].startswith(old)
                 else:
                     assert after[name] == old
+        for record in snapshot.records(data / "feeds" / "notices" / "versions.jsonl"):
+            assert list(record) == list(verify.FIELDS)

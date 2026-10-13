@@ -58,10 +58,12 @@ FIELDS: dict[str, Callable[[Any], bool]] = {
     "feed": matches(NAME),
     "url": is_str,
     "requested_at": matches(TIMESTAMP),
+    "received_at": optional(matches(TIMESTAMP)),
     "attempts": lambda v: is_int(v) and v >= 1,
     "status": optional(is_int),
     "error": optional(is_str),
     "final_url": optional(is_str),
+    "date": optional(is_str),
     "etag": optional(is_str),
     "last_modified": optional(is_str),
     "content_type": optional(is_str),
@@ -70,6 +72,8 @@ FIELDS: dict[str, Callable[[Any], bool]] = {
     "object": optional(is_str),
     "tool": matches(TOOL),
 }
+# REC-1: the fields a record written under version 0.2.0 lacks, read as null.
+ADDED = ("received_at", "date")
 STORED = ("sha256", "bytes", "object")
 
 
@@ -212,7 +216,9 @@ class Checker:
         if not isinstance(record, dict):
             self.report("REC-1", where, "not a JSON object")
             return
-        wrong = [f for f, ok in FIELDS.items() if f not in record or not ok(record[f])]
+        wrong = [
+            f for f, ok in FIELDS.items() if not (ok(record[f]) if f in record else f in ADDED)
+        ]
         sha256 = record.get("sha256") if "sha256" not in wrong else None
         if sha256:
             # Still the record that names this object, so OBJ-3 shouldn't call it unnamed.
