@@ -103,6 +103,15 @@ first part.
 | T32 | **Telemetry for facts.** A minor version of `spec/telemetry.md` for the parse workers, the query API, and the exporter, and the view of each filing's times from acceptance to facts available. | T17, T18, T19 | |
 | T33 | **Monitoring for facts.** Their metrics, the dashboard of each filing's times from acceptance to facts available, and their alert rules, tested with `promtool`. | T26, T27, T28, T32 | |
 
+## Documentation
+
+The documents, published as a site for readers who don't work in the
+repository.
+
+| ID | Task | Depends on | Done |
+| --- | --- | --- | --- |
+| T37 | **The documentation site.** A decision record on how the documents are published as a site: Zensical, from the team behind Material for MkDocs, against GitHub's own rendering of the repository, and the alternatives. Then the site, if the record chooses one: built from `spec/`, `docs/`, and `investigation/` where they are, so their paths and links still hold, without `data/`, `scripts/`, or `tests/`; citing the U.S. Securities and Exchange Commission's EDGAR system as the data's source; with its generator pinned, and a CI job that builds it and checks its links. Its first page for people outside the project is the export's format, from T18. Where the site is published is the owner's to decide. | T27 | |
+
 ## Traces, logs, and drills
 
 | ID | Task | Depends on | Done |

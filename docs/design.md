@@ -281,5 +281,5 @@ The normative parts become specifications, one per component or boundary:
 ## Decisions
 
 See [`docs/decisions/`](decisions/) for each record and its status.
-Decisions still to come: scaling workers by queue depth and the XBRL
-parser.
+Decisions still to come: scaling workers by queue depth, the XBRL
+parser, and how the documents are published as a site.
