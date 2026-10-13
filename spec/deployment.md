@@ -576,7 +576,9 @@ who could change a record.
 - **PG-8** (invariant) The umbrella chart renders a Job, a Helm hook run
   after each install and upgrade, that connects to `edgar` as its owner and:
   - creates the table `records` and its index from
-    `deploy/chart/files/records.sql`, unless the table exists;
+    `deploy/chart/files/records.sql`, unless the table exists, applying
+    the file in one transaction, so the table never exists without its
+    index;
   - grants the fetcher's role `INSERT` and `SELECT` on `records`, each
     other service's role `SELECT` only ([LOG-3]), and no other role any
     privilege on it, but its owner.
@@ -614,7 +616,7 @@ who could change a record.
 | PG-5 | rule | kind | The database's archiving works, and a backup completes. |
 | PG-6 | invariant | tests | One database, `edgar`, whose owner no service uses, and no superuser access. |
 | PG-7 | invariant | tests | Each service has a database role of its own, without special attributes, its password from a value. |
-| PG-8 | invariant | tests | A hook Job creates the table from a copy of `records.sql`, and grants only the fetcher's role inserts. |
+| PG-8 | invariant | tests | A hook Job creates the table from a copy of `records.sql`, in one transaction, and grants only the fetcher's role inserts. |
 | PG-9 | rule | kind | The table is as `records.sql` defines it; only the fetcher's role inserts, and no service's role changes a row. |
 | PG-10 | rule | review, operator | CI and the owner set a new archive server name for each cluster they create. |
 | CRD-1 | invariant | tests | Every definition is a template, none from a `crds/` directory. |
