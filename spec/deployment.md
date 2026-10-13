@@ -410,17 +410,24 @@ passed without a renewal, so the gap between the two keeps them from
 sending at once ([FETCH-16]). By default, the timings are those that
 Kubernetes's own controllers and controller-runtime's leader election use:
 a handover after the active replica is lost takes up to the duration, which
-the record shows as a gap.
+the record shows as a gap. The fetcher's leader election is client-go's
+([0006]), which refuses timings that aren't positive, a renewal deadline
+that isn't shorter than the duration, and one that isn't greater than 1.2
+times the retry period, so the chart refuses them before the fetcher
+starts.
 
 - **LEASE-1** (invariant) The umbrella chart gives the fetcher its Lease's
   name, `fetcher`, in the release namespace, and its timings, from the
   values `fetcher.lease.durationSeconds`, 15 by default,
   `fetcher.lease.renewDeadlineSeconds`, 10, and
-  `fetcher.lease.retryPeriodSeconds`, 2. It fails to render values whose
-  renewal deadline isn't shorter than the duration, or whose retry period
-  isn't shorter than the renewal deadline. It grants the fetcher's
-  ServiceAccount, in the release namespace, `create` on Leases, and `get`
-  and `update` on the Lease `fetcher` only.
+  `fetcher.lease.retryPeriodSeconds`, 2. It fails to render values where
+  any of the three is below 1, where the renewal deadline isn't shorter
+  than the duration, where the retry period isn't shorter than the renewal
+  deadline, or where the renewal deadline isn't greater than 1.2 times the
+  retry period, so it refuses what client-go's leader election refuses
+  ([0006]). It grants the fetcher's ServiceAccount, in the release
+  namespace, `create` on Leases, and `get` and `update` on the Lease
+  `fetcher` only.
 - **LEASE-2** (rule) In the installed charts, one of the fetcher's pods
   holds the Lease `fetcher` in the release namespace, with
   `leaseDurationSeconds` as the values give it.
@@ -623,7 +630,7 @@ who could change a record.
 | SECRET-2 | invariant | tests | The same values render the same manifests. |
 | SECRET-3 | invariant | tests | A credential appears only in a Secret. |
 | SECRET-4 | rule | review, operator | CI generates credentials per cluster, and the owner commits none. |
-| LEASE-1 | invariant | tests | The fetcher's Lease, `fetcher`, takes its timings from values, 15, 10, and 2 seconds by default, each shorter than the one before. |
+| LEASE-1 | invariant | tests | The fetcher's Lease, `fetcher`, takes its timings from values, 15, 10, and 2 seconds by default, and the chart refuses those client-go's leader election refuses. |
 | LEASE-2 | rule | kind | One of the fetcher's pods holds the Lease, with the values' duration. |
 
 ## 9. Later versions
@@ -685,6 +692,7 @@ among the credentials.
 [0003]: ../docs/decisions/0003-queue-work-in-nats-jetstream.md
 [0004]: ../docs/decisions/0004-keep-the-record-in-postgresql-18.md
 [0005]: ../docs/decisions/0005-send-sec-requests-through-one-active-fetcher.md
+[0006]: ../docs/decisions/0006-write-the-services-in-go-and-python.md
 [0008]: ../docs/decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md
 [0011]: ../docs/decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md
 [CHART-1]: #4-layout
