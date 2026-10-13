@@ -1,10 +1,11 @@
 """The store's schemas in spec/schemas/ against spec/snapshots.md's tables.
 
 The record's JSON Schema has the fields of section 6's table, and accepts
-every record in data/; verify.py reads it as these tests' validator does;
-the table in records.sql has a column for each; and the job's and the
-event's JSON Schemas have the fields of section 10's tables. Each test
-carries the IDs of the statements it checks, as @pytest.mark.spec(...);
+every record in data/; verify.py knows the table's fields in its order,
+and reads the schema as these tests' validator does; the table in
+records.sql has a column for each; and the job's and the event's JSON
+Schemas have the fields of section 10's tables. Each test carries the IDs
+of the statements it checks, as @pytest.mark.spec(...);
 tests/test_spec_coverage.py requires every statement checked by `verify`,
 `tests`, or `kind` to have one, or to await a later task.
 """
@@ -182,6 +183,13 @@ def test_the_record_schema_has_the_tables_fields_in_order() -> None:
     assert record["required"] == [
         field for field, _ in RECORD_FIELDS if field not in ("received_at", "date")
     ]
+
+
+# The tests of snapshot.py's records compare their order with verify.FIELDS,
+# so it must be the table's (REC-9).
+@pytest.mark.spec("REC-9")
+def test_verify_knows_the_tables_fields_in_order() -> None:
+    assert list(verify.FIELDS) == [field for field, _ in RECORD_FIELDS]
 
 
 # The stored records are real ones, so the schema must accept each (REC-13).
