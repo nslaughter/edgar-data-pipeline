@@ -22,5 +22,5 @@ A record's status is **Proposed** until the owner accepts it, then
 | [0010](0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md) | Poll each company's `submissions`, at the cadence its `Source` holds, and measure lag from the record | Accepted |
 | [0011](0011-install-the-definitions-and-operators-before-the-umbrella-chart.md) | Install the definitions and the operators before the umbrella chart, in four releases | Accepted |
 
-Decisions still to come: scaling workers by queue depth and the XBRL
-parser.
+Decisions still to come: scaling workers by queue depth, the XBRL
+parser, and how the documents are published as a site.
