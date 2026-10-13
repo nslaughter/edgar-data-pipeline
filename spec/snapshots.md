@@ -397,7 +397,9 @@ ranges that hold them.
   covers, with its object, but those [XFER-3] skips, and nothing else. It
   reads only the cluster store, never the SEC. It copies nothing if
   `scope.json` is malformed, or if a record of the range conflicts with
-  another ([XFER-3]).
+  another ([XFER-3]). It copies nothing, too, if `data/` with the range
+  copied would break [SCOPE-4] or [SCOPE-5], and says which limit it would
+  break.
 - **XFER-2** (rule) The transfer copies each record unchanged: the fields
   of [§6](#6-records)'s table, in that table's order ([REC-9]), with the
   values the cluster store holds, and `requested_at` and `received_at` in
@@ -637,7 +639,7 @@ the bucket, and keeps its manifest as the facts specification will say
 | SCOPE-3 | rule | tests | Only URLs in the scope are fetched. |
 | SCOPE-4 | invariant | verify | No file under `data/` is over 50 MiB. |
 | SCOPE-5 | invariant | verify | `data/` holds at most 1 GB. |
-| XFER-1 | rule | tests | The transfer copies the scope's records of the owner's range, with their objects. |
+| XFER-1 | rule | tests | The transfer copies the scope's records of the owner's range, with their objects, or nothing if that would break the budget. |
 | XFER-2 | rule | tests | Each record is copied unchanged, after its object, in the cluster's order. |
 | XFER-3 | rule | tests | Only a record equal to one in `data/` is skipped; a conflict on the URL, `requested_at`, and `tool` copies nothing. |
 | FETCH-1 | rule | tests | Only `https` on `www.sec.gov` and `data.sec.gov`. |
@@ -684,7 +686,9 @@ the bucket, and keeps its manifest as the facts specification will say
    so a body whose object is over 100 MiB can't be committed at all. If the
    store would outgrow its budget, objects move to Git LFS or release
    assets, with the records, manifests, and scope unchanged, in a major
-   version of this document.
+   version of this document. That can't shrink a log, which is only
+   appended to ([LOG-1]), so a log nearing 50 MiB needs a new layout, such
+   as a log per feed and year, in a major version of this document too.
 3. **What an import's output is and how reruns are compared.** The pipeline's
    specification defines the output and its identity, so that a rerun can be
    shown to match.
