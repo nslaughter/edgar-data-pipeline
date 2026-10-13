@@ -1,8 +1,7 @@
 # Plan: the EDGAR data pipeline
 
-**Status:** October 12, 2026. T1 to T3 and T13 to T15 are done. The next
-is T4, a run against the SEC that waits for the owner to ask for it; the
-first task ready without the owner is T35.
+**Status:** October 13, 2026. T1 to T3 and T13 to T15 are done. The next
+is T35; T4 to T9 and the investigation's daily refetches wait for it.
 
 The tasks that build the pipeline, in the order they're to be done, and
 which are done. When the owner asks for the next item, an agent takes the
@@ -34,7 +33,8 @@ the U.S. Securities and Exchange Commission's EDGAR system.
 - **The investigation's daily refetches aren't tasks.** Each is a run the
   owner asks for ([method, step 2](../investigation/edgar.md#method)),
   committed after `uv run scripts/verify.py` like any other change to the
-  store. T8 reads what they stored.
+  store. They wait for T35, as T4 to T9 do, so that their records keep each
+  response's arrival and `Date` (REC-10). T8 reads what they stored.
 
 ## Investigation
 
@@ -50,12 +50,12 @@ not from these tasks.
 | T1 | **Fiscal periods and joins, from the baseline (Q2).** From the stored `companyfacts` and `submissions`: whether `fy` and `fp` describe a value's period or its filing's, how each company's fiscal year appears, and whether each value's accession number joins it to a filing, and so to an acceptance time. The answer also decides `edgar-asof`'s first release, which joins `companyfacts` values to acceptance times this way. | — | October 10, 2026: SRC-6 to SRC-11 |
 | T2 | **Restated and repeated values, from the baseline (Q3).** From the stored `companyfacts`: whether a value a later filing reports for the same concept and period is kept beside the earlier one, how a restated value differs from one reported again unchanged, and how amendments appear. `edgar-asof`'s specification cites these findings too. | — | October 11, 2026: SRC-14 to SRC-17 |
 | T3 | **Sizes and the pace of a backfill, from the baseline (Q5).** Bytes per URL and per filing, and the requests and time a backfill of each company's filings takes at 5 requests a second, from the filings its `submissions` lists. Growth per refetch waits for T8. | — | October 11, 2026: SRC-18 to SRC-20 |
-| T4 | **The first refetch (Q1, Q4).** The [method's](../investigation/edgar.md#method) step 2 for the first time: refetch `submissions`, `companyfacts`, and the daily index listing; fetch the master indexes not yet stored; and refetch the stored ones. Shows whether a conditional request gets a `304` (SRC-4), and whether a published index changes. | Run | |
-| T5 | **The latest-filings feed (Q4).** Once the owner confirms its URL, widen the scope to it in its own commit, fetch it, and record what it holds, so T11 can weigh it as a second notice source. | Scope, run | |
-| T6 | **Microsoft's next 10-Q (Q2, Q3).** The method's step 4, after the report expected in late October or early November: fetch its index, header, and XBRL instance, and refetch `submissions` and `companyfacts`. Records whether its header and `submissions` agree (SRC-2), and how its values appear in `companyfacts`. | Run | |
-| T7 | **Apple's next 10-K (Q2, Q3).** The same as T6, for Apple's report. It also shows whether Apple's times still differ by 8 hours (SRC-2), its fiscal year end (SRC-3), and how a 10-K reports earlier years' values again. | Run | |
-| T8 | **What the refetches show (Q1, Q4, Q5).** From the daily refetches stored through T6 and T7: how often each feed changed, whether a URL returned to an earlier body, when each day's index appeared, and growth per refetch. Also refetches the baseline's eight filings, to see whether any archived file changed (Q1). | T4, T6, T7, run | |
-| T9 | **Walmart's next 10-Q (Q2, Q3).** The same as T6, for Walmart's report after its quarter ends October 31. | Run | |
+| T4 | **The first refetch (Q1, Q4).** The [method's](../investigation/edgar.md#method) step 2 for the first time: refetch `submissions`, `companyfacts`, and the daily index listing; fetch the master indexes not yet stored; and refetch the stored ones. Shows whether a conditional request gets a `304` (SRC-4), and whether a published index changes. | T35, run | |
+| T5 | **The latest-filings feed (Q4).** Once the owner confirms its URL, widen the scope to it in its own commit, fetch it, and record what it holds, so T11 can weigh it as a second notice source. | T35, scope, run | |
+| T6 | **Microsoft's next 10-Q (Q2, Q3).** The method's step 4, after the report expected in late October or early November: fetch its index, header, and XBRL instance, and refetch `submissions` and `companyfacts`. Records whether its header and `submissions` agree (SRC-2), and how its values appear in `companyfacts`. | T35, run | |
+| T7 | **Apple's next 10-K (Q2, Q3).** The same as T6, for Apple's report. It also shows whether Apple's times still differ by 8 hours (SRC-2), its fiscal year end (SRC-3), and how a 10-K reports earlier years' values again. | T35, run | |
+| T8 | **What the refetches show (Q1, Q4, Q5).** From the daily refetches stored through T6 and T7: how often each feed changed, whether a URL returned to an earlier body, when each day's index appeared, and growth per refetch. Also refetches the baseline's eight filings, to see whether any archived file changed (Q1). | T4, T6, T7, T35, run | |
+| T9 | **Walmart's next 10-Q (Q2, Q3).** The same as T6, for Walmart's report after its quarter ends October 31. | T35, run | |
 
 ## Observing filings
 
