@@ -280,7 +280,8 @@ times in UTC; time zones are interpreted when the record is read
 - **REC-13** (invariant) [`schemas/record.schema.json`](schemas/record.schema.json)
   is a JSON Schema of a record, with a property for each field in the
   table, of its type and form, each required but `received_at` and `date`.
-  Every record in `data/` validates against it.
+- **REC-14** (invariant) Every record in `data/` validates against
+  [`schemas/record.schema.json`](schemas/record.schema.json).
 
 ## 7. Versions
 
@@ -628,7 +629,8 @@ the bucket, and keeps its manifest as the facts specification will say
 | REC-10 | rule | tests | Writers write every field, `received_at` and `date` among them. |
 | REC-11 | invariant | verify | A record's `received_at`, if the field is present, is set exactly when there's a status, and `date` only then. |
 | REC-12 | invariant | verify | No two records in `data/` share a URL, `requested_at`, and `tool`. |
-| REC-13 | invariant | tests | `schemas/record.schema.json` describes a record, and every record in `data/` validates. |
+| REC-13 | invariant | tests | `schemas/record.schema.json` describes a record. |
+| REC-14 | invariant | verify | Every record in `data/` validates against `schemas/record.schema.json`. |
 | VER-1 | rule | tests | Versions are distinct bodies per URL, numbered by first appearance. |
 | LOG-1 | invariant | verify | Logs are only appended to. |
 | LOG-2 | invariant | verify | Objects and manifests are only added. |

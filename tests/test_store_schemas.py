@@ -1,11 +1,11 @@
 """The store's schemas in spec/schemas/ against spec/snapshots.md's tables.
 
-The record's JSON Schema has the fields of section 6's table, and every
-record in data/ validates against it; the table in records.sql has a column
-for each; and the job's and the event's JSON Schemas have the fields of
-section 10's tables. Each test carries the IDs of the statements it checks,
-as @pytest.mark.spec(...); tests/test_spec_coverage.py requires every
-statement checked by `tests` or `kind` to have one, or to await a later task.
+The record's JSON Schema has the fields of section 6's table, and accepts
+every record in data/; the table in records.sql has a column for each; and
+the job's and the event's JSON Schemas have the fields of section 10's
+tables. Each test carries the IDs of the statements it checks, as
+@pytest.mark.spec(...); tests/test_spec_coverage.py requires every statement
+checked by `tests` or `kind` to have one, or to await a later task.
 """
 
 from __future__ import annotations
@@ -182,8 +182,11 @@ def test_the_record_schema_has_the_tables_fields_in_order() -> None:
     ]
 
 
+# The stored records are real ones, so the schema must accept each (REC-13).
+# REC-14, that every record in data/ validates, is verify.py's to check, and
+# awaits T35.
 @pytest.mark.spec("REC-13")
-def test_every_record_in_the_store_validates() -> None:
+def test_the_record_schema_accepts_every_stored_record() -> None:
     record = validator("record.schema.json")
     stored = records()
 
