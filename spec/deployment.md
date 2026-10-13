@@ -32,8 +32,9 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
    [PIN-1], [PIN-2], [PIN-3], [PIN-4], [PIN-5], [PIN-6], [PIN-7], [IMG-1],
    [IMG-3].
 2. **An upgrade is a reviewed change** to a chart, the kind configuration,
-   or CI, since nothing is resolved or generated at install time. [PIN-1],
-   [PIN-4], [PIN-6], [PIN-7], [SECRET-2].
+   or CI, since nothing is resolved at install time, and nothing the charts
+   render is generated as they render it. [PIN-1], [PIN-4], [PIN-6],
+   [PIN-7], [SECRET-2].
 3. **Each component comes from the project that maintains it,** never from
    Bitnami. [CHART-2], [CHART-3].
 4. **The database is PostgreSQL 18.** [PG-1], [PG-2].
@@ -51,8 +52,10 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
    backups among them, NATS's streams, and Prometheus's and Alertmanager's
    data are kept in a directory of the host, where a cluster recreated with
    it finds them. [KIND-2], [VOL-1], [VOL-2], [VOL-3], [PG-4], [PG-5].
-9. **No credential is committed, generated at install time, or shown
-   outside a Secret.** [SECRET-1], [SECRET-2], [SECRET-3], [SECRET-4].
+9. **No credential is committed, generated as the charts render, or shown
+   outside a Secret.** An operator may generate one in the cluster, such as
+   the database owner's password ([PG-6]). [SECRET-1], [SECRET-2],
+   [SECRET-3], [SECRET-4].
 10. **Only the fetcher writes to the cluster store, and no service can
     change a record:** each service has credentials of its own, and only
     the fetcher's may add records and objects ([LOG-3], [LOG-4]). [GARAGE-4],
