@@ -1,6 +1,6 @@
 # Design: the EDGAR data pipeline
 
-**Status:** Draft, October 12, 2026. This document explains the pipeline's
+**Status:** Draft, October 13, 2026. This document explains the pipeline's
 architecture and the reasons for it. It makes no rules: the specifications
 under [`spec/`](../spec/) govern, the records under
 [`docs/decisions/`](decisions/) record each significant choice, and
@@ -260,8 +260,10 @@ The normative parts become specifications, one per component or boundary:
 - **Telemetry:** the metrics and traces each service emits, which the
   dashboards and alerts rely on, and the alerts themselves.
 - **Deployment:** the charts and the order they're installed in; pinned
-  versions, such as PostgreSQL's major version 18; and each component's
-  replicas, storage, credentials, and placement; checked by chart tests.
+  versions, such as PostgreSQL's major version 18; each component's
+  replicas, storage, credentials, and placement; and the cluster store's
+  bucket, database, table, and streams, and the fetcher's Lease; checked by
+  chart tests.
 
 ## What waits on the investigation
 
