@@ -1,6 +1,9 @@
 # 1. Deploy on Kubernetes with Helm, on kind
 
-**Status:** Accepted, October 8, 2026.
+**Status:** Accepted, October 8, 2026. Superseded in part by
+[0011](0011-install-the-definitions-and-operators-before-the-umbrella-chart.md),
+October 12, 2026: four charts, installed in order, in place of one umbrella
+chart.
 
 ## Context
 

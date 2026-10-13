@@ -9,7 +9,7 @@ EDGAR's feeds and verify the stored versions.
 | Document | Governs |
 | --- | --- |
 | [`spec/snapshots.md`](spec/snapshots.md) | The two stores of what the pipeline fetches: everything under `data/`, and the cluster's objects in Garage and records in PostgreSQL. Their layout, records, versions, history, and scope; how fetches are made, by `scripts/snapshot.py` or the fetcher; the jobs that ask the fetcher for fetches and the events that announce their records, whose schemas are in [`spec/schemas/`](spec/schemas/); how the cluster's records reach `data/`; and import manifests, as numbered statements with an index. `scripts/snapshot.py` implements its rules and `scripts/verify.py` checks its invariants of `data/`. |
-| [`spec/deployment.md`](spec/deployment.md) | What the umbrella Helm chart under `deploy/` installs and at which versions: its dependencies, the pins of every chart, image, and tool, and PostgreSQL's major version 18, as numbered statements with an index. The chart and its tests are still to be written. |
+| [`spec/deployment.md`](spec/deployment.md) | What the four Helm charts under `deploy/` install, in which order and at which versions, and how they configure it: their dependencies and the definitions each installs, the pins of every chart, image, and tool, PostgreSQL's major version 18, each component's replicas, storage, credentials, and placement, the cluster store's bucket, database, table, and streams, the fetcher's Lease, the kind cluster, and the pipeline's own images, as numbered statements with an index. The charts and their tests are still to be written. |
 | [`spec/controls.md`](spec/controls.md) | The pipeline's controls: the `Source`, `Backfill`, and `SecAccess` custom resources, whose definitions are in [`spec/schemas/`](spec/schemas/); the chart's values they're rendered from and the checks on them, such as each cadence's bounds; what the scheduler and the fetcher do with each; and who may change what, as numbered statements with an index. The code and most of its tests are still to be written. |
 | [`investigation/edgar.md`](investigation/edgar.md) | What EDGAR's feeds and filings do: the investigation's scope, method, and questions, and findings with IDs that cite the stored versions showing them. The pipeline's specification depends on EDGAR only through these findings. |
 | [`docs/design.md`](docs/design.md) | Nothing; it explains. The pipeline's architecture on Kubernetes, the record it keeps and its times, and what waits on the investigation. [`docs/decisions/`](docs/decisions/) records each significant choice and its status. |
@@ -22,7 +22,7 @@ Each document makes one kind of claim, and its directory says which.
 ```text
 spec/                    normative: numbered statements that code and tests cite
   snapshots.md           the snapshot store
-  deployment.md          what the umbrella chart installs, and its pins
+  deployment.md          what the charts install, in which order, and its pins
   controls.md            the custom resources that control the pipeline
   NAME.md                one per component, or boundary between components
   schemas/               machine-readable contracts that statements name
