@@ -51,7 +51,8 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
 8. **Stored data outlives the cluster.** Garage's objects, the database's
    backups among them, NATS's streams, and Prometheus's and Alertmanager's
    data are kept in a directory of the host, where a cluster recreated with
-   it finds them. [KIND-2], [VOL-1], [VOL-2], [VOL-3], [PG-4], [PG-5].
+   it finds them. [KIND-2], [VOL-1], [VOL-2], [VOL-3], [PG-4], [PG-5],
+   [PG-10].
 9. **No credential is committed, generated as the charts render, or shown
    outside a Secret.** An operator may generate one in the cluster, such as
    the database owner's password ([PG-6]). [SECRET-1], [SECRET-2],
@@ -104,9 +105,10 @@ Each statement is one of two kinds:
 - An **invariant** is a property of the charts and the kind configuration
   as committed, and of what the charts render. Tests check it by rendering
   each chart with `helm template`, with the values CI installs it with,
-  apart from the credentials, for which tests give values of their own
-  ([SECRET-4]). They run without a cluster or the network, with the other
-  tests, wherever those run, and need Helm.
+  apart from the credentials and the database archive's server name, which
+  CI sets for each cluster, and for which tests give values of their own
+  ([SECRET-4], [PG-10]). They run without a cluster or the network, with
+  the other tests, wherever those run, and need Helm.
 - A **rule** is how the installed charts, or the tools around them, behave.
   Tests check the installed charts in the CI job that installs them on
   kind, and are skipped where no cluster is installed. A rule on a tool,
@@ -197,7 +199,7 @@ and names its directory after its claim.
 The database's volumes are on kind's class because a data directory left by
 an earlier cluster would stop a new one from initializing. What outlives
 the cluster for the database is its backups in Garage ([PG-4]), from which
-it is restored ([0004]).
+it can be restored ([0004]).
 
 ## 5. Dependencies
 
@@ -517,6 +519,13 @@ document.
 
 ### Instances and backups
 
+The database's archive, its WAL and its base backups, is kept in Garage
+under a server name. Before a new cluster's first archive, the Barman Cloud
+plugin checks that the archive under that name is empty, so each cluster
+has a server name of its own: a cluster recreated with the same host
+directory, where Garage kept the earlier cluster's archive, archives into
+an empty destination, and the earlier archive stays as it was.
+
 - **PG-3** (invariant) The umbrella chart renders one CloudNativePG
   `Cluster`, with three instances ([0004]), its volumes on kind's `standard`
   class ([VOL-2]).
@@ -524,12 +533,19 @@ document.
   backups through the Barman Cloud plugin, as its WAL archiver. They go to
   one `ObjectStore`, which the umbrella chart renders, whose destination
   is Garage's `database-backups` bucket, reached with that bucket's key
-  from its Secret ([GARAGE-2]). A `ScheduledBackup` with `method: plugin`
-  takes a base backup of the `Cluster` at least once a day ([0002],
-  [0004]).
+  from its Secret ([GARAGE-2]). They're kept there under the server name
+  that the `Cluster` gives the plugin as its `serverName` parameter: the
+  umbrella chart's value `database.backups.serverName`, which its
+  `values.schema.json` requires and none of its committed values files
+  sets ([PG-10]). A `ScheduledBackup` with `method: plugin` takes a base
+  backup of the `Cluster` at least once a day ([0002], [0004]).
 - **PG-5** (rule) In the installed charts, the `Cluster` reports that
   continuous archiving to Garage works, and a base backup to Garage
   completes.
+- **PG-10** (rule) CI sets a new `database.backups.serverName` for each
+  cluster it creates. The owner sets a new one for each cluster they
+  create, recreating one with the same host directory included, and keeps
+  it for that cluster's upgrades.
 
 The backup plugin has been tested against MinIO, not Garage, so a restore
 from these backups is shown on kind before they're relied on ([0002]), by
@@ -591,12 +607,13 @@ who could change a record.
 | PG-1 | invariant | tests | One image catalog, of major version 18, names the database's image. |
 | PG-2 | rule | kind | Every database instance reports PostgreSQL 18. |
 | PG-3 | invariant | tests | One database `Cluster`, of three instances, on kind's `standard` class. |
-| PG-4 | invariant | tests | The database archives its WAL and backs up daily to Garage, through the plugin. |
+| PG-4 | invariant | tests | The database archives its WAL and backs up daily to Garage, through the plugin, under a server name from a required value. |
 | PG-5 | rule | kind | The database's archiving works, and a backup completes. |
 | PG-6 | invariant | tests | One database, `edgar`, whose owner no service uses, and no superuser access. |
 | PG-7 | invariant | tests | Each service has a database role of its own, without special attributes, its password from a value. |
 | PG-8 | invariant | tests | A hook Job creates the table from a copy of `records.sql`, and grants only the fetcher's role inserts. |
 | PG-9 | rule | kind | The table is as `records.sql` defines it; only the fetcher's role inserts, and no service's role changes a row. |
+| PG-10 | rule | review, operator | CI and the owner set a new archive server name for each cluster they create. |
 | CRD-1 | invariant | tests | Every definition is a template, none from a `crds/` directory. |
 | CRD-2 | invariant | tests | Each definition is rendered by the chart the table gives it; the umbrella chart renders none. |
 | CRD-3 | invariant | tests | Each resource's definition, and any webhook that fails closed on it, comes from an earlier chart. |
@@ -732,6 +749,7 @@ among the credentials.
 [PG-7]: #the-stores-database
 [PG-8]: #the-stores-database
 [PG-9]: #the-stores-database
+[PG-10]: #instances-and-backups
 [PIN-1]: #6-pins
 [PIN-2]: #6-pins
 [PIN-3]: #6-pins
