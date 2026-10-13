@@ -1,22 +1,26 @@
 # Specification: deployment
 
-**Status:** Version 1.0.0, draft, October 12, 2026. This document governs
+**Status:** Version 1.0.0, draft, October 13, 2026. This document governs
 what the pipeline's Helm charts install, in which order and at which
 versions, and how they configure what they install: the charts, operators,
 and images they pin; the custom resource definitions they install; each
-component's replicas, storage, credentials, and placement; the kind cluster
-they're installed on; the tools that install them; and the tests that check
-them. Where a chart and this document disagree, the chart is wrong or this
-document needs a new version; say which before changing either.
+component's replicas, storage, credentials, and placement; the cluster
+store's bucket, database, table, and streams, and the fetcher's Lease; the
+kind cluster they're installed on; the tools that install them; and the
+tests that check them. Where a chart and this document disagree, the chart
+is wrong or this document needs a new version; say which before changing
+either.
 
 It rests on the decisions to deploy on Kubernetes with Helm, on kind
 ([0001]); to install the definitions and the operators before the umbrella
 chart, in four releases ([0011]); and to keep the record in PostgreSQL 18
 ([0004]); and on the decisions that chose the other components ([0002],
-[0003], [0008]). Each component's resource requests and limits, which are
-measured on kind, aren't in this version ([§9](#9-later-versions)). The
-pipeline it deploys reads filings from the U.S. Securities and Exchange
-Commission's EDGAR system, but nothing here depends on how EDGAR behaves.
+[0003], [0005], [0008]). It deploys what the snapshot store's version 1.0.0
+leaves to it ([`snapshots.md`, §13](snapshots.md#left-to-other-specifications)).
+Each component's resource requests and limits, which are measured on kind,
+aren't in this version ([§9](#9-later-versions)). The pipeline it deploys
+reads filings from the U.S. Securities and Exchange Commission's EDGAR
+system, but nothing here depends on how EDGAR behaves.
 
 ## 1. Guarantees
 
@@ -39,15 +43,20 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
    and is upgraded with the chart that installs it.** [CHART-4], [CRD-1],
    [CRD-2], [CRD-3], [CRD-4], [CRD-5], [CRD-6].
 7. **NATS, Garage, and the database keep running when one worker node is
-   lost:** each keeps three replicas, one on each worker node, and Garage a
-   copy of every object on each. [KIND-1], [PLACE-1], [PLACE-2], [NATS-1],
-   [GARAGE-1], [GARAGE-3], [PG-3].
+   lost:** each keeps three replicas, one on each worker node; Garage keeps
+   a copy of every object on each, and NATS of every stream. [KIND-1],
+   [PLACE-1], [PLACE-2], [NATS-1], [NATS-3], [NATS-4], [GARAGE-1],
+   [GARAGE-3], [PG-3].
 8. **Stored data outlives the cluster.** Garage's objects, the database's
    backups among them, NATS's streams, and Prometheus's and Alertmanager's
    data are kept in a directory of the host, where a cluster recreated with
    it finds them. [KIND-2], [VOL-1], [VOL-2], [VOL-3], [PG-4], [PG-5].
 9. **No credential is committed, generated at install time, or shown
    outside a Secret.** [SECRET-1], [SECRET-2], [SECRET-3], [SECRET-4].
+10. **Only the fetcher writes to the cluster store, and no service can
+    change a record:** each service has credentials of its own, and only
+    the fetcher's may add records and objects ([LOG-3], [LOG-4]). [GARAGE-4],
+    [PG-6], [PG-7], [PG-8], [PG-9].
 
 ## 2. Terms
 
@@ -73,14 +82,19 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
 - **Credential:** a password, token, key, or shared secret by which one
   component proves itself to another, or that guards an administrative
   interface.
+- **Service:** one of the pipeline's own programs that runs in the cluster,
+  such as the fetcher, from one of its own images.
+- **The cluster store:** the store's objects in Garage and records in
+  PostgreSQL, as the snapshot store's specification describes it
+  ([`snapshots.md`](snapshots.md#the-cluster-store)).
 
 ## 3. Statement IDs
 
 Every normative statement in this document has an ID, such as `PG-1`: an
 area and a number. The areas `CHART`, `PIN`, `PG`, `CRD`, `IMG`, `KIND`,
-`VOL`, `PLACE`, `NATS`, `GARAGE`, `MON`, and `SECRET` belong to this
-document. An ID is assigned once and never reused or renumbered. A statement
-that is dropped stays in the [index](#8-index), marked retired.
+`VOL`, `PLACE`, `NATS`, `GARAGE`, `MON`, `SECRET`, and `LEASE` belong to
+this document. An ID is assigned once and never reused or renumbered. A
+statement that is dropped stays in the [index](#8-index), marked retired.
 
 Each statement is one of two kinds:
 
@@ -106,8 +120,9 @@ both, except for a statement whose tests a later task in the
 task, and fails if the statement has a test or the plan marks the task
 done. This version's statements come before the charts they describe: T20
 builds the charts and writes their tests, apart from [IMG-1] to [IMG-3]'s,
-which T21 writes with the first of the pipeline's images. Until then each
-awaits its task.
+which T21 writes with the first of the pipeline's images, and [LEASE-1]'s
+and [LEASE-2]'s, which T23 writes with the fetcher. Until then each awaits
+its task.
 
 ## 4. Layout
 
@@ -120,6 +135,7 @@ deploy/
                                Garage's definition, from its source tree
   chart/                       release 4: the umbrella chart
     charts/garage/             Garage's chart, from its source tree
+    files/records.sql          the store's table, from spec/schemas/
     values.schema.json         what its values must hold
   kind.yaml                    the kind cluster's configuration
 ```
@@ -284,6 +300,27 @@ release.
   cluster, and JetStream reports all three in its meta group, with a
   leader.
 
+The store's jobs and events travel in two streams
+([`snapshots.md`](snapshots.md#jobs-and-events)), each kept as that
+specification says, in files, and replicated on all three servers, so a
+stream keeps its messages and its leader through the loss of a node:
+
+| Stream | Subjects | Retention | Storage | Replicas |
+| --- | --- | --- | --- | --- |
+| `JOBS` | `edgar.jobs.poll`, `edgar.jobs.filing`, `edgar.jobs.backfill` | Work queue | File | 3 |
+| `RECORDS` | `edgar.records.poll`, `edgar.records.filing`, `edgar.records.backfill` | Interest | File | 3 |
+
+- **NATS-3** (invariant) The umbrella chart renders a Job, a Helm hook run
+  after each install and upgrade, that creates each stream the umbrella
+  chart's values list, or updates it to their configuration, through
+  JetStream's API. It waits until JetStream accepts its requests, and
+  succeeds when each stream already is as the values say. In this version,
+  the values list the table's two streams, with the table's subjects,
+  retention, storage, and replicas ([0003]).
+- **NATS-4** (rule) In the installed charts, each stream the values list
+  exists with their configuration, with a replica on each of the three
+  servers, and the Job succeeds when it runs again.
+
 ### Garage
 
 - **GARAGE-1** (invariant) Garage runs as a StatefulSet of three, with a
@@ -303,12 +340,20 @@ release.
 
   It reaches Garage's admin API with the admin token, and succeeds when
   what it would create already exists. In this version, the values list
-  one bucket, `database-backups`, and one key, which may read and write
-  only that bucket, for the database's backups ([PG-4]).
+  two buckets: `database-backups`, with one key, which may read and write
+  only that bucket, for the database's backups ([PG-4]); and the cluster
+  store's bucket, with its keys ([GARAGE-4]).
 - **GARAGE-3** (rule) In the installed charts, Garage's layout holds its
   three nodes, in three zones, each node holding a copy of every object.
   Each bucket and key the values list exists, with the grants they give,
   and the Job succeeds when it runs again.
+- **GARAGE-4** (invariant) The cluster store's bucket is `snapshots`. Each
+  service that uses it has a key of its own, which may use no other
+  bucket: the fetcher's may read and write it, and each other service's
+  may only read it ([LOG-4]). No key has Garage's `owner` permission on
+  any bucket, which would let it change the bucket's configuration. In
+  this version, the values list one key for the bucket, the fetcher's;
+  each other service's comes with that service ([§9](#9-later-versions)).
 
 ### Monitoring
 
@@ -339,8 +384,9 @@ values, so the same values render the same chart.
   a value of the umbrella chart. Its `values.schema.json` requires it, and
   none of its committed values files sets it, so `helm template` fails
   without it. In this version: Garage's RPC secret and admin token, the ID
-  and secret of each Garage key, and Grafana's admin password. The chart
-  renders each into a Secret, from which its component reads it.
+  and secret of each Garage key, the password of each service's database
+  role ([PG-7]), and Grafana's admin password. The chart renders each into
+  a Secret, from which its component reads it.
 - **SECRET-2** (invariant) The charts render the same manifests from the
   same values: nothing they render is generated as they render it, such as
   a random credential.
@@ -351,6 +397,29 @@ values, so the same values render the same chart.
 - **SECRET-4** (rule) CI generates new credentials for each cluster it
   creates. The owner keeps theirs in a values file git ignores, and never
   puts one in a commit, a pull request, or a log.
+
+### The fetcher's Lease
+
+One fetcher replica at a time sends requests, the one holding the Lease
+([0005]). It stops leading when it can't renew the Lease within its renewal
+deadline, and another replica takes the Lease over only once a duration has
+passed without a renewal, so the gap between the two keeps them from
+sending at once ([FETCH-16]). The timings are those of the leader election
+in Kubernetes's Go client by default: a handover after the active replica
+is lost takes up to the duration, which the record shows as a gap.
+
+- **LEASE-1** (invariant) The umbrella chart gives the fetcher its Lease's
+  name, `fetcher`, in the release namespace, and its timings, from the
+  values `fetcher.lease.durationSeconds`, 15 by default,
+  `fetcher.lease.renewDeadlineSeconds`, 10, and
+  `fetcher.lease.retryPeriodSeconds`, 2. It fails to render values whose
+  renewal deadline isn't shorter than the duration, or whose retry period
+  isn't shorter than the renewal deadline. It grants the fetcher's
+  ServiceAccount, in the release namespace, `create` on Leases, and `get`
+  and `update` on the Lease `fetcher` only.
+- **LEASE-2** (rule) In the installed charts, one of the fetcher's pods
+  holds the Lease `fetcher` in the release namespace, with
+  `leaseDurationSeconds` as the values give it.
 
 ## 6. Pins
 
@@ -455,6 +524,44 @@ The backup plugin has been tested against MinIO, not Garage, so a restore
 from these backups is shown on kind before they're relied on ([0002]), by
 the drills in the [plan](../docs/plan.md).
 
+### The store's database
+
+The cluster store's records are a table in the pipeline's database
+([STORE-1], [STORE-2]). Its owner creates the table and grants each
+service's role what [LOG-3] allows, and no service connects as the owner,
+who could change a record.
+
+- **PG-6** (invariant) The `Cluster` creates one database, `edgar`, the
+  pipeline's database, owned by the role `edgar`, whose password
+  CloudNativePG generates in the cluster ([SECRET-1]). It sets
+  `enableSuperuserAccess: false`. No service connects as `edgar`; only
+  [PG-8]'s Job does.
+- **PG-7** (invariant) Each service that uses the database connects as a
+  role of its own, which the `Cluster` declares in `managed.roles`, able
+  to log in, and without superuser, `createdb`, `createrole`,
+  `replication`, or `bypassrls`. Its password comes from a Secret the
+  umbrella chart renders from a required value ([SECRET-1]). In this
+  version, the values list one, `fetcher`; each other service's comes with
+  that service ([§9](#9-later-versions)).
+- **PG-8** (invariant) The umbrella chart renders a Job, a Helm hook run
+  after each install and upgrade, that connects to `edgar` as its owner and:
+  - creates the table `records` and its index from
+    `deploy/chart/files/records.sql`, unless the table exists;
+  - grants the fetcher's role `INSERT` and `SELECT` on `records`, each
+    other service's role `SELECT` only ([LOG-3]), and no other role any
+    privilege on it, but its owner.
+
+  `deploy/chart/files/records.sql` is a copy of
+  [`spec/schemas/records.sql`](schemas/records.sql), since Helm reads only
+  files inside the chart. The Job waits until the database accepts its
+  connection and each role exists, and succeeds when what it would create
+  already exists.
+- **PG-9** (rule) In the installed charts, `edgar` holds the table
+  `records` as `records.sql` defines it ([STORE-2]). The fetcher's role can
+  insert a row and select it; every other service's role can select it;
+  and no service's role can update, delete, or truncate a row, nor any but
+  the fetcher's insert one.
+
 ## 8. Index
 
 | ID | Kind | Checked by | Statement |
@@ -475,6 +582,10 @@ the drills in the [plan](../docs/plan.md).
 | PG-3 | invariant | tests | One database `Cluster`, of three instances, on kind's `standard` class. |
 | PG-4 | invariant | tests | The database archives its WAL and backs up daily to Garage, through the plugin. |
 | PG-5 | rule | kind | The database's archiving works, and a backup completes. |
+| PG-6 | invariant | tests | One database, `edgar`, whose owner no service uses, and no superuser access. |
+| PG-7 | invariant | tests | Each service has a database role of its own, without special attributes, its password from a value. |
+| PG-8 | invariant | tests | A hook Job creates the table from a copy of `records.sql`, and grants only the fetcher's role inserts. |
+| PG-9 | rule | kind | The table is as `records.sql` defines it; only the fetcher's role inserts, and no service's role changes a row. |
 | CRD-1 | invariant | tests | Every definition is a template, none from a `crds/` directory. |
 | CRD-2 | invariant | tests | Each definition is rendered by the chart the table gives it; the umbrella chart renders none. |
 | CRD-3 | invariant | tests | Each resource's definition, and any webhook that fails closed on it, comes from an earlier chart. |
@@ -494,9 +605,12 @@ the drills in the [plan](../docs/plan.md).
 | PLACE-2 | rule | kind | Their replicas run one on each worker node. |
 | NATS-1 | invariant | tests | NATS is a cluster of three servers, with JetStream on claims. |
 | NATS-2 | rule | kind | The three servers form one JetStream cluster, with a leader. |
+| NATS-3 | invariant | tests | A hook Job creates or updates the streams `JOBS` and `RECORDS`, each in files with three replicas. |
+| NATS-4 | rule | kind | Each stream is as the values say, on all three servers, and the Job can run again. |
 | GARAGE-1 | invariant | tests | Garage is three nodes, replication factor 3, on claims, with no definition or ClusterRole of its own. |
 | GARAGE-2 | invariant | tests | A hook Job sets the layout, keys, buckets, and grants, and can run again. |
 | GARAGE-3 | rule | kind | Garage's layout, buckets, keys, and grants are as the values say. |
+| GARAGE-4 | invariant | tests | The store's bucket is `snapshots`; only the fetcher's key may write it, and no key owns a bucket. |
 | MON-1 | invariant | tests | Nothing kind doesn't expose is scraped. |
 | MON-2 | invariant | tests | Grafana is read-only, with provisioned dashboards and data sources only. |
 | MON-3 | invariant | tests | Alertmanager sends nothing outside the cluster. |
@@ -505,17 +619,28 @@ the drills in the [plan](../docs/plan.md).
 | SECRET-2 | invariant | tests | The same values render the same manifests. |
 | SECRET-3 | invariant | tests | A credential appears only in a Secret. |
 | SECRET-4 | rule | review, operator | CI generates credentials per cluster, and the owner commits none. |
+| LEASE-1 | invariant | tests | The fetcher's Lease, `fetcher`, takes its timings from values, 15, 10, and 2 seconds by default, each shorter than the one before. |
+| LEASE-2 | rule | kind | One of the fetcher's pods holds the Lease, with the values' duration. |
 
 ## 9. Later versions
 
 Later versions of this document will add:
 
 1. **The pipeline's own services,** as each is built, with their replicas,
-   credentials, and placement, such as the fetcher's two replicas and its
-   Lease ([0005]).
-2. **Each component's resource requests and limits,** measured on kind
+   credentials, and placement, such as the fetcher's two replicas ([0005]),
+   and the database role and Garage key of each service after the fetcher
+   ([PG-7], [GARAGE-4]).
+2. **The streams' durable consumers,** each with its service. `RECORDS`
+   keeps an event only for the consumers it has when the event is
+   published, so a service that reads events needs its consumer before
+   the fetcher publishes what it should see.
+3. **Changes to the store's table.** [PG-8]'s Job creates the table only
+   where there's none, so a later version of `records.sql` needs a
+   migration, which a later version of this document specifies with the
+   snapshot store's version that changes the table.
+4. **Each component's resource requests and limits,** measured on kind
    ([0001]), and its probes.
-3. **Tempo, Loki, and Alloy** ([0008]).
+5. **Tempo, Loki, and Alloy** ([0008]).
 
 The owner decided on October 11, 2026 that each image built from this
 repository is tagged with the commit it's built from and loaded into kind
@@ -524,7 +649,8 @@ and decided on October 12, 2026 that this version states it before the
 first service is built: [IMG-1] to [IMG-4]. The owner decided on October
 11, 2026 that the components' configuration becomes statements before the
 platform is built, checked the same way as the pins: this version's
-sections 4, 5, and 7.
+sections 4, 5, and 7. The owner decided on October 12, 2026 that this
+version also deploys what the snapshot store's version 1.0.0 leaves to it.
 
 ## 10. Changes to this document
 
@@ -543,6 +669,13 @@ chart of their own ([0011]). So [CHART-1], [CHART-2], [PIN-1], [PIN-2],
 [PIN-4], [PIN-5], [PG-1], and [PG-2] now speak of every chart. Nothing was
 built under version 0.1.0, so nothing installed changes.
 
+Version 1.0.0 also deploys what the snapshot store's version 1.0.0 leaves to
+this document: the store's bucket, [GARAGE-4]; its database and each
+service's role, [PG-6] to [PG-9]; its streams, [NATS-3] and [NATS-4]; and
+the fetcher's Lease, [LEASE-1] and [LEASE-2]. [GARAGE-2] creates the store's
+bucket and keys, and [SECRET-1] lists each service's database password
+among the credentials.
+
 [0001]: ../docs/decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
 [0002]: ../docs/decisions/0002-store-bodies-in-garage.md
 [0003]: ../docs/decisions/0003-queue-work-in-nats-jetstream.md
@@ -560,21 +693,33 @@ built under version 0.1.0, so nothing installed changes.
 [CRD-4]: #definitions
 [CRD-5]: #definitions
 [CRD-6]: #definitions
+[FETCH-16]: snapshots.md#the-fetcher
 [GARAGE-1]: #garage
 [GARAGE-2]: #garage
 [GARAGE-3]: #garage
+[GARAGE-4]: #garage
 [IMG-1]: #the-pipelines-own-images
 [IMG-2]: #the-pipelines-own-images
 [IMG-3]: #the-pipelines-own-images
 [IMG-4]: #the-pipelines-own-images
 [KIND-1]: #the-kind-cluster
 [KIND-2]: #the-kind-cluster
+[LEASE-1]: #the-fetchers-lease
+[LEASE-2]: #the-fetchers-lease
+[LOG-3]: snapshots.md#8-history
+[LOG-4]: snapshots.md#8-history
 [NATS-1]: #nats
+[NATS-3]: #nats
+[NATS-4]: #nats
 [PG-1]: #7-postgresql
 [PG-2]: #7-postgresql
 [PG-3]: #instances-and-backups
 [PG-4]: #instances-and-backups
 [PG-5]: #instances-and-backups
+[PG-6]: #the-stores-database
+[PG-7]: #the-stores-database
+[PG-8]: #the-stores-database
+[PG-9]: #the-stores-database
 [PIN-1]: #6-pins
 [PIN-2]: #6-pins
 [PIN-3]: #6-pins
@@ -588,6 +733,8 @@ built under version 0.1.0, so nothing installed changes.
 [SECRET-2]: #credentials
 [SECRET-3]: #credentials
 [SECRET-4]: #credentials
+[STORE-1]: snapshots.md#the-cluster-store
+[STORE-2]: snapshots.md#the-cluster-store
 [VOL-1]: #volumes
 [VOL-2]: #volumes
 [VOL-3]: #volumes

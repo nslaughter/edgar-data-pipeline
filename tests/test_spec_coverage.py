@@ -29,14 +29,14 @@ CHECKS = {"verify", "tests", "kind", "review", "operator", "first import"}
 TESTED_BY = {"verify", "tests", "kind"}
 # Statements whose tests a later task in docs/plan.md writes, with that task:
 # of spec/deployment.md's, T20 builds the charts that most of its tests
-# check, and T21 the first of the pipeline's images; of spec/controls.md's,
-# T22 the definitions, the chart's resources, and the scheduler, T23 the
-# fetcher, T24 the discoverer, and T28 the monitoring, after which each
-# ServiceAccount in RBAC-5's table has its grants on kind; and of
-# spec/snapshots.md's, T35 brings snapshot.py and verify.py to its
-# version 1.0.0, T22 the scheduler's jobs, T23 the fetcher and the cluster
-# store, T24 the discoverer's jobs and its use of edgar-asof, and T36 the
-# transfer. Strict, like xfail_strict: a statement listed here that has a
+# check, T21 the first of the pipeline's images, and T23 the fetcher, with
+# its Lease; of spec/controls.md's, T22 the definitions, the chart's
+# resources, and the scheduler, T23 the fetcher, T24 the discoverer, and
+# T28 the monitoring, after which each ServiceAccount in RBAC-5's table has
+# its grants on kind; and of spec/snapshots.md's, T35 brings snapshot.py
+# and verify.py to its version 1.0.0, T22 the scheduler's jobs, T23 the
+# fetcher and the cluster store, T24 the discoverer's jobs and its use of
+# edgar-asof, and T36 the transfer. Strict, like xfail_strict: a statement listed here that has a
 # test fails too, and so does one whose task the plan marks done, or one
 # checked by verify that verify.py already reports.
 AWAITING = {
@@ -58,6 +58,10 @@ AWAITING = {
             "PG-3",
             "PG-4",
             "PG-5",
+            "PG-6",
+            "PG-7",
+            "PG-8",
+            "PG-9",
             "CRD-1",
             "CRD-2",
             "CRD-3",
@@ -73,9 +77,12 @@ AWAITING = {
             "PLACE-2",
             "NATS-1",
             "NATS-2",
+            "NATS-3",
+            "NATS-4",
             "GARAGE-1",
             "GARAGE-2",
             "GARAGE-3",
+            "GARAGE-4",
             "MON-1",
             "MON-2",
             "MON-3",
@@ -87,6 +94,7 @@ AWAITING = {
         "T20",
     ),
     **dict.fromkeys(["IMG-1", "IMG-2", "IMG-3"], "T21"),
+    **dict.fromkeys(["LEASE-1", "LEASE-2"], "T23"),
     **dict.fromkeys(
         [
             "API-2",
