@@ -404,9 +404,10 @@ One fetcher replica at a time sends requests, the one holding the Lease
 ([0005]). It stops leading when it can't renew the Lease within its renewal
 deadline, and another replica takes the Lease over only once a duration has
 passed without a renewal, so the gap between the two keeps them from
-sending at once ([FETCH-16]). The timings are those of the leader election
-in Kubernetes's Go client by default: a handover after the active replica
-is lost takes up to the duration, which the record shows as a gap.
+sending at once ([FETCH-16]). By default, the timings are those that
+Kubernetes's own controllers and controller-runtime's leader election use:
+a handover after the active replica is lost takes up to the duration, which
+the record shows as a gap.
 
 - **LEASE-1** (invariant) The umbrella chart gives the fetcher its Lease's
   name, `fetcher`, in the release namespace, and its timings, from the
