@@ -394,8 +394,10 @@ ranges that hold them.
 - **XFER-1** (rule) The transfer copies from the cluster store into `data/`
   each record whose `requested_at` is in the range the owner names, from
   its start up to and not including its end, and whose `url` `scope.json`
-  covers, with its object, and nothing else. It reads only the cluster
-  store, never the SEC, and copies nothing if `scope.json` is malformed.
+  covers, with its object, but those [XFER-3] skips, and nothing else. It
+  reads only the cluster store, never the SEC. It copies nothing if
+  `scope.json` is malformed, or if a record of the range conflicts with
+  another ([XFER-3]).
 - **XFER-2** (rule) The transfer copies each record unchanged: the fields
   of [§6](#6-records)'s table, in that table's order ([REC-9]), with the
   values the cluster store holds, and `requested_at` and `received_at` in
@@ -404,9 +406,12 @@ ranges that hold them.
   record, and aren't copied. It places the record's object first, as
   [OBJ-2] says, unless the object is there already, then appends the record
   to its feed's log, in the order of the records' `id`s.
-- **XFER-3** (rule) The transfer skips a record that `data/` already holds,
-  one with the same `url`, `requested_at`, and `tool` ([REC-12]), so a range
-  copied twice adds nothing.
+- **XFER-3** (rule) The transfer skips only a record equal in every field to
+  one `data/` already holds, so a range copied twice adds nothing. If a
+  record of the range shares `url`, `requested_at`, and `tool` with a
+  different record, in `data/` or in the range, which [REC-12] doesn't
+  allow, the transfer copies nothing and says which records conflict,
+  leaving that range to the owner.
 
 ## 10. Fetching
 
@@ -634,7 +639,7 @@ the bucket, and keeps its manifest as the facts specification will say
 | SCOPE-5 | invariant | verify | `data/` holds at most 1 GB. |
 | XFER-1 | rule | tests | The transfer copies the scope's records of the owner's range, with their objects. |
 | XFER-2 | rule | tests | Each record is copied unchanged, after its object, in the cluster's order. |
-| XFER-3 | rule | tests | A record `data/` holds already isn't copied again. |
+| XFER-3 | rule | tests | Only a record equal to one in `data/` is skipped; a conflict on the URL, `requested_at`, and `tool` copies nothing. |
 | FETCH-1 | rule | tests | Only `https` on `www.sec.gov` and `data.sec.gov`. |
 | FETCH-2 | rule | tests | The user's own user agent is required and sent. |
 | FETCH-15 | rule | tests | Without one in the environment, `snapshot.py` reads the user agent from the ignored `.env.dev`. |
