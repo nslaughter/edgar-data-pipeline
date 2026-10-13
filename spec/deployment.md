@@ -368,9 +368,12 @@ stream keeps its messages and its leader through the loss of a node:
 - **MON-2** (invariant) Grafana is read-only ([0008]). It admits anonymous
   viewers with the `Viewer` role only, with its login form, basic
   authentication, and sign-up turned off, so no one signs in to change
-  anything. Its dashboards and data sources come only from the charts,
-  through its sidecars, and a provisioned dashboard can't be saved from its
-  interface.
+  anything. Its data sources come only from Grafana's own `datasources`
+  value, which its configuration checksum covers, so a change to them
+  restarts Grafana. Its sidecar provisions dashboards only, which Grafana
+  reads again from their files on its own, so no reload needs a sign-in.
+  Its dashboards come only from the charts, and a provisioned dashboard
+  can't be saved from its interface.
 - **MON-3** (invariant) Alertmanager sends nothing outside the cluster: its
   configuration's only receiver is `null`, with no integration ([0008]).
 - **MON-4** (invariant) Prometheus, Alertmanager, and Grafana each run one
@@ -640,7 +643,7 @@ who could change a record.
 | GARAGE-3 | rule | kind | Garage's layout, buckets, keys, and grants are as the values say. |
 | GARAGE-4 | invariant | tests | The store's bucket is `snapshots`; only the fetcher's key may write it, and no key owns a bucket. |
 | MON-1 | invariant | tests | Nothing kind doesn't expose is scraped. |
-| MON-2 | invariant | tests | Grafana is read-only, with provisioned dashboards and data sources only. |
+| MON-2 | invariant | tests | Grafana is read-only; its data sources come from its own value, which restarts it, and its sidecar provisions dashboards only. |
 | MON-3 | invariant | tests | Alertmanager sends nothing outside the cluster. |
 | MON-4 | invariant | tests | Prometheus, Alertmanager, and Grafana run one replica each. |
 | SECRET-1 | invariant | tests | Each credential is a required value, set by no committed file, rendered into a Secret. |
