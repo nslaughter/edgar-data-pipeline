@@ -66,8 +66,9 @@ to this repository, so it holds a deliberately small scope, a few companies'
 filings and the feeds that announce them, listed in `data/scope.json`;
 `snapshot.py` fetches only URLs the scope covers.
 [`scripts/verify.py`](scripts/verify.py) checks the store's invariants:
-every object against its SHA-256, every record, and, with `--since`, that
-nothing committed was changed. `-v` lists each URL's versions.
+every object against its SHA-256, every record, against the record's JSON
+Schema too, the store's size against GitHub's limits, and, with `--since`,
+that nothing committed was changed. `-v` lists each URL's versions.
 [`spec/snapshots.md`](spec/snapshots.md) specifies the store: the layout,
 each record's fields, what a version is, the scope, how fetches are made,
 and the manifest each import writes to pin its inputs. It also specifies the
