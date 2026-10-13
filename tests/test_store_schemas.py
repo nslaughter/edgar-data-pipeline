@@ -21,7 +21,8 @@ import pytest
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 from jsonschema.protocols import Validator
 from jsonschema.validators import extend
-from referencing import Registry, Resource
+from referencing import Registry
+from referencing.jsonschema import DRAFT202012
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMAS = ROOT / "spec" / "schemas"
@@ -89,15 +90,32 @@ def schema(name: str) -> dict[str, Any]:
     return loaded
 
 
+def undeclared(name: str) -> dict[str, Any]:
+    """The schema without its $schema, which names draft 2020-12.
+
+    At each $ref, jsonschema picks the validator for the referenced schema's
+    $schema, which would drop SchemaValidator's pattern for draft 2020-12's
+    own. Without the keyword it keeps SchemaValidator, which reads 2020-12.
+    """
+    loaded = schema(name)
+    assert loaded.pop("$schema") == Draft202012Validator.META_SCHEMA["$id"], name
+    return loaded
+
+
 def validator(name: str, *, formats: bool = True) -> Validator:
     """A validator for the schema, which resolves the others by their $id,
-    reads patterns as ECMA-262 does, and asserts formats unless told not to."""
-    resources = [Resource.from_contents(schema(path.name)) for path in SCHEMAS.glob("*.json")]
+    reads patterns as ECMA-262 does, here and in each schema it refers to,
+    and asserts formats unless told not to."""
+    resources = [
+        DRAFT202012.create_resource(undeclared(path.name)) for path in SCHEMAS.glob("*.json")
+    ]
     registry: Registry[Any] = Registry().with_resources(
         (resource.contents["$id"], resource) for resource in resources
     )
     checker = FORMATS if formats else None
-    validator: Validator = SchemaValidator(schema(name), registry=registry, format_checker=checker)
+    validator: Validator = SchemaValidator(
+        undeclared(name), registry=registry, format_checker=checker
+    )
     return validator
 
 
@@ -396,6 +414,10 @@ def test_the_event_schema_accepts_a_record_with_every_field() -> None:
         {"id": 1.5, "job": job(), "record": new_record()},
         {"id": 1, "job": job(source=None), "record": new_record()},
         {"id": 1, "record": new_record()},
+        {"id": 1, "job": job(feed="submissions\n"), "record": new_record()},
+        {"id": 1, "job": job(source="apple-submissions\n"), "record": new_record()},
+        {"id": 1, "job": job(), "record": new_record(feed="submissions\n")},
+        {"id": 1, "job": job(), "record": new_record(tool=FETCHER + "\n")},
     ],
 )
 def test_the_event_schema_refuses_a_malformed_event(event: dict[str, Any]) -> None:
