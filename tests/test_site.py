@@ -494,7 +494,8 @@ def test_a_task_left_out_or_a_part_missing_is_reported() -> None:
     text = (ROOT / site_status.STATUS_PAGE).read_text("utf-8")
     region = site_status.between(text, "parts")
     assert region is not None
-    parts = site_status.read_parts(text[region[0] : region[1]])
+    parts, malformed = site_status.read_parts(text[region[0] : region[1]])
+    assert malformed == []
     changed = [
         part
         if part.name != "The controls"
@@ -510,6 +511,27 @@ def test_a_task_left_out_or_a_part_missing_is_reported() -> None:
         "STATUS-2: 'The controls' names T99, which the plan lacks",
         "STATUS-2: no part names T31, 'Drills.'",
     ]
+
+
+@pytest.mark.spec("STATUS-2")
+def test_a_line_of_the_parts_table_that_is_not_a_row_is_reported_and_kept(
+    tmp_path: Path,
+) -> None:
+    root = copy_sources(tmp_path)
+    status = root / site_status.STATUS_PAGE
+    text = status.read_text("utf-8")
+    drills = next(line for line in text.splitlines() if line.startswith("| The drills |"))
+    short = "| The export's page | Planned | — | — | — | T43 |"
+    status.write_text(text.replace(drills, f"{drills}\n{short}"), "utf-8")
+
+    pages, problems = site_status.generate(root)
+
+    assert problems == [
+        f"STATUS-2: docs/status.md's table of parts has a line that isn't a row of 7 cells: {short}"
+    ]
+    # Rewriting the table would drop the line, so nothing is written.
+    assert pages == {}
+    assert site_status.check(root) == problems
 
 
 def copy_sources(target: Path) -> Path:

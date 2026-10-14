@@ -13,7 +13,9 @@ status block that begins the home page and each explanation page (STATUS-4).
     uv run scripts/site_status.py --check    # write nothing; fail if any differs
 
 The check also fails when the status page leaves out a task, names one that
-doesn't exist, or lacks a part STATUS-2 requires.
+doesn't exist, or lacks a part STATUS-2 requires. Neither mode writes
+anything while a line of the table of parts isn't a row of its columns,
+since rewriting the table would drop it.
 """
 
 from __future__ import annotations
@@ -243,12 +245,25 @@ def ids(cell: str, pattern: str) -> tuple[str, ...]:
     return tuple(found)
 
 
-def read_parts(table: str) -> list[Part]:
-    """The parts the status page's table names, from its hand-written cells."""
+def read_parts(table: str) -> tuple[list[Part], list[str]]:
+    """The parts the status page's table names, from its hand-written cells.
+
+    Also the problems: each line that isn't a row of the table's columns,
+    which rewriting the table would drop (STATUS-2).
+    """
     parts = []
+    problems = []
     for line in table.strip().splitlines():
+        if not line.strip():
+            continue
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        if len(cells) != len(COLUMNS) or cells[0] in ("Part", "---"):
+        if not line.lstrip().startswith("|") or len(cells) != len(COLUMNS):
+            problems.append(
+                f"STATUS-2: {STATUS_PAGE}'s table of parts has a line that isn't a row of "
+                f"{len(COLUMNS)} cells: {line.strip()}"
+            )
+            continue
+        if cells[0] in ("Part", "---"):
             continue
         name, _, decisions, specs, specify, build, decide = cells
         parts.append(
@@ -261,7 +276,7 @@ def read_parts(table: str) -> list[Part]:
                 decide=ids(decide, r"\b(T\d+)\b"),
             )
         )
-    return parts
+    return parts, problems
 
 
 def render_tasks(task_ids: tuple[str, ...], tasks: dict[str, Task]) -> str:
@@ -366,7 +381,11 @@ def generate(root: Path) -> tuple[dict[str, str], list[str]]:
     if investigation_region[0] < parts_region[0]:
         problems.append(f"STATUS-2: {STATUS_PAGE} has its investigation's table before its parts'")
         return pages, problems
-    parts = read_parts(text[parts_region[0] : parts_region[1]])
+    parts, malformed = read_parts(text[parts_region[0] : parts_region[1]])
+    if malformed:
+        # Rewriting the table would drop those lines, so nothing is written.
+        problems += malformed
+        return pages, problems
     problems += check_parts(root, parts, sources)
     pages[STATUS_PAGE] = (
         text[: parts_region[0]]
