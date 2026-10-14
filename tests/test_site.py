@@ -269,12 +269,18 @@ def test_the_extension_leads_links_in_raw_html_to_github_too(
         '[Rules](../AGENTS.md#rules), <a href="../AGENTS.md#rules">rules</a>, '
         "<a href='../scripts/snapshot.py'>the script</a>, and "
         '<a href="design.md">the design</a>.\n\n'
-        '<div markdown>\n<a href="../spec/schemas/">the schemas</a>\n</div>\n'
+        '<div markdown>\n<a href="../spec/schemas/">the schemas</a>\n</div>\n\n'
+        # Attributes as HTML tokenizes them: a `>` or an href within a quoted
+        # value is the value's, and a value may be unquoted.
+        '<a title="a > b" href="../AGENTS.md#rules">rules</a>, '
+        "<a title=\"its href = '../README.md'\" href=../scripts/snapshot.py>the script</a>, "
+        "<A Href = ../AGENTS.md#rules>rules</A>.\n"
     )
 
     # As Zensical renders a page, with the site's configuration.
+    content = render(markdown, "docs/plan.md", "docs/plan/")["content"]
     parser = build_site.PageParser()
-    parser.feed(render(markdown, "docs/plan.md", "docs/plan/")["content"])
+    parser.feed(content)
 
     assert [link for link in parser.page.links if not link.startswith("#")] == [
         f"{REPOSITORY}/blob/{FAKE_COMMIT}/AGENTS.md#rules",
@@ -283,7 +289,11 @@ def test_the_extension_leads_links_in_raw_html_to_github_too(
         f"{REPOSITORY}/blob/{FAKE_COMMIT}/scripts/snapshot.py",
         "../design/",
         f"{REPOSITORY}/tree/{FAKE_COMMIT}/spec/schemas",
+        f"{REPOSITORY}/blob/{FAKE_COMMIT}/AGENTS.md#rules",
+        f"{REPOSITORY}/blob/{FAKE_COMMIT}/scripts/snapshot.py",
+        f"{REPOSITORY}/blob/{FAKE_COMMIT}/AGENTS.md#rules",
     ]
+    assert "title=\"its href = '../README.md'\"" in content
 
 
 @pytest.mark.spec("SITE-3")

@@ -119,9 +119,28 @@ class SiteLinks(Treeprocessor):
                 element.set("href", url)
 
 
-# A raw HTML <a> tag, and its href when quoted.
-ANCHOR = re.compile(r"<a\b[^>]*>", re.IGNORECASE)
-HREF = re.compile(r"""(\shref\s*=\s*)(["'])(.*?)\2""", re.IGNORECASE | re.DOTALL)
+# A start tag's attribute, as HTML tokenizes it: the whitespace or slashes
+# before it, its name, and, after `=`, a value in double quotes, in single
+# quotes, or unquoted up to whitespace or the tag's end. So a `>` or an
+# `href=` within a quoted value is the value's. The quantifiers are
+# possessive, so a tag that never closes can't make a match backtrack.
+SPACE = r"\t\n\f\r "
+ATTRIBUTE = re.compile(
+    rf"[{SPACE}/]*+(?P<name>[^{SPACE}/>][^{SPACE}/>=]*+)"
+    rf"""(?:[{SPACE}]*+=[{SPACE}]*+(?P<value>"[^"]*+"|'[^']*+'|[^{SPACE}>]*+))?+"""
+)
+# A raw HTML <a> start tag, attribute by attribute.
+ANCHOR = re.compile(rf"<a(?=[{SPACE}/>])(?:{ATTRIBUTE.pattern})*+[{SPACE}/]*+>", re.IGNORECASE)
+
+
+def attributes(tag: str) -> list[re.Match[str]]:
+    """The attributes of a start tag that ANCHOR matches, in order."""
+    found = []
+    position = len("<a")
+    while (attribute := ATTRIBUTE.match(tag, position)) is not None:
+        found.append(attribute)
+        position = attribute.end()
+    return found
 
 
 class SiteRawLinks(Postprocessor):
@@ -148,16 +167,22 @@ class SiteRawLinks(Postprocessor):
         return text
 
     def tag(self, tag: re.Match[str]) -> str:
-        page = self.rewriter.page()
-
-        def href(match: re.Match[str]) -> str:
-            url = self.rewriter.rewrite(page, html.unescape(match.group(3)))
-            if url is None:
-                return match.group(0)
-            quote = match.group(2)
-            return f"{match.group(1)}{quote}{html.escape(url)}{quote}"
-
-        return HREF.sub(href, tag.group(0), count=1)
+        text = tag.group(0)
+        # The first href is the link, as in HTML, which drops any other.
+        href = next((a for a in attributes(text) if a.group("name").lower() == "href"), None)
+        if href is None or href.group("value") is None:
+            return text
+        value = href.group("value")
+        quote = value[0] if value[:1] in ('"', "'") else ""
+        url = self.rewriter.rewrite(
+            self.rewriter.page(), html.unescape(value[1:-1] if quote else value)
+        )
+        if url is None:
+            return text
+        # An unquoted value is quoted, since the address may hold what ends one.
+        quote = quote or '"'
+        start, end = href.span("value")
+        return f"{text[:start]}{quote}{html.escape(url)}{quote}{text[end:]}"
 
 
 class SiteLinksExtension(Extension):
