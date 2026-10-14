@@ -430,6 +430,11 @@ carry their own message's attributes.
 - **TRACE-7** (rule) A service exports its spans by OTLP to the endpoint
   that `OTEL_EXPORTER_OTLP_ENDPOINT` gives in its environment, and exports
   none while it's unset, carrying trace context all the same ([TRACE-1]).
+- **TRACE-8** (rule) A service starts a trace for each message it publishes
+  while acting on no message, as the scheduler does for its polls and
+  orders ([TRACE-2]), and the discoverer for each gap notice it publishes
+  from its reading of `gaps` or when it starts ([GAP-3]): the span that
+  publishes it is a root span, sampled.
 
 ## 10. Index
 
@@ -460,6 +465,7 @@ carry their own message's attributes.
 | TRACE-5 | rule | tests | Spans carry the attributes of their messages, and nothing secret. |
 | TRACE-6 | rule | kind | The fetcher sends no trace context to the SEC. |
 | TRACE-7 | rule | tests | Spans are exported by OTLP to the endpoint given, and none without one. |
+| TRACE-8 | rule | tests | A message published while acting on none, such as a gap notice, starts a trace. |
 
 ## 11. Open questions
 
@@ -577,3 +583,4 @@ index.
 [TRACE-5]: #9-traces
 [TRACE-6]: #9-traces
 [TRACE-7]: #9-traces
+[TRACE-8]: #9-traces

@@ -196,7 +196,17 @@ AWAITING = {
         "T28",
     ),
     **dict.fromkeys(
-        ["TRACE-1", "TRACE-2", "TRACE-3", "TRACE-4", "TRACE-5", "TRACE-6", "TRACE-7"], "T29"
+        [
+            "TRACE-1",
+            "TRACE-2",
+            "TRACE-3",
+            "TRACE-4",
+            "TRACE-5",
+            "TRACE-6",
+            "TRACE-7",
+            "TRACE-8",
+        ],
+        "T29",
     ),
     **dict.fromkeys(["XFER-1", "XFER-2", "XFER-3"], "T36"),
 }
