@@ -204,6 +204,11 @@ def test_a_link_that_leads_nowhere_is_reported(tmp_path: Path) -> None:
         # A directory without a page is linked on GitHub, as tree/, not blob/.
         f"{blob}/spec/schemas",
         f"{tree}/spec/schemas",
+        # A file in the repository is linked at the commit built, not at
+        # another ref, whether the site holds it or not.
+        f"{REPOSITORY}/blob/main/LICENSE",
+        f"{REPOSITORY}/blob/main/spec/site.md",
+        f"{REPOSITORY}/tree/scripts/t40-site/scripts",
         # The site's own host is within the site, absolute or not.
         f"{here}/no-such-page/#missing",
         "//nslaughter.github.io/edgar-data-pipeline/b/#nope",
@@ -232,6 +237,12 @@ def test_a_link_that_leads_nowhere_is_reported(tmp_path: Path) -> None:
         f"SITE-3: a/index.html links to {tree}/docs/decisions on GitHub, but the site holds "
         "docs/decisions",
         f"SITE-3: a/index.html links to {blob}/spec/schemas, which isn't in the repository",
+        f"SITE-3: a/index.html links to {REPOSITORY}/blob/main/LICENSE, which isn't at the "
+        "commit built",
+        f"SITE-3: a/index.html links to {REPOSITORY}/blob/main/spec/site.md, which isn't at "
+        "the commit built",
+        f"SITE-3: a/index.html links to {REPOSITORY}/tree/scripts/t40-site/scripts, which "
+        "isn't at the commit built",
         f"SITE-3: a/index.html links to {here}/no-such-page/#missing, which the site doesn't hold",
         "SITE-3: a/index.html links to //nslaughter.github.io/edgar-data-pipeline/b/#nope, "
         "whose anchor b/index.html lacks",

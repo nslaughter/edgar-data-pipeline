@@ -352,12 +352,20 @@ def check_clean(before: str, after: str, unignored: str) -> list[str]:
 
 
 def check_github_link(root: Path, page: str, href: str, commit: str) -> list[str]:
-    """SITE-3: a link to this repository on GitHub at the commit built names what's there."""
-    on_github = re.compile(rf"^{re.escape(REPOSITORY)}/(blob|tree)/{commit}/(.+)$")
+    """SITE-3: a link to a file in the repository on GitHub leads to it at the commit built.
+
+    A link to a file or directory in the repository, as `blob/` or `tree/`
+    on GitHub, is a link to a file in the repository, whatever its ref, not
+    a link to another host. So it's at the commit built, and to a file the
+    site doesn't hold.
+    """
+    on_github = re.compile(rf"^{re.escape(REPOSITORY)}/(blob|tree)/([^/]+)(?:/(.*))?$")
     match = on_github.match(href.split("#", 1)[0])
     if not match:
         return []
-    kind, target = match.group(1), unquote(match.group(2))
+    kind, ref, target = match.group(1), match.group(2), unquote(match.group(3) or "")
+    if ref != commit:
+        return [f"SITE-3: {page} links to {href}, which isn't at the commit built"]
     file = root / target
     if not file.exists() or (kind == "tree") != file.is_dir():
         return [f"SITE-3: {page} links to {href}, which isn't in the repository"]

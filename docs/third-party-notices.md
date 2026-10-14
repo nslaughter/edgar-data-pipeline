@@ -7,9 +7,8 @@ copy of Mermaid, which draws its diagrams. Their own licenses govern them,
 and this page carries the notices those licenses require
 ([SITE-6](../spec/site.md#4-what-the-site-holds)).
 
-The repository's own license, the
-[MIT License](https://github.com/nslaughter/edgar-data-pipeline/blob/main/LICENSE),
-doesn't apply to these files, and their licenses don't change it.
+The repository's own license, the [MIT License](../LICENSE), doesn't apply
+to these files, and their licenses don't change it.
 
 These notices are for the files of Zensical 0.0.70, the version the
 repository's lock file pins, and of Mermaid 11.17.2, the version of the
