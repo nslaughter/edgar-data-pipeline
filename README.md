@@ -18,6 +18,11 @@ follows them, and nothing else is implemented yet. The
 data comes from the SEC's EDGAR system. This is an independent demonstration,
 not client work, and it is not affiliated with or endorsed by the SEC.
 
+The documents are published as a site,
+[nslaughter.github.io/edgar-data-pipeline](https://nslaughter.github.io/edgar-data-pipeline/),
+whose [status page](https://nslaughter.github.io/edgar-data-pipeline/docs/status/)
+says which parts are built and which are only specified or planned.
+
 ## What this project will demonstrate
 
 - **A bulk import anyone can rerun.** Every byte the import reads was fetched

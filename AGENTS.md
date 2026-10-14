@@ -36,6 +36,11 @@ docs/
   design.md              the architecture and the reasons for it; makes no rules
   decisions/NNNN-*.md    one record per significant choice
   plan.md                the tasks, in order, and which are done
+  status.md              each part's status, generated from the plan
+  explanation/           the site's explanation of the design; makes no rules
+  glossary.md            the terms the explanation uses
+  third-party-notices.md the notices of the files the site serves
+index.md                 the site's home page; makes no rules
 investigation/
   edgar.md               what EDGAR does, as findings with their evidence
 ```
@@ -65,6 +70,9 @@ investigation/
 - **The design document makes no rules.** It describes the components, the
   boundaries between them, and the alternatives rejected, and cites spec IDs
   for anything normative. A testable rule found there moves to a spec.
+- **The pages written for the site explain, as the design does.** They
+  make no rules, and cite the document that owns each fact
+  ([PAGE-2](spec/site.md#7-the-pages-written-for-the-site)).
 - **A significant choice gets a decision record,** such as which queue or
   database to use: `docs/decisions/NNNN-title.md`, numbered in order, with
   the context, the options, the choice, and its consequences. A later record
@@ -133,6 +141,8 @@ investigation/
 | Snapshot a feed | `uv run scripts/snapshot.py FEED URL ...`, with `SEC_USER_AGENT` in the environment or `.env.dev` |
 | Verify the store | `uv run scripts/verify.py -v` |
 | Verify history since a commit | `uv run scripts/verify.py --since origin/main` |
+| Build and check the documentation site | `uv run scripts/build_site.py` |
+| Update the site's statuses | `uv run scripts/site_status.py` |
 
 ## Commits and pull requests
 
@@ -252,8 +262,12 @@ and nothing beyond it.
    there was one. Only the owner confirms a detail or accepts a decision
    record.
 8. **Update the plan and the status lines.** Mark the task done in the plan,
-   with the date, and name the next task. Update the **Status** line of each
-   document the task changed. When another open pull request also edits the
+   with the date, and name the next task. Then run
+   `uv run scripts/site_status.py`, which updates the status page and the
+   statuses that begin the site's pages
+   ([STATUS-3](spec/site.md#6-status)); a test fails until it's run. Update
+   the **Status** line of each document the task changed. When another open
+   pull request also edits the
    plan, the later one to merge merges `origin/main` into its branch once the
    other merges, rather than rebasing
    ([commits and pull requests](#commits-and-pull-requests)): it keeps both

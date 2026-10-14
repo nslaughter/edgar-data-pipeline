@@ -1,0 +1,22 @@
+{#-
+  The footer's text on every page (spec/site.md, SITE-5): the data's source
+  and that the project isn't affiliated with the SEC; the copyright line as
+  LICENSE gives it; the commit the site was built from; and the link to the
+  notices page, the only link to it (SITE-6, SITE-7). scripts/build_site.py
+  writes the commit in place of __SITE_COMMIT__ and __SITE_COMMIT_SHORT__,
+  and fails if a page's footer lacks any of these.
+-#}
+<div class="md-copyright">
+  <p>
+    The data the pipeline keeps comes from the U.S. Securities and Exchange
+    Commission's EDGAR system. This project isn't affiliated with or endorsed
+    by the SEC.
+  </p>
+  <p>
+    <a href="https://github.com/nslaughter/edgar-data-pipeline/blob/__SITE_COMMIT__/LICENSE">Copyright (c) 2026 Nathan Slaughter</a>,
+    under the MIT License.
+    Built from commit
+    <a href="https://github.com/nslaughter/edgar-data-pipeline/commit/__SITE_COMMIT__"><code>__SITE_COMMIT_SHORT__</code></a>.
+    The site's <a href="{{ 'docs/third-party-notices/' | url }}">third-party notices</a>.
+  </p>
+</div>

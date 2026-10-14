@@ -1,0 +1,69 @@
+# Publishes the documentation site at https://nslaughter.github.io/edgar-data-pipeline/
+# (spec/site.md, SITE-10), and nothing else does. On each push to main, and
+# when the owner starts it on main, it builds the site from that commit and
+# checks it with scripts/build_site.py, as the tests do (SITE-9), then deploys
+# it with GitHub Pages' own actions. The tests check the site before each
+# merge; this checks it again before publishing, because a pull request can
+# merge without its branch being up to date with main. The owner sets the
+# repository's Pages source to GitHub Actions before the first deployment.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Only what deploying needs: reading the repository, publishing to Pages, and
+# the token Pages checks the deployment with.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time. A newer one waits for the one in progress, rather
+# than cancel it partway.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and check the site
+    # Only from main. A run the owner starts can name another branch, and the
+    # github-pages environment's rule on branches lives outside the repository,
+    # so this job, and the deployment that needs it, are skipped on any other.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Actions are pinned by commit, each with its release in a comment.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The navigation lists the specifications in the order they were
+          # first committed (SITE-7), which needs the history.
+          fetch-depth: 0
+          persist-credentials: false
+      # The release of setup-uv that ci.yml uses.
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.12"
+      - name: Install the development environment
+        run: uv sync --locked
+      - name: Build and check the site
+        run: uv run scripts/build_site.py
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  deploy:
+    name: Deploy the site
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
