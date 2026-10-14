@@ -302,6 +302,18 @@ has no gap. For it, the discoverer serves when its first poll's job
 expired, and `SourceGap` fires on that as on a gap open since then, under
 the same conditions.
 
+`SourceGap` doesn't cover a Source and URL with no poll at all. A job that
+has expired when the fetcher takes it is acknowledged without a record
+([JOB-5]), so while every job of a Source and URL expires unfetched, as
+when no fetcher runs from the start, `polls` holds none of its polls, the
+discoverer serves neither gauge for it, and `SourceGap` is silent. Once a
+Source and URL has a poll, one gauge or the other is served whenever its
+polls stop, so the case is a new Source, a Source's new URL, or a new
+install, whose fetcher never fetches. An alert on it, such as on the
+fetcher's `edgar_fetcher_jobs_expired_total`, waits for the later version
+of this document with the platform's metrics
+([§11](#left-to-other-specifications)), once the owner adds a task for it.
+
 A daily base backup finishes some minutes after the one before it turns a
 day old ([PG-4]), and `DatabaseBackupStale`'s hour lets it.
 
@@ -537,7 +549,8 @@ This version leaves to others what telemetry relies on:
 - **Later versions of this document:** the platform's own metrics, such as
   NATS's streams and consumers, with their redeliveries and consumer lag,
   Garage's, and the database's replication and failovers, and the alerts
-  on them; and logs, in Loki ([0008]).
+  on them; an alert on a polling Source and URL with no poll at all, which
+  `SourceGap` doesn't cover ([§7](#7-alerts)); and logs, in Loki ([0008]).
 
 ## 12. Changes to this document
 
