@@ -106,9 +106,11 @@ with its ID, as `@pytest.mark.spec("SITE-3")`. A test,
 tests a later task in the [plan](../docs/plan.md) writes. It lists such a
 statement as awaiting that task. Of this version's statements, those that
 tests check await the tasks that build the site: T40, which builds it with
-its checks, the home page, the status page, and the notices page; and T41,
-which writes the explanation pages, for [PAGE-4]. The others are checked by
-review, first in T41 and T42, which write the pages they govern.
+its checks, the home page, the status page, and the notices page; and T42,
+which writes the last of the explanation pages, the estimates and scale and
+limits, after T41 writes the others, for [PAGE-4]. The statements checked
+by review are checked first in T40, for [SITE-10] and the pages it writes,
+then in T41 to T43, which write the other pages.
 
 ## 4. What the site holds
 

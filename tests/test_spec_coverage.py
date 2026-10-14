@@ -40,8 +40,8 @@ TESTED_BY = {"verify", "tests", "kind"}
 # scheduler's orders and the status it sets from notices; and of
 # spec/telemetry.md's, T28 the monitoring of observing filings, with the
 # services' metrics, and T29 the traces; and of spec/site.md's, T40 the
-# site, with its checks and the status page, and T41 the explanation
-# pages. Strict, like
+# site, with its checks and the status page, and T42 the last of the
+# explanation pages, after T41 writes the others. Strict, like
 # xfail_strict: a statement listed here that has a test fails too, and so
 # does one whose task the plan marks done, or one checked by verify that
 # verify.py already reports.
@@ -230,7 +230,7 @@ AWAITING = {
         ],
         "T40",
     ),
-    **dict.fromkeys(["PAGE-4"], "T41"),
+    **dict.fromkeys(["PAGE-4"], "T42"),
 }
 
 
