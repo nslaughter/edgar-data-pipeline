@@ -215,8 +215,9 @@ Grafana also reads the record from PostgreSQL, through views made for it:
 coverage over time with gaps as bands, each source's lag from acceptance
 as a distribution, and each filing's times from acceptance to facts
 available. Alerts fire while requests are stopped after a `403`, while a
-source that's polling has a gap longer than its cadence, and while the
-latest backup is more than a day old, and `promtool` tests them in CI.
+source that's polling has a gap longer than its cadence, or has gone as
+long since its first poll without a successful one, and while the latest
+backup is more than a day old, and `promtool` tests them in CI.
 [`spec/telemetry.md`](../spec/telemetry.md) gives the metrics, the views,
 and the alerts.
 

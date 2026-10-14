@@ -33,8 +33,9 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
    [METRIC-4], [METRIC-5], [STATE-1], [SCRAPE-1], [SCRAPE-2].
 2. **The owner is alerted while requests to the SEC are stopped after a
    `403`, while a Source that's polling has an open gap longer than its
-   cadence, and while the database's latest backup is more than a day
-   old.** [ALERT-1], [ALERT-2], [ALERT-3], [ALERT-4].
+   cadence, or no successful poll though its first poll's job expired more
+   than its cadence ago, and while the database's latest backup is more
+   than a day old.** [ALERT-1], [ALERT-2], [ALERT-3], [ALERT-4].
 3. **Grafana reads the record only through views made for it,** which give
    each Source's coverage, its gaps, and its lags, and it can change
    nothing. [VIEW-1], [VIEW-2], [VIEW-3], [VIEW-4], [VIEW-5], [VIEW-6].
@@ -66,9 +67,10 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
 - **An alert fires** when Prometheus evaluates its rule and finds the
   rule's condition true, and has found it true for at least the rule's
   `for`, as Prometheus's alerting rules have it.
-- **Source**, **Backfill**, **SecAccess**, **poll**, **cadence**, **the
-  chart**, **the release namespace**, and **requests are allowed** are as
-  the controls have them ([§2 of the controls](controls.md#2-terms)).
+- **Source**, **Backfill**, **SecAccess**, **poll**, a poll that
+  **succeeds**, **cadence**, **the chart**, **the release namespace**, and
+  **requests are allowed** are as the controls have them
+  ([§2 of the controls](controls.md#2-terms)).
   **Job**, **event**, **record**, and **timestamp** are as the store has
   them ([§2 of the store](snapshots.md#2-terms)), and **order**,
   **notice**, **sighting**, **gap**, and **open gap** as the notices have
@@ -198,11 +200,14 @@ generated is still to be shown ([open question 1](#11-open-questions)).
 | `edgar_discoverer_jobs_failed_total` | counter | `kind`, `file` | Events of jobs that `jobs` holds whose record names no version: fetches of a filing's files, or of a Backfill's lists, that ended without one ([FILE-4], [LIST-3]). |
 | `edgar_discoverer_notices_total` | counter | `kind` | Notices it published, by `kind`, `filing`, `gap`, or `backfill`. |
 | `edgar_discoverer_open_gap_since_seconds` | gauge | `source`, `url` | For each Source and URL with an open gap, when it began, as Unix time ([GAP-2]). Absent for one with none. |
+| `edgar_discoverer_no_successful_poll_since_seconds` | gauge | `source`, `url` | For each Source and URL whose polls in `polls` include none that succeeded, when its first poll's job expired, as Unix time: the `expires_at` of its poll with the least `record` ([GAP-1]). Absent for one with no poll, and once one of its polls has succeeded. |
 
 - **METRIC-5** (rule) The discoverer serves the metrics of its table, as the
-  table says. It reads the open gaps from `gaps` at least every 10 seconds,
-  as [GAP-3] needs, and sets `edgar_discoverer_open_gap_since_seconds` from
-  each reading.
+  table says. At least every 10 seconds, it reads the open gaps from
+  `gaps`, as [GAP-3] needs, and the Sources and URLs whose polls in `polls`
+  include none that succeeded, and sets
+  `edgar_discoverer_open_gap_since_seconds` and
+  `edgar_discoverer_no_successful_poll_since_seconds` from each reading.
 
 ## 5. Metrics of the controls
 
@@ -276,31 +281,41 @@ The alerts the design names ([monitoring](../docs/design.md#monitoring)):
 | Alert | `severity` | Fires | `for` |
 | --- | --- | --- | --- |
 | `SecRequestsStopped` | `critical` | While the SecAccess has a stop the owner hasn't acknowledged | None |
-| `SourceGap` | `warning` | For each Source that's polling, while its URL has an open gap longer than its cadence | 2 minutes |
+| `SourceGap` | `warning` | For each Source that's polling, while its URL has an open gap longer than its cadence, or no successful poll though its first poll's job expired more than its cadence ago | 2 minutes |
 | `DatabaseBackupStale` | `warning` | While the database's latest base backup is more than a day old, or it has none | 1 hour |
 
 A `403` stops requests until the owner acknowledges it ([ACCESS-3]), so
 `SecRequestsStopped` fires from the stop until the acknowledgement, not
 only at the `403`. It compares the two by their `at` labels, as the
 controls compare them, so an acknowledgement that differs from the stop
-only in its milliseconds leaves it firing. `SourceGap` is silent for a Source that the owner paused,
-or that requests being paused or stopped keep from polling: the record
-still shows each such gap, and a stop has its own alert. Its `for` covers
-the moments after polling resumes, before the first poll closes the gap. A
-gap that ended before the rule found it open shows in the views and
-dashboards, not in an alert. A daily base backup finishes some minutes
-after the one before it turns a day old ([PG-4]), and
-`DatabaseBackupStale`'s hour lets it.
+only in its milliseconds leaves it firing.
+
+`SourceGap` is silent for a Source that the owner paused, or that requests
+being paused or stopped keep from polling: the record still shows each
+such gap, and a stop has its own alert. Its `for` covers the moments after
+polling resumes, before the first poll closes the gap. A gap that ended
+before the rule found it open shows in the views and dashboards, not in an
+alert. A gap begins only after a successful poll ([GAP-2]), so a Source
+and URL none of whose polls has succeeded, such as a Source whose `url`
+fails from its first poll, or one in a cluster that can't reach the SEC,
+has no gap. For it, the discoverer serves when its first poll's job
+expired, and `SourceGap` fires on that as on a gap open since then, under
+the same conditions.
+
+A daily base backup finishes some minutes after the one before it turns a
+day old ([PG-4]), and `DatabaseBackupStale`'s hour lets it.
 
 - **ALERT-1** (rule) `SecRequestsStopped` fires while
   `edgar_secaccess_stop_time_seconds` is served and no
   `edgar_secaccess_acknowledged_stop_time_seconds` with the same `at` is.
 - **ALERT-2** (rule) `SourceGap` fires for a Source and URL once, for 2
   minutes, `edgar_discoverer_open_gap_since_seconds` of the Source and URL,
-  at its greatest across the discoverer's replicas, has been earlier than
-  the rule's evaluation by more than the Source's
-  `edgar_source_cadence_seconds` with that URL, and the Source's
-  `edgar_source_condition` of type `Polling` has been 1.
+  or, where that's absent, its
+  `edgar_discoverer_no_successful_poll_since_seconds`, each at its greatest
+  across the discoverer's replicas, has been earlier than the rule's
+  evaluation by more than the Source's `edgar_source_cadence_seconds` with
+  that URL, and the Source's `edgar_source_condition` of type `Polling` has
+  been 1.
 - **ALERT-3** (rule) `DatabaseBackupStale` fires once, for an hour, the
   greatest `barman_cloud_cloudnative_pg_io_last_available_backup_timestamp`
   that the database's instances serve, the Unix time of the latest base
@@ -456,12 +471,12 @@ carry their own message's attributes.
 | METRIC-2 | rule | tests | Labels take only their listed values, and carry no identifier, user agent, credential, or request header. |
 | METRIC-3 | rule | tests | The scheduler serves its metrics. |
 | METRIC-4 | rule | tests | The fetcher serves its metrics, its clock's skew among them. |
-| METRIC-5 | rule | tests | The discoverer serves its metrics, each open gap among them. |
+| METRIC-5 | rule | tests | The discoverer serves its metrics, each open gap and each Source and URL without a successful poll among them. |
 | STATE-1 | rule | kind | kube-state-metrics exports the controls' fields as the tables say, and nothing else under their names. |
 | SCRAPE-1 | invariant | tests | The chart renders a `PodMonitor` for each service and for the database's instances. |
 | SCRAPE-2 | rule | kind | Prometheus scrapes every replica, every instance, and kube-state-metrics. |
 | ALERT-1 | rule | tests | `SecRequestsStopped` fires while a stop isn't acknowledged. |
-| ALERT-2 | rule | tests | `SourceGap` fires while a polling Source's open gap is longer than its cadence, for 2 minutes. |
+| ALERT-2 | rule | tests | `SourceGap` fires while a polling Source's open gap, or its time with no successful poll since its first poll's job expired, is longer than its cadence, for 2 minutes. |
 | ALERT-3 | rule | tests | `DatabaseBackupStale` fires once the latest base backup has been more than a day old for an hour. |
 | ALERT-4 | invariant | tests | The chart renders the three alerts, and no other of its own. |
 | VIEW-1 | invariant | tests | `schemas/dashboards.sql` creates the schema `dashboards` and its three views, with their columns. |
@@ -551,6 +566,7 @@ index.
 [DISC-2]: notices.md#processing
 [FILE-3]: notices.md#7-a-filings-files
 [FILE-4]: notices.md#7-a-filings-files
+[GAP-1]: notices.md#5-polls-coverage-and-gaps
 [GAP-2]: notices.md#5-polls-coverage-and-gaps
 [GAP-3]: notices.md#5-polls-coverage-and-gaps
 [LAG-1]: notices.md#10-times-and-lags
