@@ -391,7 +391,10 @@ filing's trace to its facts, as the facts specification will say.
 
 Each message carries its trace context in its NATS headers, not in its
 body, so jobs, events, orders, and notices are as their schemas have them
-([JOB-1], [MSG-1]).
+([JOB-1], [MSG-1]). Each message is published by a span of its own, so the
+span that acts on a message and the spans that publish the messages it
+leads to, such as a poll's event and the jobs of each filing it shows, each
+carry their own message's attributes.
 
 | Attribute | Value |
 | --- | --- |
@@ -403,20 +406,21 @@ body, so jobs, events, orders, and notices are as their schemas have them
 | `edgar.accession_number` | A filing notice's `accession_number`; and on the discoverer's spans of a job of a filing's file and of its event, the filing that `jobs` holds for it. |
 
 - **TRACE-1** (rule) Each job, event, order, and notice that a service
-  publishes carries, in its NATS headers, the trace context of the span
-  that published it: `traceparent`, and `tracestate` if the span has one.
+  publishes is published by a span of its own, which publishes no other
+  message and acts on none, and carries, in its NATS headers, that span's
+  trace context: `traceparent`, and `tracestate` if the span has one.
 - **TRACE-2** (rule) The scheduler starts a trace for each poll it queues
   and each order it publishes: the span that publishes it is a root span,
   sampled.
 - **TRACE-3** (rule) A service that acts on a message makes its span a
   child of the context that the message's headers carry, or a root span,
   sampled, if they carry no valid one. Each message it publishes while
-  acting on it carries that span's context, but those of [TRACE-4]. A span
-  is sampled when its parent is.
+  acting on it is published by a child of that span, but those of
+  [TRACE-4]. A span is sampled when its parent is.
 - **TRACE-4** (rule) When the discoverer queues the fetches of a Backfill's
   filing ([LIST-2]), it starts a trace for the filing: a root span, sampled,
-  with a span link to the span of the list's event, and the filing's jobs
-  carry its context.
+  with a span link to the span of the list's event, and each of the
+  filing's jobs is published by a child of that root span.
 - **TRACE-5** (rule) Each span that publishes a message, or acts on one,
   has the attributes of the table that the message gives it. No span's
   attributes or events carry the user agent, a credential, or a request
@@ -449,7 +453,7 @@ body, so jobs, events, orders, and notices are as their schemas have them
 | VIEW-4 | invariant | kind | `coverage` gives each stretch of each Source's coverage. |
 | VIEW-5 | invariant | kind | `gaps` gives each gap, with its length. |
 | VIEW-6 | invariant | kind | `lags` gives each sighting whose lag is bounded, in seconds. |
-| TRACE-1 | rule | tests | Each message carries the trace context of the span that published it. |
+| TRACE-1 | rule | tests | Each message is published by a span of its own, whose trace context it carries. |
 | TRACE-2 | rule | tests | Each poll and each order starts a trace. |
 | TRACE-3 | rule | tests | Acting on a message continues its trace. |
 | TRACE-4 | rule | tests | Each of a Backfill's filings gets a trace, linked to its list. |
