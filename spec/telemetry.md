@@ -238,8 +238,14 @@ The SecAccess's, each with the label `secaccess`, its name:
 | Metric | Field |
 | --- | --- |
 | `edgar_secaccess_paused` | `spec.paused` |
-| `edgar_secaccess_acknowledged_stop_time_seconds` | `spec.acknowledgedStopAt` |
-| `edgar_secaccess_stop_time_seconds` | `status.stop.at` |
+| `edgar_secaccess_acknowledged_stop_time_seconds` | `spec.acknowledgedStopAt`, also as the label `at` |
+| `edgar_secaccess_stop_time_seconds` | `status.stop.at`, also as the label `at` |
+
+The label `at` gives the timestamp as the SecAccess holds it, to the
+millisecond. Each timestamp has one form
+([§2 of the controls](controls.md#2-terms)), so a stop and an
+acknowledgement are the same instant exactly when their `at` labels are
+equal, though their values, to the second, can be equal when they aren't.
 
 - **STATE-1** (rule) In the installed charts, kube-state-metrics exports,
   for each Source and Backfill in the release namespace and for the
@@ -273,7 +279,9 @@ The alerts the design names ([monitoring](../docs/design.md#monitoring)):
 
 A `403` stops requests until the owner acknowledges it ([ACCESS-3]), so
 `SecRequestsStopped` fires from the stop until the acknowledgement, not
-only at the `403`. `SourceGap` is silent for a Source that the owner paused,
+only at the `403`. It compares the two by their `at` labels, as the
+controls compare them, so an acknowledgement that differs from the stop
+only in its milliseconds leaves it firing. `SourceGap` is silent for a Source that the owner paused,
 or that requests being paused or stopped keep from polling: the record
 still shows each such gap, and a stop has its own alert. Its `for` covers
 the moments after polling resumes, before the first poll closes the gap. A
@@ -283,9 +291,8 @@ after the one before it turns a day old ([PG-4]), and
 `DatabaseBackupStale`'s hour lets it.
 
 - **ALERT-1** (rule) `SecRequestsStopped` fires while
-  `edgar_secaccess_stop_time_seconds` is served and
-  `edgar_secaccess_acknowledged_stop_time_seconds` is absent or differs
-  from it.
+  `edgar_secaccess_stop_time_seconds` is served and no
+  `edgar_secaccess_acknowledged_stop_time_seconds` with the same `at` is.
 - **ALERT-2** (rule) `SourceGap` fires for a Source and URL once, for 2
   minutes, `edgar_discoverer_open_gap_since_seconds` of the Source and URL,
   at its greatest across the discoverer's replicas, has been earlier than
