@@ -55,7 +55,8 @@ What the choice must keep:
     configuration, with a `.gitignore` of its own that makes git ignore
     it.
   - Its theme's script loads Mermaid from `unpkg.com` when a page has a
-    diagram, unless the page has already loaded Mermaid.
+    diagram, unless the page has already loaded Mermaid. The address names
+    Mermaid's major version 11.
 - **MkDocs, with Material for MkDocs.** Mature, and Zensical's
   predecessor. Material for MkDocs has been in maintenance mode since
   November 2025: "while we'll continue to fix critical bugs and security

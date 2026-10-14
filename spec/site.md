@@ -143,7 +143,16 @@ their pages, as it is on GitHub.
   host: no script, stylesheet, font, image, icon, or frame. Pages use the
   reader's system fonts. A diagram is written in Mermaid in its page, as
   GitHub draws it too, and the site draws it with a copy of Mermaid the
-  site serves itself.
+  site serves itself:
+  1. The copy is `docs/assets/mermaid.min.js`, the script of a release of
+     Mermaid, committed as Mermaid publishes it. Every page loads it through
+     `zensical.toml`'s `extra_javascript`, so the theme's script finds
+     Mermaid loaded, and loads none of its own.
+  2. Its major version is the one the theme's script names in the address
+     it would load Mermaid from otherwise: 11, for Zensical 0.0.70
+     ([0012]).
+  3. It's replaced only in a change of its own, which names its new
+     version on the notices page ([SITE-6]).
 - **SITE-5** (invariant) Every built page's footer:
   1. says that the data the pipeline keeps comes from the U.S. Securities
      and Exchange Commission's EDGAR system, and that the project isn't
@@ -156,8 +165,9 @@ their pages, as it is on GitHub.
 - **SITE-6** (invariant) The notices page, `docs/third-party-notices.md`,
   gives the license of each file from another project that the site serves,
   such as the theme's scripts, stylesheets, and icons, and Mermaid's script,
-  with the notice each license requires. It names Zensical's version, and a
-  change to that version checks the files the site serves again.
+  with the notice each license requires. It names Zensical's version and
+  the version of Mermaid's copy ([SITE-4]), and a change to either checks
+  the files the site serves again.
 - **SITE-7** (invariant) The site's navigation is four tabs, in this order:
   1. **Home:** the home page.
   2. **Explanation:** the design, [`docs/design.md`](../docs/design.md),
@@ -375,9 +385,9 @@ more than the plan, the specifications, and the decision records do.
 | SITE-1 | invariant | tests | The site publishes `index.md` and the Markdown under `spec/`, `docs/`, and `investigation/`, from the files themselves, at their paths, and nothing else from the repository. |
 | SITE-2 | invariant | tests | Building the site changes no file git tracks, and writes only files git ignores: the built site under `site/`, and Zensical's cache in `.cache/`. |
 | SITE-3 | invariant | tests | Every link on a built page resolves within the site, or leads to the file on GitHub at the commit built. |
-| SITE-4 | invariant | tests | A built page loads nothing from another host, and the site draws diagrams with its own copy of Mermaid. |
+| SITE-4 | invariant | tests | A built page loads nothing from another host, and the site draws diagrams with its own copy of Mermaid, `docs/assets/mermaid.min.js`, of the major version the theme expects. |
 | SITE-5 | invariant | tests | Every footer cites EDGAR, disclaims affiliation with the SEC, gives the copyright line, names the commit built, and links to the notices page. |
-| SITE-6 | invariant | tests, review | The notices page gives the license and notice of each file from another project the site serves. |
+| SITE-6 | invariant | tests, review | The notices page gives the license and notice of each file from another project the site serves, and names Zensical's version and Mermaid's. |
 | SITE-7 | invariant | tests | The navigation is Home, Explanation, Reference, and Status, holding every page but the notices page. |
 | SITE-8 | invariant | tests | Zensical is locked in `uv.lock`, configured in `zensical.toml` with `strict` on. |
 | SITE-9 | rule | tests | The tests build the site and check it, offline. |
