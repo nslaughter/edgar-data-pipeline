@@ -33,12 +33,14 @@ TESTED_BY = {"verify", "tests", "kind"}
 # its Lease; of spec/controls.md's, T22 the Go types that generate the
 # definitions, the chart's resources, and the scheduler, T23 the fetcher,
 # T24 the discoverer, and T28 the monitoring, after which each
-# ServiceAccount in RBAC-5's table has its grants on kind; and of
+# ServiceAccount in RBAC-5's table has its grants on kind; of
 # spec/snapshots.md's, T22 the scheduler's jobs, T23 the fetcher and the
 # cluster store, T24 the discoverer's jobs and its use of edgar-asof, and
-# T36 the transfer. Strict, like xfail_strict: a statement listed here that has a
-# test fails too, and so does one whose task the plan marks done, or one
-# checked by verify that verify.py already reports.
+# T36 the transfer; and of spec/notices.md's, T24 the discoverer, with the
+# scheduler's orders and the status it sets from notices. Strict, like
+# xfail_strict: a statement listed here that has a test fails too, and so
+# does one whose task the plan marks done, or one checked by verify that
+# verify.py already reports.
 AWAITING = {
     **dict.fromkeys(
         [
@@ -136,6 +138,38 @@ AWAITING = {
         "T23",
     ),
     **dict.fromkeys(["SOURCE-5", "BACKFILL-1", "BACKFILL-3", "FETCH-18", "JOB-3"], "T24"),
+    **dict.fromkeys(
+        [
+            "TABLE-2",
+            "TABLE-3",
+            "GAP-1",
+            "GAP-2",
+            "GAP-3",
+            "SEEN-1",
+            "SEEN-2",
+            "SEEN-3",
+            "FILE-1",
+            "FILE-2",
+            "FILE-3",
+            "FILE-4",
+            "FILE-5",
+            "FILE-6",
+            "ORDER-1",
+            "LIST-1",
+            "LIST-2",
+            "LIST-3",
+            "LIST-4",
+            "LIST-5",
+            "LIST-6",
+            "NOTICE-1",
+            "NOTICE-2",
+            "MSG-2",
+            "DISC-1",
+            "DISC-2",
+            "LAG-1",
+        ],
+        "T24",
+    ),
     **dict.fromkeys(["RBAC-3", "RBAC-5"], "T28"),
     **dict.fromkeys(["XFER-1", "XFER-2", "XFER-3"], "T36"),
 }
