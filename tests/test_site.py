@@ -20,6 +20,8 @@ import pytest
 import site_status
 from markdown import Markdown
 from site_links import REPOSITORY, SiteLinksExtension, github_url, has_page, held, resolve
+from zensical.config import parse_zensical_config
+from zensical.markdown.render import render
 
 ROOT = Path(__file__).resolve().parent.parent
 SITE = ROOT / "site"
@@ -185,25 +187,57 @@ def test_every_link_on_the_site_resolves(
 
 @pytest.mark.spec("SITE-3")
 def test_a_link_that_leads_nowhere_is_reported(tmp_path: Path) -> None:
-    on_github = f"{REPOSITORY}/blob/{FAKE_COMMIT}"
+    blob = f"{REPOSITORY}/blob/{FAKE_COMMIT}"
+    tree = f"{REPOSITORY}/tree/{FAKE_COMMIT}"
+    here = "https://nslaughter.github.io/edgar-data-pipeline"
+    links = [
+        "../missing/",
+        "../b/#nope",
+        "../b/#here",
+        f"{blob}/no/such/file.py",
+        f"{blob}/AGENTS.md#no-such-heading",
+        f"{blob}/AGENTS.md#rules",
+        # What the site holds, linked on GitHub: a page, and a directory
+        # with a page of its own.
+        f"{blob}/spec/site.md",
+        f"{tree}/docs/decisions",
+        # A directory without a page is linked on GitHub, as tree/, not blob/.
+        f"{blob}/spec/schemas",
+        f"{tree}/spec/schemas",
+        # The site's own host is within the site, absolute or not.
+        f"{here}/no-such-page/#missing",
+        "//nslaughter.github.io/edgar-data-pipeline/b/#nope",
+        f"{here}/b/#here",
+        "https://nslaughter.github.io/edgar-asof/",
+        "https://example.com/",
+    ]
     site = write(
         tmp_path,
         {
-            "a/index.html": (
-                '<a href="../missing/">x</a><a href="../b/#nope">x</a><a href="../b/#here">x</a>'
-                f'<a href="{on_github}/no/such/file.py">x</a>'
-                f'<a href="{on_github}/AGENTS.md#no-such-heading">x</a>'
-                f'<a href="{on_github}/AGENTS.md#rules">x</a>'
-                '<a href="https://example.com/">x</a>'
-            ),
+            "a/index.html": "".join(f'<a href="{link}">x</a>' for link in links),
             "b/index.html": '<h2 id="here">Here</h2>',
         },
     )
 
     problems = build_site.check_links(ROOT, site, FAKE_COMMIT, build_site.html_pages(site))
 
-    assert len(problems) == 4
-    assert all(problem.startswith("SITE-3: a/index.html links to") for problem in problems)
+    assert problems == [
+        "SITE-3: a/index.html links to ../missing/, which the site doesn't hold",
+        "SITE-3: a/index.html links to ../b/#nope, whose anchor b/index.html lacks",
+        f"SITE-3: a/index.html links to {blob}/no/such/file.py, which isn't in the repository",
+        f"SITE-3: a/index.html links to {blob}/AGENTS.md#no-such-heading, whose anchor "
+        "AGENTS.md lacks",
+        f"SITE-3: a/index.html links to {blob}/spec/site.md on GitHub, but the site holds "
+        "spec/site.md",
+        f"SITE-3: a/index.html links to {tree}/docs/decisions on GitHub, but the site holds "
+        "docs/decisions",
+        f"SITE-3: a/index.html links to {blob}/spec/schemas, which isn't in the repository",
+        f"SITE-3: a/index.html links to {here}/no-such-page/#missing, which the site doesn't hold",
+        "SITE-3: a/index.html links to //nslaughter.github.io/edgar-data-pipeline/b/#nope, "
+        "whose anchor b/index.html lacks",
+        "SITE-3: a/index.html links to https://nslaughter.github.io/edgar-asof/, which the site "
+        "doesn't hold",
+    ]
 
 
 @pytest.mark.spec("SITE-3", "SITE-8")
@@ -222,11 +256,53 @@ def test_the_extension_leads_links_to_files_the_site_does_not_hold_to_github() -
     assert not has_page(ROOT / "spec" / "schemas")
 
 
+@pytest.mark.spec("SITE-3", "SITE-8")
+def test_the_extension_leads_links_in_raw_html_to_github_too(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SITE_COMMIT", FAKE_COMMIT)
+    monkeypatch.setenv("SITE_ROOT", str(ROOT))
+    parse_zensical_config(str(ROOT / "zensical.toml"))
+    markdown = (
+        "# Links\n\n"
+        '## The <a href="../AGENTS.md#rules">rules</a>\n\n'
+        '[Rules](../AGENTS.md#rules), <a href="../AGENTS.md#rules">rules</a>, '
+        "<a href='../scripts/snapshot.py'>the script</a>, and "
+        '<a href="design.md">the design</a>.\n\n'
+        '<div markdown>\n<a href="../spec/schemas/">the schemas</a>\n</div>\n'
+    )
+
+    # As Zensical renders a page, with the site's configuration.
+    parser = build_site.PageParser()
+    parser.feed(render(markdown, "docs/plan.md", "docs/plan/")["content"])
+
+    assert [link for link in parser.page.links if not link.startswith("#")] == [
+        f"{REPOSITORY}/blob/{FAKE_COMMIT}/AGENTS.md#rules",
+        f"{REPOSITORY}/blob/{FAKE_COMMIT}/AGENTS.md#rules",
+        f"{REPOSITORY}/blob/{FAKE_COMMIT}/AGENTS.md#rules",
+        f"{REPOSITORY}/blob/{FAKE_COMMIT}/scripts/snapshot.py",
+        "../design/",
+        f"{REPOSITORY}/tree/{FAKE_COMMIT}/spec/schemas",
+    ]
+
+
 @pytest.mark.spec("SITE-3")
 def test_github_gives_headings_the_anchors_the_documents_use() -> None:
-    slugs = build_site.github_slugs("# Title\n\n## 10. Fetching\n\n## The `edgar-asof` page\n")
+    slugs = build_site.github_slugs(
+        "# Title\n\n## 10. Fetching\n\n## The `edgar-asof` page\n\n"
+        "## The `received_at` field\n\n## `SEC_USER_AGENT`\n\n## SEC_USER_AGENT, _set_ **once**\n\n"
+        "~~~\n## Not a heading\n```\n~~~\n\n## Title\n"
+    )
 
-    assert slugs == {"title", "10-fetching", "the-edgar-asof-page"}
+    assert slugs == {
+        "title",
+        "10-fetching",
+        "the-edgar-asof-page",
+        "the-received_at-field",
+        "sec_user_agent",
+        "sec_user_agent-set-once",
+        "title-1",
+    }
 
 
 # --- What a page loads ------------------------------------------------------

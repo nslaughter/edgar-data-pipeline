@@ -29,10 +29,10 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote, urlsplit
+from urllib.parse import SplitResult, unquote, urlsplit
 
 import site_status
-from site_links import HELD_FILES, REPOSITORY, held
+from site_links import HELD_FILES, REPOSITORY, has_page, held
 
 ROOT = Path(__file__).resolve().parent.parent
 COMMIT_PLACEHOLDER = "__SITE_COMMIT__"
@@ -202,10 +202,15 @@ def page_path(source: str) -> str:
     return f"{stem}/index.html"
 
 
+def site_address(root: Path) -> SplitResult:
+    """The site's address, as zensical.toml gives it."""
+    url: str = tomllib.loads((root / "zensical.toml").read_text("utf-8"))["project"]["site_url"]
+    return urlsplit(url)
+
+
 def site_prefix(root: Path) -> str:
     """The path of the site's address, which links from the site's root begin with."""
-    url: str = tomllib.loads((root / "zensical.toml").read_text("utf-8"))["project"]["site_url"]
-    return urlsplit(url).path
+    return site_address(root).path
 
 
 def resolve_in_site(site: Path, page: str, path: str) -> str | None:
@@ -231,21 +236,42 @@ def resolve_in_site(site: Path, page: str, path: str) -> str | None:
     return None
 
 
+def heading_text(heading: str) -> str:
+    """A heading's text as GitHub renders it: without links' targets, or emphasis.
+
+    A code span keeps what it holds, and an underscore within a word, such
+    as `SEC_USER_AGENT`'s, is the word's, not emphasis.
+    """
+    heading = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", heading)
+    spans = re.split(r"(`+)(.+?)\1", heading)
+    text = []
+    for index, span in enumerate(spans):
+        if index % 3 == 2:
+            text.append(span)
+        elif index % 3 == 0:
+            text.append(re.sub(r"\*|(?<![^\W_])_|_(?![^\W_])", "", span))
+    return "".join(text)
+
+
 def github_slugs(markdown: str) -> set[str]:
     """The anchors GitHub gives a Markdown file's headings."""
     slugs: set[str] = set()
     seen: dict[str, int] = {}
-    in_fence = False
+    fence = ""
     for line in markdown.splitlines():
-        if line.startswith("```"):
-            in_fence = not in_fence
-        if in_fence:
+        marks = re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", line)
+        if fence:
+            # A fence closes on a line of its own marks alone, at least as many.
+            if marks and marks.group(1).startswith(fence) and not marks.group(2).strip():
+                fence = ""
+            continue
+        if marks:
+            fence = marks.group(1)
             continue
         match = re.match(r"^#{1,6} (.+?)\s*#*$", line)
         if not match:
             continue
-        text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", match.group(1))
-        text = re.sub(r"[`*_]", "", text).lower()
+        text = heading_text(match.group(1)).lower()
         slug = re.sub(r"[^\w\- ]", "", text).replace(" ", "-")
         count = seen.get(slug, 0)
         seen[slug] = count + 1
@@ -330,6 +356,10 @@ def check_github_link(root: Path, page: str, href: str, commit: str) -> list[str
     file = root / target
     if not file.exists() or (kind == "tree") != file.is_dir():
         return [f"SITE-3: {page} links to {href}, which isn't in the repository"]
+    # What the site holds is linked within it: its files, and a directory
+    # with a page of its own.
+    if held(target) and (not file.is_dir() or has_page(file)):
+        return [f"SITE-3: {page} links to {href} on GitHub, but the site holds {target}"]
     fragment = urlsplit(href).fragment
     if (
         fragment
@@ -343,13 +373,18 @@ def check_github_link(root: Path, page: str, href: str, commit: str) -> list[str
 def check_links(root: Path, site: Path, commit: str, pages: dict[str, Page]) -> list[str]:
     """SITE-3: every link resolves within the site, or leads to the file on GitHub."""
     problems = []
+    host = site_address(root).hostname
     for path, page in pages.items():
         for href in page.links:
             parts = urlsplit(href)
-            if parts.scheme or parts.netloc:
+            # A link to the site's own host isn't to another host, so it
+            # resolves within the site, as a path from the host's root.
+            own = parts.scheme in ("", "http", "https") and parts.hostname == host
+            if (parts.scheme or parts.netloc) and not own:
                 problems += check_github_link(root, path, href, commit)
                 continue
-            target = resolve_in_site(site, path, parts.path) if parts.path else path
+            local = parts.path or ("/" if own else "")
+            target = resolve_in_site(site, path, local) if local else path
             if target is None:
                 problems.append(f"SITE-3: {path} links to {href}, which the site doesn't hold")
             elif (
