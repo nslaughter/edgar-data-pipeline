@@ -1,0 +1,120 @@
+# The documentation site (spec/site.md). Build and check it with
+# `uv run scripts/build_site.py` (SITE-8): `zensical build` alone can't
+# import the Markdown extension in scripts/, and doesn't write the commit
+# into the footer. The built site goes to site/, and Zensical's cache to
+# .cache/, both ignored by git (SITE-2). .github/workflows/pages.yml
+# publishes it from main (SITE-10).
+[project]
+site_name = "EDGAR data pipeline"
+site_description = "The design of a pipeline that keeps every version of the SEC EDGAR filings it observes, with their times, and says plainly which parts are built."
+site_url = "https://nslaughter.github.io/edgar-data-pipeline/"
+# The documents are built where they are (SITE-1): the repository's root is
+# the source, and everything but index.md, spec/, docs/, and investigation/
+# is excluded.
+docs_dir = "."
+site_dir = "site"
+exclude_docs = """
+/*
+!/index.md
+!/spec/
+!/docs/
+!/investigation/
+"""
+# A missing anchor fails the build. Zensical can't tell a page the site
+# excludes, such as AGENTS.md, from a missing one, so it ignores links to
+# pages it doesn't hold: scripts/site_links.py leads links to files in the
+# repository to GitHub, and scripts/build_site.py fails on any that remain
+# (SITE-3, SITE-8).
+strict = true
+# There's no repo_url: with one, the theme's script would ask GitHub's API
+# for the repository's facts from each reader's browser (SITE-4).
+# The site's own copy of Mermaid, so the theme's script loads none from
+# another host (SITE-4).
+extra_javascript = ["docs/assets/mermaid.min.js"]
+# The four tabs, in the order SITE-7 gives. A page not yet written, such as
+# the glossary, has no entry until it is.
+nav = [
+  { "Home" = "index.md" },
+  { "Explanation" = [
+    { "The design" = "docs/design.md" },
+    { "Decision records" = [
+      "docs/decisions/README.md",
+      "docs/decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md",
+      "docs/decisions/0002-store-bodies-in-garage.md",
+      "docs/decisions/0003-queue-work-in-nats-jetstream.md",
+      "docs/decisions/0004-keep-the-record-in-postgresql-18.md",
+      "docs/decisions/0005-send-sec-requests-through-one-active-fetcher.md",
+      "docs/decisions/0006-write-the-services-in-go-and-python.md",
+      "docs/decisions/0007-control-the-pipeline-through-custom-resources.md",
+      "docs/decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md",
+      "docs/decisions/0009-read-edgar-through-a-public-point-in-time-library.md",
+      "docs/decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md",
+      "docs/decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md",
+      "docs/decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md",
+    ] },
+  ] },
+  { "Reference" = [
+    { "The snapshot store" = "spec/snapshots.md" },
+    { "Deployment" = "spec/deployment.md" },
+    { "Controls" = "spec/controls.md" },
+    { "Notices" = "spec/notices.md" },
+    { "Telemetry" = "spec/telemetry.md" },
+    { "The documentation site" = "spec/site.md" },
+    { "The investigation of EDGAR" = "investigation/edgar.md" },
+  ] },
+  { "Status" = [
+    { "Status" = "docs/status.md" },
+    { "The plan" = "docs/plan.md" },
+  ] },
+]
+
+[project.validation]
+not_found = "ignore"
+
+[project.theme]
+# The footer's templates, which carry the notices of SITE-5.
+custom_dir = "overrides"
+# No web fonts: the theme would load them from Google's servers (SITE-4).
+font = false
+features = [
+  "navigation.tabs",
+  "navigation.sections",
+  "navigation.path",
+  "navigation.footer",
+  "navigation.top",
+  "navigation.instant",
+  "navigation.instant.prefetch",
+  "navigation.tracking",
+  "search.highlight",
+  "toc.follow",
+  "content.code.copy",
+]
+
+# The Markdown the documents use, as GitHub renders it, and the admonitions
+# that set analysis apart (PAGE-7). Diagrams are Mermaid, in fences.
+# site_links leads links to files the site doesn't hold to GitHub (SITE-3).
+[project.markdown_extensions.site_links]
+[project.markdown_extensions.abbr]
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.def_list]
+[project.markdown_extensions.footnotes]
+[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.tables]
+[project.markdown_extensions.toc]
+permalink = true
+[project.markdown_extensions.pymdownx.betterem]
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true
+[project.markdown_extensions.pymdownx.inlinehilite]
+[project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+[project.markdown_extensions.pymdownx.tasklist]
+custom_checkbox = true
+[project.markdown_extensions.pymdownx.tilde]
+subscript = false

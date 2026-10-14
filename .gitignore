@@ -5,3 +5,6 @@ __pycache__/
 .ruff_cache/
 # Each user's SEC_USER_AGENT (FETCH-15); never committed.
 .env.dev
+# The documentation site, which scripts/build_site.py builds (spec/site.md,
+# SITE-2). Zensical ignores its own cache, .cache/.
+/site/
