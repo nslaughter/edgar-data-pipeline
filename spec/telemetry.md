@@ -40,7 +40,9 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
    nothing. [VIEW-1], [VIEW-2], [VIEW-3], [VIEW-4], [VIEW-5], [VIEW-6].
 4. **One trace follows each filing,** from the poll that first showed it,
    or for a Backfill's filing from its listing, through each of its fetches
-   and readings to its notice. [TRACE-1], [TRACE-2], [TRACE-3], [TRACE-4],
+   and readings to its notice. A Backfill's filing whose jobs are published
+   again, when its list's event is delivered again, gets another trace,
+   linked to the same list. [TRACE-1], [TRACE-2], [TRACE-3], [TRACE-4],
    [TRACE-5].
 5. **Telemetry carries no secret, and adds nothing to the requests to the
    SEC:** no credential, user agent, or request header in a label or a
@@ -386,8 +388,11 @@ list first shows join: the fetches of the filing's files, their readings,
 and the filing's notice. Two filings a poll first shows share its trace. A
 Backfill's order starts a trace for its lists, and each of its filings gets
 a trace of its own, linked to the list that named it, so a Backfill of
-thousands of filings isn't one trace. The parse workers will continue each
-filing's trace to its facts, as the facts specification will say.
+thousands of filings isn't one trace. When the list's event is delivered
+again and the discoverer publishes a filing's jobs again ([DISC-2]), the
+filing gets another trace, also linked to the list, so its fetches can be
+split across two traces. The parse workers will continue each filing's
+trace to its facts, as the facts specification will say.
 
 Each message carries its trace context in its NATS headers, not in its
 body, so jobs, events, orders, and notices are as their schemas have them
@@ -420,7 +425,14 @@ carry their own message's attributes.
 - **TRACE-4** (rule) When the discoverer queues the fetches of a Backfill's
   filing ([LIST-2]), it starts a trace for the filing: a root span, sampled,
   with a span link to the span of the list's event, and each of the
-  filing's jobs is published by a child of that root span.
+  filing's jobs is published by a child of that root span. Each time it
+  publishes the filing's jobs again, as [DISC-2] does when the list's event
+  is delivered again, such as after it stopped between the jobs'
+  publications, it starts another trace for the filing in the same way: a
+  root span, sampled, also linked to the span of the list's event, and each
+  job it publishes again is published by a child of that root span. So the
+  filing's fetches can be split across two traces, or more if the event is
+  delivered again more than once.
 - **TRACE-5** (rule) Each span that publishes a message, or acts on one,
   has the attributes of the table that the message gives it. No span's
   attributes or events carry the user agent, a credential, or a request
@@ -461,7 +473,7 @@ carry their own message's attributes.
 | TRACE-1 | rule | tests | Each message is published by a span of its own, whose trace context it carries. |
 | TRACE-2 | rule | tests | Each poll and each order starts a trace. |
 | TRACE-3 | rule | tests | Acting on a message continues its trace. |
-| TRACE-4 | rule | tests | Each of a Backfill's filings gets a trace, linked to its list. |
+| TRACE-4 | rule | tests | Each of a Backfill's filings gets a trace, linked to its list, and another each time its jobs are published again. |
 | TRACE-5 | rule | tests | Spans carry the attributes of their messages, and nothing secret. |
 | TRACE-6 | rule | kind | The fetcher sends no trace context to the SEC. |
 | TRACE-7 | rule | tests | Spans are exported by OTLP to the endpoint given, and none without one. |
@@ -536,6 +548,7 @@ index.
 [PG-4]: deployment.md#instances-and-backups
 [SECRET-1]: deployment.md#credentials
 [DISC-1]: notices.md#processing
+[DISC-2]: notices.md#processing
 [FILE-3]: notices.md#7-a-filings-files
 [FILE-4]: notices.md#7-a-filings-files
 [GAP-2]: notices.md#5-polls-coverage-and-gaps

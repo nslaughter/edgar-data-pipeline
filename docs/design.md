@@ -222,8 +222,10 @@ and the alerts.
 
 Tempo comes next, with one trace per filing from the poll that first saw it
 to its facts, or for a Backfill's filing from its listing, carried through
-NATS in message headers. Loki, fed by Alloy, follows, with logs that carry
-the accession number.
+NATS in message headers. A Backfill's filing whose jobs are published again,
+when its list's event is delivered again, gets another trace, linked to the
+same list ([TRACE-4](../spec/telemetry.md#9-traces)). Loki, fed by Alloy,
+follows, with logs that carry the accession number.
 
 ## Testing on kind
 
