@@ -171,9 +171,13 @@ finds nothing, so the pull request shows which reviews ran. A review of the
 whole code, with `--codebase`, has no pull request until its fixes open one,
 so that pull request's description records the first two reviews instead,
 and any third review is posted on it. A run with `--review-only` posts
-nothing and fixes nothing, so it doesn't count. The owner's approval to merge
-comes after the review, never in place of it. If the review hasn't run, or
-hasn't ended, don't merge, even when the owner asks: say so, and stop.
+nothing and fixes nothing, so it doesn't count.
+
+An agent merges a pull request only when the owner asks it to merge that pull
+request, in the current conversation, and only after the owner's iterative
+review has ended. The owner's approval to merge comes after the review, never
+in place of it. If the review hasn't run, or hasn't ended, don't merge, even
+when the owner asks: say so, and stop.
 
 The review's comments are anchored to the branch's commits, so never rebase,
 amend, or force-push a branch with an open pull request. To bring in changes
@@ -271,8 +275,9 @@ and nothing beyond it.
     - any tests written ahead of a later task;
     - anything deferred, and the remaining work.
 
-    Don't merge it: the owner merges pull requests, once the owner's
-    iterative review has ended
+    Don't merge it: an agent merges a pull request only when the owner asks
+    it to merge that pull request, in the current conversation, and only
+    after the owner's iterative review has ended
     ([commits and pull requests](#commits-and-pull-requests)).
 11. **Report.** Finish with a short handoff: what changed, the evidence, the
     limitations, and the remaining work, with the pull request's link and
