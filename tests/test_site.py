@@ -499,7 +499,7 @@ def test_a_task_left_out_or_a_part_missing_is_reported() -> None:
     changed = [
         part
         if part.name != "The controls"
-        else site_status.Part(part.name, part.decisions, part.specs, ("T14", "T99"), (), ())
+        else site_status.Part(part.name, ("0007", "0099"), part.specs, ("T14", "T99"), ("T37",), ())
         for part in parts
         if part.name != "The drills"
     ]
@@ -509,6 +509,8 @@ def test_a_task_left_out_or_a_part_missing_is_reported() -> None:
     assert problems == [
         "STATUS-2: the status page has no part 'The drills'",
         "STATUS-2: 'The controls' names T99, which the plan lacks",
+        "STATUS-2: 'The controls' names T37, which was split",
+        "STATUS-2: 'The controls' names record 0099, which doesn't exist",
         "STATUS-2: no part names T31, 'Drills.'",
     ]
 
@@ -586,9 +588,22 @@ def test_a_page_without_its_status_block_first_is_reported(tmp_path: Path) -> No
     index.write_text(
         text.replace("# EDGAR data pipeline\n\n", "# EDGAR data pipeline\n\nIntro.\n\n")
     )
-    write(root, {"docs/explanation/the-problem.md": "# The problem\n\nNo block.\n"})
+    write(
+        root,
+        {
+            "docs/explanation/the-problem.md": "# The problem\n\nNo block.\n",
+            "docs/explanation/the-architecture.md": (
+                "# The architecture\n\n"
+                "<!-- status: Fetcher; No such part -->\n<!-- end status -->\n"
+            ),
+        },
+    )
 
     problems = site_status.check(root)
 
     assert "STATUS-4: index.md doesn't begin with its status block" in problems
     assert "STATUS-4: docs/explanation/the-problem.md has no status block" in problems
+    assert (
+        "STATUS-4: docs/explanation/the-architecture.md names parts the status page lacks: "
+        "['No such part']"
+    ) in problems
