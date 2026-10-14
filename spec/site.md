@@ -68,8 +68,11 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
 - **Analysis:** what a page says about something no task, decision record,
   or specification covers, such as a scope wider than the plan's
   ([PAGE-7]).
-- **Task**, **done:** a task in the [plan](../docs/plan.md) and whether its
-  row's Done column is filled. A decision record is **Accepted** when
+- **Task**, **done**, **split:** a task in the [plan](../docs/plan.md);
+  whether its row's Done column is filled; and whether that column begins
+  "Split", as T37's does, since the task was split into others. A split
+  task isn't done; the tasks it was split into do its work. A decision
+  record is **Accepted** when
   [`docs/decisions/README.md`](../docs/decisions/README.md) gives its status
   as Accepted, alone or with a note such as "superseded in part".
 - **`edgar-asof`:** the public library, in a repository of its own,
@@ -242,8 +245,10 @@ more than the plan, the specifications, and the decision records do.
      each is Accepted.
   4. **Planned:** none of the above.
 
-  When some, but not all, of the next stage's tasks are done, the status
-  says so after it, as "Decided; specified in part".
+  When some, but not all, of a later stage's tasks are done, or of its
+  decision records Accepted, the status names that stage after it, "in
+  part", as "Decided; specified in part", "Specified; built in part", or
+  "Planned; decided in part".
 
   `edgar-asof`'s tasks are in its own repository, which the site's checks
   can't read. So its status is Built once `uv.lock` pins a release of it,
@@ -256,20 +261,27 @@ more than the plan, the specifications, and the decision records do.
   `edgar-asof`; the snapshot store in git and in the cluster; the controls;
   the charts; the drills; and the documentation site. Each row names its
   part, the decision records that choose it, the specifications that
-  govern it, and the tasks that specify it and that build it.
+  govern it, and its tasks, each in one of three roles:
+  1. the tasks that specify it;
+  2. the tasks that build it;
+  3. the tasks that decide or revisit it, such as one that writes a
+     decision record not yet written, or revisits an Accepted one. These
+     count toward no status ([STATUS-1]); a decision record counts once it
+     exists and the row names it.
+
   `edgar-asof`'s row names instead each release of it that a task in the
   plan waits on, with those tasks, and the version `uv.lock` pins, if any.
   Every task in the plan outside its Investigation section is named by at
-  least one row, and every task and decision record a row names exists. The
-  investigation's tasks are in a table of their own, with the questions
-  each answers.
+  least one row, but for a split task, which no row names. Every task and
+  decision record a row names exists. The investigation's tasks are in a
+  table of their own, with the questions each answers.
 - **STATUS-3** (invariant) The status page's generated columns give each
-  part's status ([STATUS-1]), each of its tasks with whether it's done, and
-  each governing specification's version, as the plan, the specifications'
-  Status lines, and the decision records' index give them at the same
-  commit. A script rewrites them in place, between markers. A test fails
-  when they differ from what the script would write, so a pull request
-  that marks a task done also updates the status page.
+  part's status ([STATUS-1]), each of its tasks in its role with whether
+  it's done, and each governing specification's version, as the plan, the
+  specifications' Status lines, and the decision records' index give them
+  at the same commit. A script rewrites them in place, between markers. A
+  test fails when they differ from what the script would write, so a pull
+  request that marks a task done also updates the status page.
 - **STATUS-4** (invariant) The home page, and each explanation page that
   describes a part, begins with the status of each part it describes, as
   the status page gives it, linked to the status page. The same script
@@ -407,8 +419,8 @@ more than the plan, the specifications, and the decision records do.
 | SITE-8 | invariant | tests | Zensical is locked in `uv.lock` and configured in `zensical.toml` with `strict` on, and `scripts/build_site.py` builds the site, leading links to GitHub through a Markdown extension and writing the commit in each footer, then checks it. |
 | SITE-9 | rule | tests | The tests build the site and check it, offline, with `scripts/build_site.py`. |
 | SITE-10 | rule | review | Only `pages.yml` publishes the site, from `main`, after the same script's checks, with pinned actions and the least permissions. |
-| STATUS-1 | invariant | tests | A part's status is the furthest of Built, Specified, Decided, and Planned it has reached. |
-| STATUS-2 | invariant | tests | The status page lists the parts, `edgar-asof` among them, with their decision records and tasks, and names every task outside the investigation. |
+| STATUS-1 | invariant | tests | A part's status is the furthest of Built, Specified, Decided, and Planned it has reached, and names each later stage reached in part. |
+| STATUS-2 | invariant | tests | The status page lists the parts, `edgar-asof` among them, with their decision records and their tasks in three roles, and names every task outside the investigation but a split one. |
 | STATUS-3 | invariant | tests | The status page's generated columns match the plan, the specifications, and the decision records at the same commit. |
 | STATUS-4 | invariant | tests | The home page and each explanation page begin with the statuses of the parts they describe. |
 | PAGE-1 | invariant | tests | The pages written for the site are the home page, the explanation pages, the status page, the glossary, and the notices page. |
