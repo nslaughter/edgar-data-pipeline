@@ -290,5 +290,6 @@ The normative parts become specifications, one per component or boundary:
 ## Decisions
 
 See [`docs/decisions/`](decisions/) for each record and its status.
-Decisions still to come: scaling workers by queue depth, the XBRL
-parser, and how the documents are published as a site.
+Decisions still to come: scaling workers by queue depth, and the XBRL
+parser. How the documents are published as a site is proposed in
+[0012](decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md).
