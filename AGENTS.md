@@ -140,6 +140,49 @@ The repository allows squash merges only, so the pull request's description
 becomes the commit on `main`. Keep it current as commits are added. It lists
 what changed, the checks run with their results, and anything deferred.
 
+A pull request merges only once the checks a ruleset on `main` requires have
+passed: the `CI` workflow's jobs `Python 3.12`, `Python 3.13`, and
+`Python 3.14`. The ruleset names each job it requires, and only the owner
+changes it, on GitHub. So a pull request that adds, removes, or renames a CI
+job names among what awaits the owner whether the ruleset changes with it,
+and when. The jobs are named for the Python versions they run on, so a change
+to the versions renames them. A job the pull request no longer runs leaves
+the ruleset before the merge, or the pull request can't merge. A job newly
+required joins it after the merge, and each other open pull request then
+merges `origin/main`, so that the job runs on it.
+
+No pull request merges until the owner's iterative review has run on it and
+ended, whatever it changes: documents, data, and this file included. The
+owner starts the review, with `/iterative-review`. Each of its reviews is by a
+reviewer who didn't write or fix the change and doesn't share the context of
+whoever did. It runs in this order:
+
+1. Two reviews at the same time.
+2. Fixes: each finding is fixed, or declined with a reason, and answered under
+   it on the pull request.
+3. A third review, of the fixes, when the first two reviews found anything of
+   high or medium severity or the fixes changed behavior or tests, and only
+   if the fixes pushed a commit. Its findings are fixed or declined the same
+   way, which ends the review. Without a third review, the fixes end it.
+
+When the first two reviews find nothing, the review ends there. Each review is
+posted on the pull request as a review of its own, numbered, even when it
+finds nothing, so the pull request shows which reviews ran. A review of the
+whole code, with `--codebase`, has no pull request until its fixes open one,
+so that pull request's description records the first two reviews instead,
+and any third review is posted on it. A run with `--review-only` posts
+nothing and fixes nothing, so it doesn't count.
+
+An agent merges a pull request only when the owner asks it to merge that pull
+request, in the current conversation, and only after the owner's iterative
+review has ended. The owner's approval to merge comes after the review, never
+in place of it. If the review hasn't run, or hasn't ended, don't merge, even
+when the owner asks: say so, and stop.
+
+The review's comments are anchored to the branch's commits, so never rebase,
+amend, or force-push a branch with an open pull request. To bring in changes
+from `main`, merge `origin/main` into the branch.
+
 ## Doing the next item
 
 When the owner asks for the next item, do the next task in the plan,
@@ -207,8 +250,10 @@ and nothing beyond it.
 8. **Update the plan and the status lines.** Mark the task done in the plan,
    with the date, and name the next task. Update the **Status** line of each
    document the task changed. When another open pull request also edits the
-   plan, the later one to merge rebases onto `origin/main` once the other
-   merges: it keeps both tasks' entries, and names the next task again.
+   plan, the later one to merge merges `origin/main` into its branch once the
+   other merges, rather than rebasing
+   ([commits and pull requests](#commits-and-pull-requests)): it keeps both
+   tasks' entries, and names the next task again.
 9. **Verify.** Run the checks CI runs, from [commands](#commands): the format
    check, the lint, the type check, the tests, and
    `uv run scripts/verify.py --since origin/main`. Check that each new test
@@ -230,9 +275,12 @@ and nothing beyond it.
     - any tests written ahead of a later task;
     - anything deferred, and the remaining work.
 
-    Don't merge it: the owner merges pull requests.
+    Don't merge it: an agent merges a pull request only when the owner asks
+    it to merge that pull request, in the current conversation, and only
+    after the owner's iterative review has ended
+    ([commits and pull requests](#commits-and-pull-requests)).
 11. **Report.** Finish with a short handoff: what changed, the evidence, the
     limitations, and the remaining work, with the pull request's link and
-    the next task. Name what awaits the owner: this task's details to
-    confirm, any decision record still Proposed, and any approval, such as a
-    run against the SEC.
+    the next task. Name what awaits the owner: the iterative review, this
+    task's details to confirm, any decision record still Proposed, and any
+    approval, such as a run against the SEC.
