@@ -109,6 +109,9 @@ class Page:
     footer_text: str = ""
     footer_links: list[tuple[str, str]] = field(default_factory=list)
     tabs: list[str] = field(default_factory=list)
+    # The repository each of the theme's source components names: its script
+    # asks that repository's host for the repository's facts (SITE-4).
+    sources: list[str] = field(default_factory=list)
 
 
 class PageParser(HTMLParser):
@@ -138,6 +141,8 @@ class PageParser(HTMLParser):
         for attribute in ("src", "srcset", "data", "poster", "href", "xlink:href"):
             if (tag, attribute) in LOADING_ATTRS and attribute in values:
                 self.page.loads.append((tag, values[attribute]))
+        if values.get("data-md-component") == "source":
+            self.page.sources.append(values.get("href", ""))
         if "style" in values:
             self.page.styles.append(values["style"])
         if tag == "style":
@@ -419,6 +424,12 @@ def check_hosts(site: Path, pages: dict[str, Page]) -> list[str]:
                 url = match.group(1) or match.group(2)
                 if remote(url):
                     problems.append(f"SITE-4: {path} loads {url} from another host, in a style")
+        for url in page.sources:
+            if remote(url):
+                problems.append(
+                    f"SITE-4: {path} names the repository {url} in the theme's source "
+                    "component, whose script loads the repository's facts from another host"
+                )
         scripts = [
             resolve_in_site(site, path, value)
             for tag, value in page.loads

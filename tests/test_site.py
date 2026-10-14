@@ -331,6 +331,9 @@ def test_a_page_that_loads_from_another_host_or_lacks_mermaid_is_reported(
                 '<script src="https://unpkg.com/x.js"></script>'
                 '<link rel="stylesheet" href="//fonts.googleapis.com/css">'
                 '<div style="background: url(https://example.com/i.png)"></div>'
+                # What the theme writes for a repo_url, which its script asks
+                # GitHub's API about.
+                f'<a href="{REPOSITORY}" class="md-source" data-md-component="source">x</a>'
             ),
             "b/index.html": "<p>no Mermaid here</p>",
             "assets/stylesheets/main.css": "@import 'https://example.com/font.css';",
@@ -343,6 +346,8 @@ def test_a_page_that_loads_from_another_host_or_lacks_mermaid_is_reported(
         "SITE-4: a/index.html loads https://unpkg.com/x.js from another host, by a <script>",
         "SITE-4: a/index.html loads //fonts.googleapis.com/css from another host, by a <link>",
         "SITE-4: a/index.html loads https://example.com/i.png from another host, in a style",
+        f"SITE-4: a/index.html names the repository {REPOSITORY} in the theme's source "
+        "component, whose script loads the repository's facts from another host",
         "SITE-4: b/index.html doesn't load the site's copy of Mermaid, docs/assets/mermaid.min.js",
         "SITE-4: assets/stylesheets/main.css loads https://example.com/font.css from another host",
         "SITE-4: the copy of Mermaid is 10.9.0, but the theme's script loads major version 11",
