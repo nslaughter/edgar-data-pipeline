@@ -166,6 +166,10 @@ approval to merge comes after the review, never in place of it. If the review
 hasn't run, or hasn't ended, don't merge, even when the owner asks: say so,
 and stop.
 
+The review's comments are anchored to the branch's commits, so never rebase,
+amend, or force-push a branch with an open pull request. To bring in changes
+from `main`, merge `origin/main` into the branch.
+
 ## Doing the next item
 
 When the owner asks for the next item, do the next task in the plan,
@@ -233,8 +237,10 @@ and nothing beyond it.
 8. **Update the plan and the status lines.** Mark the task done in the plan,
    with the date, and name the next task. Update the **Status** line of each
    document the task changed. When another open pull request also edits the
-   plan, the later one to merge rebases onto `origin/main` once the other
-   merges: it keeps both tasks' entries, and names the next task again.
+   plan, the later one to merge merges `origin/main` into its branch once the
+   other merges, rather than rebasing
+   ([commits and pull requests](#commits-and-pull-requests)): it keeps both
+   tasks' entries, and names the next task again.
 9. **Verify.** Run the checks CI runs, from [commands](#commands): the format
    check, the lint, the type check, the tests, and
    `uv run scripts/verify.py --since origin/main`. Check that each new test
