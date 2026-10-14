@@ -123,9 +123,12 @@ their pages, as it is on GitHub.
   nothing else from the repository: nothing under `data/`, `scripts/`,
   `tests/`, `deploy/`, or `.github/`, and not `README.md`, `AGENTS.md`,
   `CLAUDE.md`, or `LICENSE`.
-- **SITE-2** (invariant) Building the site changes no file in the
-  repository and writes only under `site/`, which git ignores. No document
-  is copied, moved, or generated into another path to build it.
+- **SITE-2** (invariant) Building the site changes no file that git
+  tracks, and adds none that git doesn't ignore. It writes the built site
+  under `site/`, which git ignores. Zensical also writes its cache on every
+  build, in `.cache/` beside `zensical.toml`, with a `.gitignore` of its own
+  that makes git ignore it ([0012]). No document is copied, moved, or
+  generated into another path to build it.
 - **SITE-3** (invariant) Every link on a built page resolves:
   1. A link to a page or a file the site holds leads to it within the site,
      and its anchor, if it has one, names an element of that page.
@@ -370,7 +373,7 @@ more than the plan, the specifications, and the decision records do.
 | ID | Kind | Checked by | Statement |
 | --- | --- | --- | --- |
 | SITE-1 | invariant | tests | The site publishes `index.md` and the Markdown under `spec/`, `docs/`, and `investigation/`, from the files themselves, at their paths, and nothing else from the repository. |
-| SITE-2 | invariant | tests | Building the site changes no file in the repository and writes only under `site/`. |
+| SITE-2 | invariant | tests | Building the site changes no file git tracks, and writes only files git ignores: the built site under `site/`, and Zensical's cache in `.cache/`. |
 | SITE-3 | invariant | tests | Every link on a built page resolves within the site, or leads to the file on GitHub at the commit built. |
 | SITE-4 | invariant | tests | A built page loads nothing from another host, and the site draws diagrams with its own copy of Mermaid. |
 | SITE-5 | invariant | tests | Every footer cites EDGAR, disclaims affiliation with the SEC, gives the copyright line, names the commit built, and links to the notices page. |

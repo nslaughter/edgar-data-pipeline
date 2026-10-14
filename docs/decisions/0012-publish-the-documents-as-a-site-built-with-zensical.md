@@ -51,6 +51,9 @@ What the choice must keep:
     built page keeps a link that leads nowhere. Its `validation` setting
     can ignore links to missing pages, while it still fails on a missing
     anchor.
+  - Every build writes Zensical's cache in `.cache/`, beside its
+    configuration, with a `.gitignore` of its own that makes git ignore
+    it.
   - Its theme's script loads Mermaid from `unpkg.com` when a page has a
     diagram, unless the page has already loaded Mermaid.
 - **MkDocs, with Material for MkDocs.** Mature, and Zensical's
