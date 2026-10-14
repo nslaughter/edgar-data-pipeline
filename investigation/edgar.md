@@ -1,7 +1,7 @@
 # Source investigation: EDGAR
 
 **Status:** Started October 7, 2026. The baseline was fetched October 7;
-twenty findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
+twenty-one findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
 and SRC-14 to SRC-17, on restated and repeated values, were read from it
 on October 10. SRC-12 and SRC-13, on `submissions`' further files and its
 acceptance times, were read from them and the baseline once they were
@@ -10,9 +10,11 @@ fetched on October 10. On October 11, SRC-15's rounding matches and their
 Microsoft's further file as well, and SRC-15 and SRC-17 were checked
 against the further files. SRC-18 to SRC-20, on sizes and the pace of a
 backfill, were read from the baseline and the further files on October 11.
-Since October 10, how soon each feed shows a new filing (Q4) is measured
-from the pipeline's record. Data here comes from the U.S. Securities and
-Exchange Commission's EDGAR system.
+SRC-21, on the URLs of a company's lists and of a filing's files, was read
+from them on October 14, for the notices specification. Since October 10,
+how soon each feed shows a new filing (Q4) is measured from the pipeline's
+record. Data here comes from the U.S. Securities and Exchange Commission's
+EDGAR system.
 
 This document records how EDGAR's feeds and filings behave, each finding
 shown by versions in the snapshot store
@@ -646,3 +648,25 @@ finding relies on a record's time to within a second.
   Shown by the three `submissions` records, the four further files, the
   eight filings' headers and index pages, and the baseline's 43 records
   and the further files' four, in the records cited.
+- **SRC-21** (Q1) A company's `submissions`, its further files, and its
+  filings' files are at URLs made from its CIK and each filing's accession
+  number, and a filing's index page links its XBRL instance. `submissions`
+  is at `https://data.sec.gov/submissions/CIK##########.json`, with the CIK
+  padded to ten digits, and each further file at
+  `https://data.sec.gov/submissions/` followed by the `name` that
+  `filings.files` gives it (SRC-12). A filing's files are in the directory
+  `https://www.sec.gov/Archives/edgar/data/CIK/NODASHES/`, with the CIK of
+  the company whose `submissions` lists the filing, without leading zeros,
+  and `NODASHES` the accession number without its dashes. So Apple's 8-K/A,
+  whose accession number begins with another filer's CIK (SRC-2), is in a
+  directory under Apple's CIK, which its header gives as the filer's
+  `CENTRAL INDEX KEY`. In that directory, the header is
+  `ACCESSION-index-headers.html` and the index page `ACCESSION-index.html`,
+  with the accession number's dashes. In each of the eight filings, the
+  index page marks one row `EXTRACTED XBRL INSTANCE DOCUMENT` (SRC-20),
+  whose link is a path on `https://www.sec.gov` to a file in the filing's
+  directory; with that host, it is the URL of the instance stored. Each of
+  these URLs returned a `200`.
+  Shown by the three `submissions` records, the four further files, and the
+  eight filings' headers, index pages, and XBRL instances in the records
+  cited.

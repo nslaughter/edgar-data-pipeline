@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nslaughter/edgar-data-pipeline/blob/main/spec/schemas/notice.schema.json",
+  "$comment": "A notice: what the discoverer publishes of a filing, a gap, or a Backfill's progress. spec/notices.md governs it (section 9); changing it changes that spec.",
+  "title": "Notice",
+  "type": "object",
+  "required": ["kind", "at"],
+  "properties": {
+    "kind": {"enum": ["filing", "gap", "backfill"]},
+    "at": {"$ref": "#/$defs/timestamp"},
+    "accession_number": {"type": "string", "pattern": "^[0-9]{10}-[0-9]{2}-[0-9]{6}$"},
+    "form": {"type": "string"},
+    "filing_date": {"type": "string"},
+    "listed_acceptance": {"type": "string"},
+    "header_acceptance": {"type": "string", "pattern": "^[0-9]{14}$"},
+    "files": {
+      "type": "object",
+      "required": ["header", "index"],
+      "properties": {
+        "header": {"$ref": "#/$defs/file"},
+        "index": {"$ref": "#/$defs/file"},
+        "instance": {"$ref": "#/$defs/file"}
+      }
+    },
+    "source": {"$ref": "#/$defs/name"},
+    "url": {"type": "string"},
+    "open_since": {"anyOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]},
+    "backfill": {"$ref": "#/$defs/name"},
+    "uid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "started_at": {"$ref": "#/$defs/timestamp"},
+    "filings": {"anyOf": [{"type": "integer", "minimum": 0}, {"type": "null"}]},
+    "fetched": {"type": "integer", "minimum": 0},
+    "failed": {"type": "integer", "minimum": 0},
+    "completed_at": {"anyOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"kind": {"const": "filing"}}},
+      "then": {
+        "required": [
+          "accession_number",
+          "form",
+          "filing_date",
+          "listed_acceptance",
+          "header_acceptance",
+          "files"
+        ]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["accession_number"]},
+            {"required": ["form"]},
+            {"required": ["filing_date"]},
+            {"required": ["listed_acceptance"]},
+            {"required": ["header_acceptance"]},
+            {"required": ["files"]}
+          ]
+        }
+      }
+    },
+    {
+      "if": {"properties": {"kind": {"const": "gap"}}},
+      "then": {"required": ["source", "url", "open_since"]},
+      "else": {
+        "not": {
+          "anyOf": [{"required": ["source"]}, {"required": ["url"]}, {"required": ["open_since"]}]
+        }
+      }
+    },
+    {
+      "if": {"properties": {"kind": {"const": "backfill"}}},
+      "then": {
+        "required": ["backfill", "uid", "started_at", "filings", "fetched", "failed", "completed_at"]
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {"required": ["backfill"]},
+            {"required": ["uid"]},
+            {"required": ["started_at"]},
+            {"required": ["filings"]},
+            {"required": ["fetched"]},
+            {"required": ["failed"]},
+            {"required": ["completed_at"]}
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "file": {
+      "$comment": "One of a filing's files, as an import's manifest names an input (spec/snapshots.md, IMP-2).",
+      "type": "object",
+      "required": ["feed", "url", "sha256"],
+      "properties": {
+        "feed": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+        "url": {"type": "string", "pattern": "^https://www\\.sec\\.gov/"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "name": {
+      "$comment": "A Kubernetes object's name, as a Source's and a Backfill's are.",
+      "type": "string",
+      "maxLength": 253,
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+    },
+    "timestamp": {
+      "$comment": "A time in UTC, RFC 3339 with milliseconds and Z (spec/snapshots.md, section 2). The pattern holds each part to its range, leaving out a leap second, which no service's clock gives; the format, which a validator asserts, holds each day to its month.",
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{3}Z$"
+    }
+  }
+}

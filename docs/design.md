@@ -1,6 +1,6 @@
 # Design: the EDGAR data pipeline
 
-**Status:** Draft, October 13, 2026. This document explains the pipeline's
+**Status:** Draft, October 14, 2026. This document explains the pipeline's
 architecture and the reasons for it. It makes no rules: the specifications
 under [`spec/`](../spec/) govern, the records under
 [`docs/decisions/`](decisions/) record each significant choice, and
@@ -82,9 +82,9 @@ exporter: facts ──▶ Parquet in Garage      query API: "as of T" ──▶ 
 
 | Component | Role | Language | On the cluster |
 | --- | --- | --- | --- |
-| Scheduler | A controller: queues each `Source`'s polls at its cadence and each `Backfill`'s fetches, and keeps their status ([0007](decisions/0007-control-the-pipeline-through-custom-resources.md)) | Go | A Deployment of two, one active through leader election |
+| Scheduler | A controller: queues each `Source`'s polls at its cadence, hands each `Backfill` to the discoverer, and keeps their status ([0007](decisions/0007-control-the-pipeline-through-custom-resources.md), [`spec/notices.md`](../spec/notices.md#8-backfills)) | Go | A Deployment of two, one active through leader election |
 | Fetcher | The only component that talks to the SEC: the user agent, the rate limit, retries, and the stop on a `403`, kept in `SecAccess`; stores each body and appends each record | Go | A Deployment of two, one active through a Lease ([0005](decisions/0005-send-sec-requests-through-one-active-fetcher.md)); the only pod with the `SEC_USER_AGENT` Secret |
-| Discoverer | Compares each new version of a notice source with the last; records each new filing with its first-seen time and any gap's bounds, and queues fetches of its header, index, and XBRL instance | Python | A Deployment |
+| Discoverer | Compares each new version of a notice source with the last; records each new filing with its first-seen time and any gap's bounds, and queues fetches of its header, index, and XBRL instance; lists each `Backfill`'s filings and queues their fetches ([`spec/notices.md`](../spec/notices.md)) | Python | A Deployment |
 | Parse workers | Read a stored XBRL instance and write its facts with the filing's acceptance time, under an import manifest ([§11](../spec/snapshots.md#11-imports)) | Python | A Deployment, scaled by queue depth |
 | Exporter | Writes the facts to Parquet in Garage, deterministically, and records each file's SHA-256 | Python | A CronJob |
 | Query API | Answers "as of T" | Go | A stateless Deployment |
@@ -115,10 +115,11 @@ upgrades it with its chart.
 3. The discoverer finds a new accession number in the new version. It
    records the filing, with this poll as its first-seen time and the
    previous successful poll as the lower bound, flagging a gap if polls were
-   missed between them, and queues fetches of the filing's header, index,
-   and XBRL instance.
+   missed between them, and queues fetches of the filing's header and index
+   page.
 4. The fetcher fetches them, and the discoverer reads the acceptance time
-   from the header.
+   from the header, and from the index page the XBRL instance, whose fetch
+   it queues.
 5. A parse worker writes an import manifest, reads the instance from
    Garage, and inserts the facts in one transaction with the filing's
    acceptance time.
@@ -146,8 +147,10 @@ A mode is a cadence on each `Source`, not a different deployment
 - **Daily.** Sources are polled once a day, and the same workers drain each
   round.
 
-Both write the same records, so a day in daily mode reads as continuous
-operation with a long gap, which is what it is.
+Both write the same records. A Source polled once a day is covered between
+its polls, as one polled every 10 seconds is, so a day in daily mode reads
+as continuous operation whose filings' first-seen times are each bounded
+within a day.
 
 ## Controls
 
