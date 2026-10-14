@@ -36,8 +36,10 @@ TESTED_BY = {"verify", "tests", "kind"}
 # ServiceAccount in RBAC-5's table has its grants on kind; of
 # spec/snapshots.md's, T22 the scheduler's jobs, T23 the fetcher and the
 # cluster store, T24 the discoverer's jobs and its use of edgar-asof, and
-# T36 the transfer; and of spec/notices.md's, T24 the discoverer, with the
-# scheduler's orders and the status it sets from notices. Strict, like
+# T36 the transfer; of spec/notices.md's, T24 the discoverer, with the
+# scheduler's orders and the status it sets from notices; and of
+# spec/telemetry.md's, T28 the monitoring of observing filings, with the
+# services' metrics, and T29 the traces. Strict, like
 # xfail_strict: a statement listed here that has a test fails too, and so
 # does one whose task the plan marks done, or one checked by verify that
 # verify.py already reports.
@@ -171,6 +173,41 @@ AWAITING = {
         "T24",
     ),
     **dict.fromkeys(["RBAC-3", "RBAC-5"], "T28"),
+    **dict.fromkeys(
+        [
+            "METRIC-1",
+            "METRIC-2",
+            "METRIC-3",
+            "METRIC-4",
+            "METRIC-5",
+            "STATE-1",
+            "SCRAPE-1",
+            "SCRAPE-2",
+            "ALERT-1",
+            "ALERT-2",
+            "ALERT-3",
+            "ALERT-4",
+            "VIEW-2",
+            "VIEW-3",
+            "VIEW-4",
+            "VIEW-5",
+            "VIEW-6",
+        ],
+        "T28",
+    ),
+    **dict.fromkeys(
+        [
+            "TRACE-1",
+            "TRACE-2",
+            "TRACE-3",
+            "TRACE-4",
+            "TRACE-5",
+            "TRACE-6",
+            "TRACE-7",
+            "TRACE-8",
+        ],
+        "T29",
+    ),
     **dict.fromkeys(["XFER-1", "XFER-2", "XFER-3"], "T36"),
 }
 

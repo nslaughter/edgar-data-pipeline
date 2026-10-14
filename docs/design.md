@@ -214,12 +214,18 @@ The pipeline reports:
 Grafana also reads the record from PostgreSQL, through views made for it:
 coverage over time with gaps as bands, each source's lag from acceptance
 as a distribution, and each filing's times from acceptance to facts
-available. Alerts fire on a `403`, on a gap longer than its source's
-cadence, and on a backup more than a day old, and `promtool` tests them in
-CI.
+available. Alerts fire while requests are stopped after a `403`, while a
+source that's polling has a gap longer than its cadence, or has gone as
+long since its first poll without a successful one, and while the latest
+backup is more than a day old, and `promtool` tests them in CI.
+[`spec/telemetry.md`](../spec/telemetry.md) gives the metrics, the views,
+and the alerts.
 
 Tempo comes next, with one trace per filing from the poll that first saw it
-to its facts, carried through NATS in message headers. Loki, fed by Alloy,
+to its facts, or for a Backfill's filing from its listing, carried through
+NATS in message headers. A Backfill's filing whose jobs are published again,
+when its list's event is delivered again, gets another trace, linked to the
+same list ([TRACE-4](../spec/telemetry.md#9-traces)). Loki, fed by Alloy,
 follows, with logs that carry the accession number.
 
 ## Testing on kind
