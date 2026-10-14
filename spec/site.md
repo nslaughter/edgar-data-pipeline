@@ -483,6 +483,25 @@ The owner also decided on October 14, 2026:
   Explanation ([SITE-7]); and the seventeen topics, each on a page of its
   own ([PAGE-4]).
 
+After the review of this version, the owner confirmed on October 14, 2026
+the details its fixes settled:
+
+- Zensical's cache, `.cache/` beside `zensical.toml`, which the build may
+  write and Zensical makes git ignore ([SITE-2]);
+- one build script, `scripts/build_site.py`, with the Markdown extension
+  `scripts/site_links.py` and the footer's templates in `overrides/`
+  ([SITE-8]);
+- the copy of Mermaid, `docs/assets/mermaid.min.js`, of the major version
+  the theme's loader names, replaced only in a change of its own
+  ([SITE-4], [SITE-6]);
+- a third role for the tasks that decide or revisit a part, which counts
+  toward no status, and split tasks, which aren't done and no row names
+  ([STATUS-1], [STATUS-2]);
+- the navigation's tabs holding the pages that exist, the specifications
+  in the order they were first written, and the export's page at
+  `docs/export.md` ([SITE-7], [PAGE-1]);
+- and [PAGE-4]'s test waiting for T42, which depends on T41.
+
 ## 10. Changes to this document
 
 Versions follow semantic versioning. Adding a statement, a page, a topic, a
