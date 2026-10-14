@@ -12,16 +12,22 @@
 ## What the pipeline is
 
 A pipeline for the filings companies make with the U.S. Securities and
-Exchange Commission, read from its EDGAR system. The SEC's own feeds show
-the present: `submissions` and `companyfacts` are summaries it rewrites in
-place. The pipeline keeps a better record, in three ways, and claims no more
-than these ([what the pipeline keeps](docs/design.md#what-the-pipeline-keeps)):
+Exchange Commission, read from its EDGAR system. EDGAR's `submissions`
+lists a company's filings, and `companyfacts` its XBRL values, each value
+with the accession number of the filing that reported it
+([SRC-9](investigation/edgar.md#findings-so-far),
+[SRC-14](investigation/edgar.md#findings-so-far)); how often their content
+changes is still an open question of the investigation
+([Q1](investigation/edgar.md#questions)). The pipeline keeps a record of
+its own, in three ways, and claims no more than these
+([what the pipeline keeps](docs/design.md#what-the-pipeline-keeps)):
 
 1. **Every filing in its scope, with its acceptance time from the filing
-   itself,** so what was known on a date follows from the filings accepted
-   by then.
+   itself** ([SRC-1](investigation/edgar.md#findings-so-far)), so what was
+   known on a date follows from the filings accepted by then.
 2. **Every version of a feed it observed, never overwritten,** each body
-   stored once by its SHA-256 ([`spec/snapshots.md`](spec/snapshots.md)).
+   stored once by its SHA-256 ([OBJ-1](spec/snapshots.md#5-objects),
+   [OBJ-2](spec/snapshots.md#5-objects)).
 3. **Where it was looking, and where it wasn't.** Each poll is recorded, so
    coverage and gaps are part of the record.
 
