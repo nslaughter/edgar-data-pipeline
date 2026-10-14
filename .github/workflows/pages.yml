@@ -1,11 +1,11 @@
 # Publishes the documentation site at https://nslaughter.github.io/edgar-data-pipeline/
 # (spec/site.md, SITE-10), and nothing else does. On each push to main, and
-# when the owner starts it, it builds the site from that commit and checks it
-# with scripts/build_site.py, as the tests do (SITE-9), then deploys it with
-# GitHub Pages' own actions. The tests check the site before each merge; this
-# checks it again before publishing, because a pull request can merge without
-# its branch being up to date with main. The owner sets the repository's Pages
-# source to GitHub Actions before the first deployment.
+# when the owner starts it on main, it builds the site from that commit and
+# checks it with scripts/build_site.py, as the tests do (SITE-9), then deploys
+# it with GitHub Pages' own actions. The tests check the site before each
+# merge; this checks it again before publishing, because a pull request can
+# merge without its branch being up to date with main. The owner sets the
+# repository's Pages source to GitHub Actions before the first deployment.
 name: Pages
 
 on:
@@ -29,6 +29,10 @@ concurrency:
 jobs:
   build:
     name: Build and check the site
+    # Only from main. A run the owner starts can name another branch, and the
+    # github-pages environment's rule on branches lives outside the repository,
+    # so this job, and the deployment that needs it, are skipped on any other.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
