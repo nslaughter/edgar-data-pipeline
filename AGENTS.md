@@ -140,10 +140,16 @@ The repository allows squash merges only, so the pull request's description
 becomes the commit on `main`. Keep it current as commits are added. It lists
 what changed, the checks run with their results, and anything deferred.
 
-A pull request merges only once the `CI` workflow's jobs, `Python 3.12`,
-`Python 3.13`, and `Python 3.14`, pass, which a ruleset on `main` requires.
-The jobs are named for the versions they run on, so a change to the versions
-needs the ruleset changed with it, which the owner does on GitHub.
+A pull request merges only once the checks a ruleset on `main` requires have
+passed: the `CI` workflow's jobs `Python 3.12`, `Python 3.13`, and
+`Python 3.14`. The ruleset names each job it requires, and only the owner
+changes it, on GitHub. So a pull request that adds, removes, or renames a CI
+job names among what awaits the owner whether the ruleset changes with it,
+and when. The jobs are named for the Python versions they run on, so a change
+to the versions renames them. A job the pull request no longer runs leaves
+the ruleset before the merge, or the pull request can't merge. A job newly
+required joins it after the merge, and each other open pull request then
+merges `origin/main`, so that the job runs on it.
 
 No pull request merges until the owner's iterative review has run on it and
 ended, whatever it changes: documents, data, and this file included. The
