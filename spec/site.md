@@ -54,7 +54,7 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
 - **The site:** what Zensical builds from this repository, and GitHub
   Pages serves at `https://nslaughter.github.io/edgar-data-pipeline/`
   ([0012]).
-- **The built site:** the files `zensical build` writes into `site/`,
+- **The built site:** the files the build writes into `site/` ([SITE-8]),
   before they're published. **The commit built** is the commit they're
   built from.
 - **The pages written for the site:** the home page, the explanation pages,
@@ -121,8 +121,8 @@ their pages, as it is on GitHub.
   The other files under those directories, such as the schemas in
   `spec/schemas/`, are served as they're committed. The site publishes
   nothing else from the repository: nothing under `data/`, `scripts/`,
-  `tests/`, `deploy/`, or `.github/`, and not `README.md`, `AGENTS.md`,
-  `CLAUDE.md`, or `LICENSE`.
+  `tests/`, `deploy/`, `overrides/`, or `.github/`, and not `README.md`,
+  `AGENTS.md`, `CLAUDE.md`, or `LICENSE`.
 - **SITE-2** (invariant) Building the site changes no file that git
   tracks, and adds none that git doesn't ignore. It writes the built site
   under `site/`, which git ignores. Zensical also writes its cache on every
@@ -193,21 +193,36 @@ owner does, the site uses the theme's defaults.
   Zensical can't tell a page the site excludes, such as `AGENTS.md`, from
   one that doesn't exist, so its validation ignores links to pages it
   doesn't hold, and the check of the built site resolves each one
-  ([SITE-3]). The site is built with `uv run zensical build --clean`, and
-  then checked.
-- **SITE-9** (rule) The tests build the site, and check the built site for
-  [SITE-1] to [SITE-7] and [STATUS-3], offline. So each of CI's jobs, which
+  ([SITE-3]). One script, `scripts/build_site.py`, builds the site and then
+  checks it, run as `uv run scripts/build_site.py`, and fails when either
+  fails:
+  1. It takes the commit built from `git rev-parse HEAD`.
+  2. It runs Zensical's build in its own process, with the cache cleaned,
+     as `zensical build --clean` does. During the build, a Markdown
+     extension, `scripts/site_links.py`, which `zensical.toml` names,
+     rewrites each link to a file the site doesn't hold as [SITE-3] gives,
+     before Zensical rewrites the relative links that remain. Zensical can
+     import the extension only where `scripts/` is on Python's path, as it
+     is in the script's process, so the site isn't built by
+     `zensical build` alone.
+  3. It writes the commit built into each built page's footer, in the
+     place the theme's footer leaves for it. The footer is the theme's,
+     overridden by templates in `overrides/`, which `zensical.toml` names
+     as the theme's `custom_dir` ([SITE-5]).
+  4. It checks the built site for [SITE-1] to [SITE-7] and [STATUS-3].
+- **SITE-9** (rule) The tests build the site and check it, offline, by
+  running `scripts/build_site.py` ([SITE-8]). So each of CI's jobs, which
   run the tests, fails on a site that doesn't build or doesn't pass, and
   the site is checked before each merge without a job of its own.
 - **SITE-10** (rule) The workflow `.github/workflows/pages.yml` alone
   publishes the site. It runs on each push to `main`, and when the owner
-  starts it. It builds the site from that commit, checks it as [SITE-9]
-  does, and deploys it with GitHub Pages' own actions, to the site's
-  address ([§2](#2-terms)). Its actions are pinned by commit, each with its
-  release in a comment. It has only the permissions deploying needs:
-  `contents: read`, `pages: write`, and `id-token: write`. One deployment
-  runs at a time, and a newer one waits rather than cancel the one in
-  progress.
+  starts it. It builds the site from that commit and checks it by running
+  `scripts/build_site.py`, as the tests do ([SITE-9]), and deploys it with
+  GitHub Pages' own actions, to the site's address ([§2](#2-terms)). Its
+  actions are pinned by commit, each with its release in a comment. It has
+  only the permissions deploying needs: `contents: read`, `pages: write`,
+  and `id-token: write`. One deployment runs at a time, and a newer one
+  waits rather than cancel the one in progress.
 
 The owner sets the repository's Pages source to GitHub Actions before the
 first deployment ([0012]).
@@ -389,9 +404,9 @@ more than the plan, the specifications, and the decision records do.
 | SITE-5 | invariant | tests | Every footer cites EDGAR, disclaims affiliation with the SEC, gives the copyright line, names the commit built, and links to the notices page. |
 | SITE-6 | invariant | tests, review | The notices page gives the license and notice of each file from another project the site serves, and names Zensical's version and Mermaid's. |
 | SITE-7 | invariant | tests | The navigation is Home, Explanation, Reference, and Status, holding every page but the notices page. |
-| SITE-8 | invariant | tests | Zensical is locked in `uv.lock`, configured in `zensical.toml` with `strict` on. |
-| SITE-9 | rule | tests | The tests build the site and check it, offline. |
-| SITE-10 | rule | review | Only `pages.yml` publishes the site, from `main`, after the same checks, with pinned actions and the least permissions. |
+| SITE-8 | invariant | tests | Zensical is locked in `uv.lock` and configured in `zensical.toml` with `strict` on, and `scripts/build_site.py` builds the site, leading links to GitHub through a Markdown extension and writing the commit in each footer, then checks it. |
+| SITE-9 | rule | tests | The tests build the site and check it, offline, with `scripts/build_site.py`. |
+| SITE-10 | rule | review | Only `pages.yml` publishes the site, from `main`, after the same script's checks, with pinned actions and the least permissions. |
 | STATUS-1 | invariant | tests | A part's status is the furthest of Built, Specified, Decided, and Planned it has reached. |
 | STATUS-2 | invariant | tests | The status page lists the parts, `edgar-asof` among them, with their decision records and tasks, and names every task outside the investigation. |
 | STATUS-3 | invariant | tests | The status page's generated columns match the plan, the specifications, and the decision records at the same commit. |

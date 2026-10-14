@@ -51,6 +51,13 @@ What the choice must keep:
     built page keeps a link that leads nowhere. Its `validation` setting
     can ignore links to missing pages, while it still fails on a missing
     anchor.
+  - A Markdown extension named in its `markdown_extensions` sees each link
+    as written, with its page's path, before Zensical rewrites relative
+    links, so it can lead a link to a file the site excludes to that file
+    on GitHub. Zensical imports the extension from Python's path, so it
+    can live beside a script that runs Zensical's build in its own
+    process. Templates in the theme's `custom_dir` override the theme's
+    footer.
   - Every build writes Zensical's cache in `.cache/`, beside its
     configuration, with a `.gitignore` of its own that makes git ignore
     it.
