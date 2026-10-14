@@ -58,8 +58,9 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
   before they're published. **The commit built** is the commit they're
   built from.
 - **The pages written for the site:** the home page, the explanation pages,
-  the status page, the glossary, and the notices page ([PAGE-1]). Each is a
-  document like any other in `docs/`, read on GitHub too.
+  the status page, the glossary, the notices page, and the export's page
+  ([PAGE-1]). Each is a document like any other in `docs/`, read on GitHub
+  too.
 - **A part of the pipeline:** a component, store, control, or capability
   that the status page lists ([STATUS-2]), such as the fetcher, the
   snapshot store in git, or the alerts.
@@ -171,13 +172,19 @@ their pages, as it is on GitHub.
   with the notice each license requires. It names Zensical's version and
   the version of Mermaid's copy ([SITE-4]), and a change to either checks
   the files the site serves again.
-- **SITE-7** (invariant) The site's navigation is four tabs, in this order:
+- **SITE-7** (invariant) The site's navigation is four tabs, in this order.
+  Each holds the pages named here that the site publishes, in the order
+  given; a page not yet written, such as the glossary until it is, has no
+  entry:
   1. **Home:** the home page.
   2. **Explanation:** the design, [`docs/design.md`](../docs/design.md),
      first; then the explanation pages, in the order [PAGE-4] gives; then
      the decision records, after their index.
   3. **Reference:** the specifications, in the order they were first
-     written, this one last; the investigation; and the glossary.
+     written, each new one after those before it: `spec/snapshots.md`,
+     `spec/deployment.md`, `spec/controls.md`, `spec/notices.md`,
+     `spec/telemetry.md`, this one, and then those written later; the
+     export's page; the investigation; and the glossary.
   4. **Status:** the status page, then the plan.
 
   Every page the site publishes is in the navigation, except the notices
@@ -289,7 +296,10 @@ more than the plan, the specifications, and the decision records do.
 
 ## 7. The pages written for the site
 
-- **PAGE-1** (invariant) The pages written for the site are:
+- **PAGE-1** (invariant) The site publishes no Markdown file but the
+  repository's documents, which are the specifications, the investigation,
+  the design, the plan, and the decision records with their index, and the
+  pages written for the site, each at its path here:
   1. the home page, `index.md` at the repository's root: what the pipeline
      is and what it keeps, the parts' statuses ([STATUS-4]), how the site
      is arranged, and that the data comes from the U.S. Securities and
@@ -297,7 +307,13 @@ more than the plan, the specifications, and the decision records do.
   2. the explanation pages, under `docs/explanation/` ([PAGE-4]);
   3. the status page, `docs/status.md` ([STATUS-2]);
   4. the glossary, `docs/glossary.md` ([PAGE-8]);
-  5. the notices page, `docs/third-party-notices.md` ([SITE-6]).
+  5. the notices page, `docs/third-party-notices.md` ([SITE-6]);
+  6. the export's page, `docs/export.md`, which explains the export's
+     format as the export's specification gives it.
+
+  This lists the pages the site may hold, and where each goes, not the
+  pages it must: a page is required by the statement it cites, and the
+  home page by [SITE-1].
 - **PAGE-2** (rule) The pages written for the site make no rules and own no
   facts. Each fact about the pipeline cites the document that owns it: a
   statement by its ID, a decision record, a section of the design, or a
@@ -415,7 +431,7 @@ more than the plan, the specifications, and the decision records do.
 | SITE-4 | invariant | tests | A built page loads nothing from another host, and the site draws diagrams with its own copy of Mermaid, `docs/assets/mermaid.min.js`, of the major version the theme expects. |
 | SITE-5 | invariant | tests | Every footer cites EDGAR, disclaims affiliation with the SEC, gives the copyright line, names the commit built, and links to the notices page. |
 | SITE-6 | invariant | tests, review | The notices page gives the license and notice of each file from another project the site serves, and names Zensical's version and Mermaid's. |
-| SITE-7 | invariant | tests | The navigation is Home, Explanation, Reference, and Status, holding every page but the notices page. |
+| SITE-7 | invariant | tests | The navigation is Home, Explanation, Reference, and Status, holding every page the site publishes but the notices page, in a given order. |
 | SITE-8 | invariant | tests | Zensical is locked in `uv.lock` and configured in `zensical.toml` with `strict` on, and `scripts/build_site.py` builds the site, leading links to GitHub through a Markdown extension and writing the commit in each footer, then checks it. |
 | SITE-9 | rule | tests | The tests build the site and check it, offline, with `scripts/build_site.py`. |
 | SITE-10 | rule | review | Only `pages.yml` publishes the site, from `main`, after the same script's checks, with pinned actions and the least permissions. |
@@ -423,7 +439,7 @@ more than the plan, the specifications, and the decision records do.
 | STATUS-2 | invariant | tests | The status page lists the parts, `edgar-asof` among them, with their decision records and their tasks in three roles, and names every task outside the investigation but a split one. |
 | STATUS-3 | invariant | tests | The status page's generated columns match the plan, the specifications, and the decision records at the same commit. |
 | STATUS-4 | invariant | tests | The home page and each explanation page begin with the statuses of the parts they describe. |
-| PAGE-1 | invariant | tests | The pages written for the site are the home page, the explanation pages, the status page, the glossary, and the notices page. |
+| PAGE-1 | invariant | tests | The site's pages are the repository's documents and the pages written for the site, at their paths: the home page, the explanation pages, the status page, the glossary, the notices page, and the export's page. |
 | PAGE-2 | rule | review | The pages written for the site make no rules and cite the document that owns each fact, `edgar-asof`'s at a named commit. |
 | PAGE-3 | rule | review | The explanation pages claim nothing measured or run that no finding or record shows. |
 | PAGE-4 | invariant | tests, review | The explanation pages cover the seventeen topics, in order, `edgar-asof` among them. |
