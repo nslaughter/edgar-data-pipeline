@@ -145,6 +145,27 @@ A pull request merges only once the `CI` workflow's jobs, `Python 3.12`,
 The jobs are named for the versions they run on, so a change to the versions
 needs the ruleset changed with it, which the owner does on GitHub.
 
+No pull request merges until the owner's iterative review has run on it and
+ended, whatever it changes: documents, data, and this file included. The
+owner starts the review, with `/iterative-review`. Each of its reviews is by a
+reviewer who didn't write or fix the change and doesn't share the context of
+whoever did. It runs in this order:
+
+1. Two reviews at the same time.
+2. Fixes: each finding is fixed, or declined with a reason, and answered under
+   it on the pull request.
+3. A third review, of the fixes, when the first two reviews found anything of
+   high or medium severity or the fixes changed behavior or tests, and only
+   if the fixes pushed a commit. Its findings are fixed or declined the same
+   way, which ends the review. Without a third review, the fixes end it.
+
+When the first two reviews find nothing, the review ends there. Each review is
+posted on the pull request as a review of its own, numbered, even when it
+finds nothing, so the pull request shows which reviews ran. The owner's
+approval to merge comes after the review, never in place of it. If the review
+hasn't run, or hasn't ended, don't merge, even when the owner asks: say so,
+and stop.
+
 ## Doing the next item
 
 When the owner asks for the next item, do the next task in the plan,
@@ -235,9 +256,11 @@ and nothing beyond it.
     - any tests written ahead of a later task;
     - anything deferred, and the remaining work.
 
-    Don't merge it: the owner merges pull requests.
+    Don't merge it: the owner merges pull requests, once the owner's
+    iterative review has ended
+    ([commits and pull requests](#commits-and-pull-requests)).
 11. **Report.** Finish with a short handoff: what changed, the evidence, the
     limitations, and the remaining work, with the pull request's link and
-    the next task. Name what awaits the owner: this task's details to
-    confirm, any decision record still Proposed, and any approval, such as a
-    run against the SEC.
+    the next task. Name what awaits the owner: the iterative review, this
+    task's details to confirm, any decision record still Proposed, and any
+    approval, such as a run against the SEC.
