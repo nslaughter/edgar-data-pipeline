@@ -394,13 +394,12 @@ more than the plan, the specifications, and the decision records do.
 
 ## 9. Open questions
 
-The owner decides each. Until then, its proposed default holds.
+None is open. The owner decided on October 14, 2026 that the site keeps no
+version per release of the pipeline: it shows `main`, and each page names
+the commit built ([SITE-5]). That's revisited when the pipeline has
+releases.
 
-1. **Whether the site keeps a version per release of the pipeline.**
-   Proposed default: no. The site shows `main`, and each page names the
-   commit built ([SITE-5]). Revisit when the pipeline has releases.
-
-The owner decided on October 14, 2026:
+The owner also decided on October 14, 2026:
 
 - that the site is built before the pipeline, with Zensical, and served by
   GitHub Pages at the address it gives this repository, with no custom
@@ -411,9 +410,20 @@ The owner decided on October 14, 2026:
 - that the explanation includes analysis of scopes wider than the plan's,
   and estimates of how storage grows and of the compute the pipeline needs
   ([PAGE-5] to [PAGE-7]);
-- and that `edgar-asof`, though it's in a repository of its own, is
+- that `edgar-asof`, though it's in a repository of its own, is
   explained here as a part of the pipeline, at the depth the pipeline
-  relies on it ([PAGE-4], [STATUS-2]).
+  relies on it ([PAGE-4], [STATUS-2]);
+- and, confirming the details this version settled: what the site
+  publishes, with `README.md`, `AGENTS.md`, `CLAUDE.md`, and `LICENSE` off
+  it ([SITE-1]); the home page at `index.md` in the repository's root, and
+  the other pages in `docs/` ([PAGE-1]); a committed status page whose
+  generated columns a test checks ([STATUS-2], [STATUS-3]); no CI job of
+  its own, since the tests build and check the site ([SITE-9]);
+  `pages.yml`'s actions pinned by commit ([SITE-10]); nothing loaded from
+  another host, with the site's own copy of Mermaid, and the footer
+  ([SITE-4], [SITE-5]); the navigation, with the decision records under
+  Explanation ([SITE-7]); and the seventeen topics, each on a page of its
+  own ([PAGE-4]).
 
 ## 10. Changes to this document
 

@@ -4,7 +4,7 @@
 are done, and T37 is split into T39 to T43. The next is T4, once the owner
 asks for its run against the SEC; the investigation's daily refetches can
 run now too, when the owner asks. Until then, the next task ready without a
-run is T40, once the owner accepts decision record 0012.
+run is T40.
 
 The tasks that build the pipeline, in the order they're to be done, and
 which are done. When the owner asks for the next item, an agent takes the

@@ -1,6 +1,6 @@
 # 12. Publish the documents as a site built with Zensical, served by GitHub Pages
 
-**Status:** Proposed, October 14, 2026.
+**Status:** Accepted, October 14, 2026. The owner accepted it the same day.
 
 ## Context
 
