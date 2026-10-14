@@ -167,10 +167,13 @@ whoever did. It runs in this order:
 
 When the first two reviews find nothing, the review ends there. Each review is
 posted on the pull request as a review of its own, numbered, even when it
-finds nothing, so the pull request shows which reviews ran. The owner's
-approval to merge comes after the review, never in place of it. If the review
-hasn't run, or hasn't ended, don't merge, even when the owner asks: say so,
-and stop.
+finds nothing, so the pull request shows which reviews ran. A review of the
+whole code, with `--codebase`, has no pull request until its fixes open one,
+so that pull request's description records the first two reviews instead,
+and a third review is posted on it. A run with `--review-only` posts nothing
+and fixes nothing, so it doesn't count. The owner's approval to merge comes
+after the review, never in place of it. If the review hasn't run, or hasn't
+ended, don't merge, even when the owner asks: say so, and stop.
 
 The review's comments are anchored to the branch's commits, so never rebase,
 amend, or force-push a branch with an open pull request. To bring in changes
