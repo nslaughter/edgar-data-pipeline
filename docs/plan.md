@@ -1,9 +1,10 @@
 # Plan: the EDGAR data pipeline
 
-**Status:** October 14, 2026. T1 to T3, T13 to T16, T19, T34, and T35 are
-done. The next is T4, once the owner asks for its run against the SEC; the
-investigation's daily refetches can run now too, when the owner asks. Until
-then, the next task ready without a run is T38.
+**Status:** October 14, 2026. T1 to T3, T13 to T16, T19, T34, T35, and T39
+are done, and T37 is split into T39 to T43. The next is T4, once the owner
+asks for its run against the SEC; the investigation's daily refetches can
+run now too, when the owner asks. Until then, the next task ready without a
+run is T40, once the owner accepts decision record 0012.
 
 The tasks that build the pipeline, in the order they're to be done, and
 which are done. When the owner asks for the next item, an agent takes the
@@ -59,6 +60,25 @@ not from these tasks.
 | T8 | **What the refetches show (Q1, Q4, Q5).** From the daily refetches stored through T6 and T7: how often each feed changed, whether a URL returned to an earlier body, when each day's index appeared, and growth per refetch. Also refetches the baseline's eight filings, to see whether any archived file changed (Q1). | T4, T6, T7, T35, run | |
 | T9 | **Walmart's next 10-Q (Q2, Q3).** The same as T6, for Walmart's report after its quarter ends October 31. | T35, run | |
 
+## Documentation
+
+The documents, published as a site for readers who don't work in the
+repository
+([0012](decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md),
+[`spec/site.md`](../spec/site.md)). The owner decided on October 14, 2026
+to build the site before the pipeline, so its tasks come before the
+pipeline's, and split T37 into T39 to T43, so that only the export's page
+waits for the export.
+
+| ID | Task | Depends on | Done |
+| --- | --- | --- | --- |
+| T37 | **The documentation site.** A decision record on how the documents are published as a site: Zensical, from the team behind Material for MkDocs, against GitHub's own rendering of the repository, and the alternatives. Then the site, if the record chooses one: built from `spec/`, `docs/`, and `investigation/` where they are, so their paths and links still hold, without `data/`, `scripts/`, or `tests/`; citing the U.S. Securities and Exchange Commission's EDGAR system as the data's source; with its generator pinned, and a CI job that builds it and checks its links. Its first page for people outside the project is the export's format, from T18. Where the site is published is the owner's to decide. | T27 | Split on October 14, 2026, into T39 to T43, as the owner decided. |
+| T39 | **The site's specification, `spec/site.md`,** with decision record 0012 on how the documents are published as a site: Zensical, from the team behind Material for MkDocs, against GitHub's own rendering of the repository, and the alternatives. | — | October 14, 2026: version 0.1.0, whose tests T40 to T42 write. |
+| T40 | **The site.** Zensical locked in `uv.lock`, `zensical.toml`, and the build from the documents where they are ([SITE-1 to SITE-8](../spec/site.md#4-what-the-site-holds)); the tests that build the site and check the built site ([SITE-9](../spec/site.md#5-building-and-publishing)); the publishing workflow, `pages.yml` ([SITE-10](../spec/site.md#5-building-and-publishing)); the home page; the status page, with the script that writes its generated columns and the test that checks them ([STATUS-1 to STATUS-4](../spec/site.md#6-status)); and the notices page ([PAGE-1](../spec/site.md#7-the-pages-written-for-the-site)). It links the site from the README, and proposes to the owner, for `AGENTS.md`, that a pull request that marks a task done updates the status page. The owner sets the repository's Pages source to GitHub Actions while its pull request is open. | T39, 0012 | |
+| T41 | **The explanation pages and the glossary.** [PAGE-4](../spec/site.md#7-the-pages-written-for-the-site)'s topics, but for the estimates and scale and limits, with their diagrams, `edgar-asof`'s page among them; and the glossary ([PAGE-8](../spec/site.md#7-the-pages-written-for-the-site)). Each fact is cited as [PAGE-2](../spec/site.md#7-the-pages-written-for-the-site) gives, `edgar-asof`'s at a named commit. | T40 | |
+| T42 | **The estimates, and scale and limits.** [PAGE-5 and PAGE-6](../spec/site.md#7-the-pages-written-for-the-site): the requests a second and bytes fetched; the growth of storage in Garage, PostgreSQL, the queue's streams, the export, and Prometheus; and the CPU, memory, and storage each component needs; at the chart's default scope and wider ones, each input cited or marked an assumption; then the first limit as the scope grows. | T40 | |
+| T43 | **The export's format, on the site.** A page for people who read the export, from T18's specification. | T18, T40 | |
+
 ## Observing filings
 
 The first part of the pipeline: enough to poll each company's `submissions`,
@@ -105,15 +125,6 @@ first part.
 | T27 | **The exporter.** The facts as Parquet in Garage, with each file's SHA-256, through a pinned `edgar-asof`. | T18, T25 | |
 | T32 | **Telemetry for facts.** A minor version of `spec/telemetry.md` for the parse workers, the query API, and the exporter, and the view of each filing's times from acceptance to facts available. | T17, T18, T19 | |
 | T33 | **Monitoring for facts.** Their metrics, the dashboard of each filing's times from acceptance to facts available, and their alert rules, tested with `promtool`. | T26, T27, T28, T32 | |
-
-## Documentation
-
-The documents, published as a site for readers who don't work in the
-repository.
-
-| ID | Task | Depends on | Done |
-| --- | --- | --- | --- |
-| T37 | **The documentation site.** A decision record on how the documents are published as a site: Zensical, from the team behind Material for MkDocs, against GitHub's own rendering of the repository, and the alternatives. Then the site, if the record chooses one: built from `spec/`, `docs/`, and `investigation/` where they are, so their paths and links still hold, without `data/`, `scripts/`, or `tests/`; citing the U.S. Securities and Exchange Commission's EDGAR system as the data's source; with its generator pinned, and a CI job that builds it and checks its links. Its first page for people outside the project is the export's format, from T18. Where the site is published is the owner's to decide. | T27 | |
 
 ## Traces, logs, and drills
 
