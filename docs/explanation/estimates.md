@@ -143,7 +143,7 @@ neither a response's encoding nor its length ([SRC-18]).
 | Scope | Arithmetic | A day |
 | --- | --- | --- |
 | The default | Polls: 25,920 × 157,326 to 185,250 bytes = 4.08 to 4.80 GB. New filings' headers and index pages: 1.4 × 15,498 to 43,849 = 21 to 61 KB. Reports: 48.93 MB a year, 0.13 MB a day, in a few days of each quarter | 4.1 to 4.8 GB |
-| The full budget | Polls: 216,000 × 157,326 to 185,250 = 33.98 to 40.01 GB. 25 companies' new filings and reports: under 1 MB | 34 to 40 GB |
+| The full budget | Polls: 216,000 × 157,326 to 185,250 = 33.98 to 40.01 GB. 25 companies' new filings' headers and index pages: 11.5 × 15,498 to 43,849 = 0.18 to 0.50 MB. Reports: 48.93 MB × 25 ÷ 3 = 408 MB a year, 1.1 MB a day | 34 to 40 GB |
 | A larger feed | The default's, and `companyfacts`: 25,920 × 3,770,257 to 4,881,196 = 97.7 to 126.5 GB | 102 to 131 GB |
 | All filers | Headers and index pages: 3,100 to 6,200 × 15,498 to 43,849 = 48 to 272 MB. Instances: 5.0% of the filings, 155 to 310, of which 43% are reports of 904,157 to 10,948,157 bytes and the rest 9,836 to 11,695: 61 MB to 1.46 GB | 0.11 to 1.73 GB, and that feed's polls |
 
