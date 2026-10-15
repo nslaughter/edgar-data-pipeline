@@ -231,8 +231,9 @@ The archive is in Garage, under the bucket `database-backups` ([PG-4]).
 
 Kept forever, the base backups grow with the square of the time: each day
 adds a copy of a database that is itself a day larger. In the low case they
-are most of the host's disk within weeks, and in the high case they share it
-with the objects ([below](#on-the-hosts-disk)).
+are most of what the host's disk holds within two to four weeks, and in the
+high case they share it with the objects, and for all filers with the
+export ([below](#on-the-hosts-disk)).
 
 ### The queue's streams
 
@@ -329,12 +330,16 @@ disk. After *d* days it holds:
 | A larger feed | 20 to 846 GB | 1.8 to 14.3 TB | 31% to 97% | 18 to 191 days |
 | All filers | 12 to 303 GB | 0.81 to 33.5 TB | 77% to 95% | 41 to 283 days |
 
-In each range, the shorter time is the high case, where each poll stores a
-new version: at the default, after 110 days, its objects take 234 GB of
-the disk, and its base backups 243 GB. In the low case, the base backups are nearly all of
-it. Had Garage stored each WAL segment at its full 16 MiB, the WAL alone
-would take 3 × 4.83 = 14.5 GB a day, and fill 500 GB in 34 days at any of
-these scopes.
+In each range, the shorter time is the high case. At the scopes that poll,
+it's the case in which each poll stores a new version, and by the time the
+disk is full, the objects take 46% of it at the default, 234 GB beside
+243 GB of base backups; 76% at the full budget; and 95% with a larger
+feed. For all filers, the range comes from the filings and the facts, not
+the polls: in the high case, the base backups take 64% of the disk by the
+time it's full, the export 17%, and the objects 2%. In each low case, the
+base backups take 89% to 96% of it. Had Garage stored each WAL segment at
+its full 16 MiB, the WAL alone would take 3 × 4.83 = 14.5 GB a day, and
+fill 500 GB in 34 days at any of these scopes.
 
 ## CPU, memory, and storage
 

@@ -26,14 +26,21 @@ U.S. Securities and Exchange Commission's EDGAR system.
 | By shorter cadences | The polls' budget | At 2.5 *c* companies at a cadence of *c* seconds: the three companies at 1, 1, and 2 seconds |
 | By more feeds | The polls' budget, which each feed's Sources share; first, [the host's disk](#the-hosts-disk), if a large feed's body changes at each poll | Each company's `companyfacts` at 10 seconds is 0.3 polls a second more; in the high case, 500 GB of disk is full after 18 days |
 | To all of EDGAR's filers | The polls' budget, for polling each company: the notice source must change | At *N* companies, a cadence of *N* ÷ 2.5 seconds |
-| With time, at every scope | The host's disk, through base backups that nothing removes | 500 GB is full after 110 to 271 days at the default, and 22 to 91 at the full budget |
+| With time | The host's disk, through base backups that nothing removes; at the full budget, [reading the gaps](#reading-the-gaps) may come first | 500 GB is full after 110 to 271 days at the default, 18 to 191 with a larger feed, and 22 to 91 at the full budget, where a read of `gaps` may take 10 seconds after 46 days |
 
 So the first limit that the scope reaches is the polls' budget, which the
 chart enforces before anything reaches the cluster ([VAL-3]). The first
-that time reaches is the host's disk, at every scope, unless the backups
-are removed. Next come [reading the gaps](#reading-the-gaps), whose cost
-grows with every poll, and, for a large feed, [the network](#the-network).
-[Memory](#memory) is spent up front and grows little with the scope.
+that time reaches, unless the backups are removed, is the host's disk at
+the default and with a larger feed, in every case the estimates consider.
+At the full budget, it's the disk if each poll stores a new version, after
+22 days. If lists change only with new filings, the disk lasts 91 days, and
+[reading the gaps](#reading-the-gaps) comes first if PostgreSQL reads
+fewer than about 2 million polls a second. For all filers, the estimates
+give no polls of the feed that would notice their filings, so they don't
+say when reading the gaps would slow. After the disk come reading the
+gaps, whose cost grows with every poll, and, for a large feed,
+[the network](#the-network). [Memory](#memory) is spent up front and grows
+little with the scope.
 
 ## The polls' budget
 
@@ -122,16 +129,23 @@ backups grow with the square of the time:
 
 These are the [estimates' figures](estimates.md#on-the-hosts-disk), at
 the reference of 500 GB free, an assumption, since no document names the
-machine kind runs on. In each range, the shorter time is the high case, in
-which each poll stores a new version of its list, and the objects take
-about half the disk by the time it's full. Which case holds is for the
-investigation's refetches to show (tasks T4 and T8).
+machine kind runs on. In each range, the shorter time is the high case. At
+the scopes that poll, each poll then stores a new version of its body, and
+by the time the disk is full, the objects take about half of it at the
+default, three quarters at the full budget, and nearly all with a larger
+feed; which case holds is for the investigation's refetches to show
+(tasks T4 and T8). For all filers, the high case has more filings and more
+facts, and the base backups and the export take most of the disk. In each
+low case, the base backups take nearly all of it.
 
-So at every scope, the host's disk is the first limit time reaches, and it
-comes sooner as the scope grows: 4 to 9 months at the default, 3 weeks to
-3 months at the full budget. All the copies are on that one disk, so
-Garage's three nodes and the database's three instances survive the loss
-of a node, not of the disk ([deployment, §1][deployment-guarantees]).
+So the host's disk is the first limit time reaches at the default and
+with a larger feed, and at the full budget unless lists change only with
+new filings and PostgreSQL reads the polls slowly
+([reading the gaps](#reading-the-gaps)). It comes sooner as the scope
+grows: 4 to 9 months at the default, 3 weeks to 3 months at the full
+budget. All the copies are on that one disk, so Garage's three nodes and
+the database's three instances survive the loss of a node, not of the disk
+([deployment, §1][deployment-guarantees]).
 
 > **Analysis.** No task, decision record, or specification covers this.
 > The deployment could give the backups' object store a retention policy,
@@ -176,10 +190,15 @@ on kind replaces ([open question 4 of the telemetry][telemetry-open]):
 Until then, the reads take a growing share of a core: at the default after
 a year, 19% to 95% of one, every 10 seconds. Once a read takes longer than
 10 seconds, the discoverer can't read the gaps every 10 seconds, as
-[METRIC-5] asks. At the full budget that comes in 46 to 231 days, and may
-come before the disk is full. [Telemetry's open question 4][telemetry-open]
-already says that a later version adds what the views need, such as an
-index or a stored summary of each day, if they slow.
+[METRIC-5] asks. At the full budget that comes in 46 to 231 days. It comes
+before the disk is full only if lists change only with new filings, so
+that the disk lasts 91 days, and PostgreSQL reads fewer than about 2
+million polls a second, so that 91 days' polls, 19.7 million, take 10
+seconds to read. At the default and with a larger feed, the disk is full
+first, though with a larger feed in the low case by only 2 days.
+[Telemetry's open question 4][telemetry-open] already says that a later
+version adds what the views need, such as an index or a stored summary of
+each day, if they slow.
 
 > **Analysis.** No task, decision record, or specification covers this.
 > The discoverer reads each Source's poll events in order, one at a time
