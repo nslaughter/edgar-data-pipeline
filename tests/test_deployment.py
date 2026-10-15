@@ -1089,7 +1089,10 @@ def test_the_values_list_the_tables_durable_consumers() -> None:
 
 # A fake of the `nats` command, as the JetStream Job runs it: a request to
 # JetStream's API, answered from a state it keeps in a file, which also logs
-# each request.
+# each request. Its first requests for JetStream's information fail as its
+# state's `failures` list: `unavailable`, with JetStream's error; `exit`, as
+# the command does when it reaches no server; or `garbled`, with a response
+# that isn't JSON.
 FAKE_NATS = """\
 import json, sys
 STATE = sys.argv[1]
@@ -1106,9 +1109,20 @@ api = subject.removeprefix("$JS.API.").split(".")
 def error(code, err_code, description):
     return {"error": {"code": code, "err_code": err_code, "description": description}}
 
+def save():
+    with open(STATE, "w") as f:
+        json.dump(state, f)
+
 if api == ["INFO"]:
-    if state["unavailable"] > 0:
-        state["unavailable"] -= 1
+    failure = state["failures"].pop(0) if state["failures"] else None
+    if failure == "exit":
+        save()
+        sys.exit("nats: error: nats: no servers available for connection")
+    elif failure == "garbled":
+        save()
+        print("nats: error: nats: timeout", end="")
+        sys.exit(0)
+    elif failure == "unavailable":
         response = error(503, 10008, "JetStream system temporarily unavailable")
     else:
         response = {"type": "io.nats.jetstream.api.v1.account_info_response"}
@@ -1143,8 +1157,7 @@ elif api[:2] == ["CONSUMER", "CREATE"]:
         response = {"config": request["config"]}
 else:
     raise SystemExit(f"unexpected request {subject}")
-with open(STATE, "w") as f:
-    json.dump(state, f)
+save()
 print(json.dumps(response), end="")
 """
 
@@ -1159,7 +1172,7 @@ def jetstream(tmp_path: Path) -> dict[str, Any]:
     for name, content in jetstream_files().items():
         (config / name).write_text(content)
     state = tmp_path / "state.json"
-    state.write_text(json.dumps({"streams": {}, "consumers": {}, "log": [], "unavailable": 0}))
+    state.write_text(json.dumps({"streams": {}, "consumers": {}, "log": [], "failures": []}))
     bin = tmp_path / "bin"
     bin.mkdir()
     (tmp_path / "fake_nats.py").write_text(FAKE_NATS)
@@ -1215,9 +1228,12 @@ def test_the_job_makes_each_stream_and_consumer_as_the_values_say(
 
 
 @pytest.mark.spec("NATS-3")
-def test_the_job_waits_until_jetstream_accepts_its_requests(jetstream: dict[str, Any]) -> None:
+@pytest.mark.parametrize("failure", ["unavailable", "exit", "garbled"])
+def test_the_job_waits_until_jetstream_accepts_its_requests(
+    jetstream: dict[str, Any], failure: str
+) -> None:
     state = json.loads(jetstream["state"].read_text())
-    state["unavailable"] = 2
+    state["failures"] = [failure] * 2
     jetstream["state"].write_text(json.dumps(state))
     script = (jetstream["config"] / "setup.sh").read_text()
     (jetstream["config"] / "setup.sh").write_text(script.replace("sleep 5", "sleep 0"))

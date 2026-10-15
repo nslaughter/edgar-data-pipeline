@@ -19,14 +19,17 @@ CONFIG=${CONFIG:-/config}
 # JetStream's error code for a stream that doesn't exist.
 STREAM_NOT_FOUND=10059
 
-# Sends one request to JetStream's API, and prints the response. Fails on an
-# error in the response, unless its code is one of those given after the body.
+# Sends one request to JetStream's API, and prints the response. Fails when
+# the request or the reading of its response fails, and on an error in the
+# response, unless its code is one of those given after the body. Each
+# failure returns explicitly, since set -e doesn't apply where the function is
+# a condition, as in the wait below.
 request() {
 	subject=$1
 	body=$2
 	shift 2
-	response=$(nats --server "$NATS_URL" --timeout 10s request --raw "\$JS.API.$subject" "$body")
-	code=$(printf '%s' "$response" | jq -r '.error.err_code // empty')
+	response=$(nats --server "$NATS_URL" --timeout 10s request --raw "\$JS.API.$subject" "$body") || return 1
+	code=$(printf '%s' "$response" | jq -r '.error.err_code // empty') || return 1
 	if [ -n "$code" ]; then
 		for allowed in "$@"; do
 			if [ "$code" = "$allowed" ]; then
