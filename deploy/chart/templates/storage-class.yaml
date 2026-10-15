@@ -1,0 +1,14 @@
+{{- /*
+The class that keeps a volume's data when its claim is deleted, in kind's
+host directory, under a path named by the claim's namespace and name, so a
+new claim of the same name finds it there (VOL-1, VOL-3, KIND-2).
+*/}}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: edgar-retained
+provisioner: rancher.io/local-path
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+parameters:
+  pathPattern: {{ `"{{ .PVC.Namespace }}/{{ .PVC.Name }}/"` }}

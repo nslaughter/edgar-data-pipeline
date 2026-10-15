@@ -1,0 +1,73 @@
+{{- /*
+The Job that makes the streams and their durable consumers after each install
+and upgrade, in the values' order (NATS-3, NATS-5), with what it reads: the
+script, and the configuration of each stream and consumer, as JetStream's API
+takes it.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jetstream-setup
+data:
+  setup.sh: |
+    {{- .Files.Get "files/jetstream-setup.sh" | nindent 4 }}
+  streams: |
+    {{- range .Values.jetstream.streams }}
+    {{ .name }}
+    {{- end }}
+  {{- range .Values.jetstream.streams }}
+  {{- $stream := . }}
+  stream-{{ .name }}.json: {{ dict "name" .name "subjects" .subjects "retention" .retention "storage" .storage "num_replicas" .replicas | toJson | quote }}
+  consumers-{{ .name }}: |
+    {{- range .consumers }}
+    {{ .name }}
+    {{- end }}
+  {{- range .consumers }}
+  {{- $config := dict "durable_name" .name "name" .name "filter_subjects" .filterSubjects "ack_policy" "explicit" "deliver_policy" "all" "max_deliver" -1 "num_replicas" $stream.replicas }}
+  {{- with .maxAckPending }}
+  {{- $_ := set $config "max_ack_pending" . }}
+  {{- end }}
+  consumer-{{ $stream.name }}-{{ .name }}.json: {{ dict "stream_name" $stream.name "config" $config | toJson | quote }}
+  {{- end }}
+  {{- end }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jetstream-setup
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: setup
+          image: {{ .Values.jetstream.setupImage }}
+          command: [/bin/sh, /config/setup.sh]
+          env:
+            - name: NATS_URL
+              value: nats://nats:4222
+            - name: CONFIG
+              value: /config
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: jetstream-setup

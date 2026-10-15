@@ -1,0 +1,97 @@
+{{- /*
+The Job that sets Garage up after each install and upgrade, through its admin
+API: the layout, each key, each bucket, and each key's grants (GARAGE-2).
+Garage's chart gives its admin port no Service, so this chart does, for the
+Job to reach any node by.
+*/}}
+{{- $keys := list }}
+{{- range $bucket, $grants := .Values.garageSetup.buckets }}
+{{- $keys = concat $keys (keys $grants) }}
+{{- end }}
+{{- $keys = $keys | uniq | sortAlpha }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: garage-admin
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: garage
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: admin
+      port: 3903
+      targetPort: 3903
+      protocol: TCP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: garage-setup
+data:
+  garage_setup.py: |
+    {{- .Files.Get "files/garage_setup.py" | nindent 4 }}
+  garage.json: {{ dict "nodes" .Values.garage.deployment.replicaCount "capacity" .Values.garageSetup.capacity "buckets" .Values.garageSetup.buckets | toJson | quote }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: garage-setup
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: setup
+          image: {{ .Values.garageSetup.image }}
+          command: [python, -B, /config/garage_setup.py]
+          env:
+            - name: GARAGE_ADMIN_URL
+              value: http://garage-admin:3903
+            - name: GARAGE_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: garage-credentials
+                  key: adminToken
+            - name: CONFIG
+              value: /config/garage.json
+            - name: KEYS
+              value: /keys
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            {{- range $keys }}
+            - name: key-{{ . }}
+              mountPath: /keys/{{ . }}
+              readOnly: true
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: garage-setup
+        {{- range $keys }}
+        - name: key-{{ . }}
+          secret:
+            secretName: garage-key-{{ . }}
+            items:
+              - key: AWS_ACCESS_KEY_ID
+                path: AWS_ACCESS_KEY_ID
+              - key: AWS_SECRET_ACCESS_KEY
+                path: AWS_SECRET_ACCESS_KEY
+        {{- end }}
