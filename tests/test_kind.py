@@ -183,6 +183,12 @@ def psql(role: str, sql: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def attempt(role: str, statement: str) -> subprocess.CompletedProcess[str]:
+    """Runs a write as a role, in a transaction that is rolled back, so the
+    write changes nothing even when the role may make it."""
+    return psql(role, f"BEGIN; {statement}; ROLLBACK;")
+
+
 def rerun_job(name: str) -> None:
     """Runs a hook Job again, as an upgrade does, and waits for it to succeed."""
     job = kubectl_json("get", "job", "-n", NAMESPACE, name)
@@ -374,14 +380,14 @@ def test_no_services_role_can_change_a_record(role: str) -> None:
         "DELETE FROM records",
         "TRUNCATE records",
     ):
-        result = psql(role, statement)
+        result = attempt(role, statement)
         assert result.returncode != 0, statement
         assert "permission denied" in result.stderr, result.stderr
 
 
 @pytest.mark.spec("PG-9")
 def test_every_other_services_role_can_only_read_records() -> None:
-    insert = psql(
+    insert = attempt(
         "discoverer",
         "INSERT INTO records (job, feed, url, requested_at, attempts, error, tool)"
         " VALUES (gen_random_uuid(), 'submissions', 'https://data.sec.gov/kind-test', now(), 1,"
@@ -413,7 +419,7 @@ def test_only_the_discoverers_role_may_add_to_the_notices_tables() -> None:
     for table in notices_tables():
         assert privilege("discoverer", table, "INSERT"), table
         assert not privilege("fetcher", table, "INSERT"), table
-    insert = psql("fetcher", f"INSERT INTO {notices_tables()[0]} DEFAULT VALUES")
+    insert = attempt("fetcher", f"INSERT INTO {notices_tables()[0]} DEFAULT VALUES")
     assert insert.returncode != 0
     assert "permission denied" in insert.stderr
 
@@ -427,7 +433,7 @@ def test_each_services_role_reads_the_notices_and_changes_no_row(role: str) -> N
     for table in notices_tables():
         for write in WRITES[1:]:
             assert not privilege(role, table, write), (table, write)
-    truncate = psql(role, f"TRUNCATE {notices_tables()[0]}")
+    truncate = attempt(role, f"TRUNCATE {notices_tables()[0]}")
     assert truncate.returncode != 0
     assert "permission denied" in truncate.stderr
 
