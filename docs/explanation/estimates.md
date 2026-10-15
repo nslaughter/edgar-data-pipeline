@@ -71,7 +71,7 @@ files takes and stores, not that feed's own polls.
 | Each company's reports a year | About 4: 70 of Apple's XBRL 10-Ks, 10-Qs, and amendments, 68 of Microsoft's, and 70 of Walmart's, since their first in 2009 | [SRC-10], [SRC-20] |
 | A year of the three companies' reports, in bytes | 48.93 MB of instances: a 10-K and three 10-Qs are 4.30 MB of Apple's, 39.97 MB of Microsoft's, and 4.65 MB of Walmart's. Stored with their headers and index pages, 1.52 MB | [SRC-19]'s eight filings. Assumption: each next report is the size of the one stored. Replaced by the next reports, tasks T6, T7, and T9. |
 | New filings | 126 by the three companies in the 13 weeks to October 7, 2026: 126 ÷ 91 ÷ 3 = 0.46 a company a day | [0010] |
-| Filings with an XBRL instance | 5.0%: `submissions` marks 484 of the three companies' 9,689 filings `isXBRL`. 208 of the 484, 43%, are 10-Ks, 10-Qs, and amendments | [SRC-19], [SRC-20] |
+| Filings with an XBRL instance | 5.0%: `submissions` marks 484 of the three companies' 9,689 filings `isXBRL`. 208 of the 484, 43%, are 10-Ks, 10-Qs, and amendments, and the other 276, 57%, are of other forms | [SRC-19], [SRC-20] |
 | When filings arrive | About 90% of Microsoft's and Walmart's between 4 and 7 PM US Eastern time | [0010] |
 | How often a list changes | Low: once for each new filing it lists. High: at every poll | Assumption: a new filing changes the list that names it ([SRC-9]), and nothing stored shows whether anything else changes it; how often each feed's content changes is the investigation's Q1 ([questions]). Replaced by the investigation's daily refetches, tasks T4 and T8. |
 | Filings a day across EDGAR | 3,100 to 6,200 | Assumption: a day's master index is 310,875 to 621,000 bytes ([SRC-18]), and it has a line of about 100 bytes for each filing. Replaced by counting the lines of the stored master indexes, a finding the investigation could add. |
@@ -100,6 +100,7 @@ files takes and stores, not that feed's own polls.
 | An empty database | 0.05 GB | Assumption. Replaced by its size on kind. |
 | WAL kept by each instance | 0.6 to 1.5 GB | Assumption: CloudNativePG's default `wal_keep_size` of 512 MB ([its defaults][cnpg-defaults]), and PostgreSQL's default `max_wal_size` of 1 GB. Replaced by each instance's `pg_wal` on kind. |
 | Facts a report | 440 to 4,400 | `companyfacts` holds 2,641 values of the six stored reports, 440 each: only their facts of `us-gaap` and `dei` concepts with a unit and without dimensions ([SRC-14]). Assumption: an instance holds up to 10 times as many. Replaced by the facts the parse workers write, task T25. |
+| Facts a filing of another form with an XBRL instance | 40 to 580 | The instances of Apple's and Walmart's 8-K/As hold only `dei` facts with no unit, 40 and 49 ([SRC-16]), and five 8-Ks that report a 10-K again give 2,888 values in `companyfacts`, 578 each ([SRC-14]). Assumption: these filings hold, on average, as many facts as the 8-K/As in the low case, and as those five 8-Ks in the high. Replaced by the facts the parse workers write, task T25. |
 | A fact's row | 150 to 400 bytes, with its indexes | Assumption: the fact table is the facts specification's, task T17, still to be written. |
 | A fact in the export | 20 to 60 bytes | Assumption: the export's format is task T18's. |
 | The export's runs | A run a day. Low: the export holds each fact once. High: each run writes every fact, and every run's files are kept | Assumption: how often the export runs and what it keeps are task T18's, and no statement removes its files. Replaced by the export's specification, task T18, and the export's size in Garage on kind. |
@@ -187,20 +188,24 @@ high case, a poll of `submissions` adds a reading of its new version too,
 | The default | 25,920 polls × 654 to 985 bytes; filings and facts add under 0.1 MB a day | 17.0 to 25.6 MB | 6.2 to 9.3 GB |
 | The full budget | 216,000 × 654 to 985 | 141 to 213 MB | 52 to 78 GB |
 | A larger feed | 25,920 polls of `submissions` × 654 to 985, and 25,920 of `companyfacts` × 654 to 722 | 34 to 44 MB | 12 to 16 GB |
-| All filers | 3,100 to 6,200 filings × 981; 6,355 to 12,710 fetches × 1,205; and 10.7 to 214 million facts a year × 150 to 400 | 15 to 256 MB | 5.5 to 93 GB |
+| All filers | 3,100 to 6,200 filings × 981; 6,355 to 12,710 fetches × 1,205; and 12.0 to 251 million facts a year × 150 to 400 | 16 to 297 MB | 5.7 to 108 GB |
 
 The first poll of each Source adds its list's filings, about 1,000 each
 ([SRC-9]), with a sighting of each: about 3,000 rows each for the three
 companies, under 2 MB in all.
 
-Facts are few at the scopes of a few companies: 12 reports a year × 440 to
-4,400 = 5,280 to 52,800 facts, 0.8 to 21 MB a year, at the default; 100
-reports, 44,000 to 440,000 facts, 7 to 176 MB, at the full budget. A
-Backfill of the three companies' 208 reports ([SRC-19]) adds 92,000 to
-915,000 facts, 14 to 366 MB. For all filers, facts are most of the
-database: 155 to 310 instances a day × 43% × 365 = 24,000 to 49,000
-reports a year, × 440 to 4,400 = 10.7 to 214 million facts, 1.6 to 86 GB a
-year.
+Facts are few at the scopes of a few companies. At the default, 12
+reports a year × 440 to 4,400 facts, and 12 × 57 ÷ 43 = 16 filings of other
+forms with an XBRL instance × 40 to 580, are 5,920 to 62,080 facts, 0.9 to
+25 MB a year; at the full budget, 100 reports and 133 filings of other
+forms are 49,000 to 517,000 facts, 7 to 207 MB. A Backfill of the three
+companies' 208 reports ([SRC-19]) adds 92,000 to 915,000 facts, 14 to
+366 MB. For all filers, facts are a third of the database's growth in the
+low case, and nearly all of it in the high: 155 to 310 instances a day ×
+43% × 365 = 24,000 to 49,000 reports a year, × 440 to 4,400 = 10.7 to 214
+million facts, and 155 to 310 × 57% × 365 = 32,000 to 64,000 filings of
+other forms, × 40 to 580 = 1.3 to 37 million, so 12.0 to 251 million
+facts, 1.8 to 101 GB a year.
 
 Each of the three instances holds all of it ([PG-3]), so the database
 takes three times its size on the host's disk, and each instance keeps
@@ -227,7 +232,7 @@ The archive is in Garage, under the bucket `database-backups` ([PG-4]).
   | The default | 17.0 to 25.6 MB | 1.15 to 1.73 TB | 0.29 to 0.86 TB |
   | The full budget | 141 to 213 MB | 9.5 to 14.3 TB | 2.4 to 7.1 TB |
   | A larger feed | 34 to 44 MB | 2.3 to 3.0 TB | 0.57 to 1.49 TB |
-  | All filers | 15 to 256 MB | 1.0 to 17.1 TB | 0.26 to 8.6 TB |
+  | All filers | 16 to 297 MB | 1.1 to 19.9 TB | 0.27 to 9.9 TB |
 
 Kept forever, the base backups grow with the square of the time: each day
 adds a copy of a database that is itself a day larger. In the low case they
@@ -275,17 +280,17 @@ new facts, as the base backups do ([above](#the-databases-archive)):
 
 | Scope | Facts a year | Each fact once: a day, and a year | Every run kept: a day after a year, and the first year |
 | --- | --- | --- | --- |
-| The default | 5,280 to 52,800 | 5,280 × 20 bytes ÷ 365 = 0.3 KB, to 52,800 × 60 ÷ 365 = 8.7 KB; 0.1 to 3.2 MB | 3.2 MB; 8.7 KB × 66,795 = 0.58 GB |
-| The full budget | 44,000 to 440,000 | 2.4 to 72 KB; 0.9 to 26 MB | 26 MB; 72 KB × 66,795 = 4.8 GB |
+| The default | 5,920 to 62,080 | 5,920 × 20 bytes ÷ 365 = 0.3 KB, to 62,080 × 60 ÷ 365 = 10.2 KB; 0.1 to 3.7 MB | 3.7 MB; 10.2 KB × 66,795 = 0.68 GB |
+| The full budget | 49,000 to 517,000 | 2.7 to 85 KB; 1.0 to 31 MB | 31 MB; 85 KB × 66,795 = 5.7 GB |
 | A larger feed | The default's | The default's | The default's |
-| All filers | 10.7 to 214 million | 0.59 to 35 MB; 0.21 to 12.8 GB | 12.8 GB; 35.2 MB × 66,795 = 2.35 TB |
+| All filers | 12.0 to 251 million | 0.66 to 41 MB; 0.24 to 15.1 GB | 15.1 GB; 41.3 MB × 66,795 = 2.76 TB |
 
 A Backfill of the three companies' 208 reports adds 92,000 to 915,000
 facts, 1.8 to 55 MB, to the export once in the low case, and to each run
 after it in the high case. Garage keeps each file on each of its three
 nodes ([GARAGE-3]), so the export takes three times its size on the
-host's disk. That's much only for all filers in the high case: 3 × 2.35 =
-7.0 TB after a year, and 17% of the disk by the time it's full
+host's disk. That's much only for all filers in the high case: 3 × 2.76 =
+8.3 TB after a year, and 17% of the disk by the time it's full
 ([below](#on-the-hosts-disk)).
 
 ### Prometheus
@@ -328,14 +333,14 @@ disk. After *d* days it holds:
 | The default | 12 to 98 GB | 0.89 to 3.45 TB | 75% to 97% | 110 to 271 days |
 | The full budget | 70 to 738 GB | 7.3 to 28.5 TB | 75% to 97% | 22 to 91 days |
 | A larger feed | 20 to 846 GB | 1.8 to 14.3 TB | 31% to 97% | 18 to 191 days |
-| All filers | 12 to 303 GB | 0.81 to 33.5 TB | 77% to 95% | 41 to 283 days |
+| All filers | 13 to 349 GB | 0.84 to 39.0 TB | 76% to 95% | 37 to 279 days |
 
 In each range, the shorter time is the high case. At the scopes that poll,
 it's the case in which each poll stores a new version, and by the time the
 disk is full, the objects take 46% of it at the default, 234 GB beside
 243 GB of base backups; 76% at the full budget; and 95% with a larger
 feed. For all filers, the range comes from the filings and the facts, not
-the polls: in the high case, the base backups take 64% of the disk by the
+the polls: in the high case, the base backups take 63% of the disk by the
 time it's full, the export 17%, and the objects 2%. In each low case, the
 base backups take 89% to 96% of it. Had Garage stored each WAL segment at
 its full 16 MiB, the WAL alone would take 3 × 4.83 = 14.5 GB a day, and
@@ -355,7 +360,7 @@ of its kind take, which that measurement replaces.
 | Scheduler | 2, one active ([design][design-components]) | 30 to 100 MB: a Go controller | A job a poll: a few millicores at the default | None |
 | Fetcher | 2, one active ([0005]) | 50 to 150 MB: a Go service that holds a body of up to 10.9 MB ([SRC-18]) | A request, a hash, and a gzip a poll: under 10 millicores at the default | None |
 | Discoverer | 1 or 2: a Deployment ([design][design-components]) | 100 to 250 MB: a Python service that reads a list of up to 314 KB ([SRC-18]) | Reading each poll's list, and reading `gaps` every 10 seconds ([GAP-3], [METRIC-5]), which grows with the polls ([scale and limits](scale-and-limits.md#reading-the-gaps)) | None |
-| Parse workers | Scaled by queue depth, task T10 | 150 to 250 MB with lxml, 0.5 to 2 GB with Arelle, task T12 | 0.5 to 2 seconds an instance with lxml: a few a year at the default, or 2 to 7 minutes for a Backfill of 208 | None |
+| Parse workers | Scaled by queue depth, task T10 | 150 to 250 MB with lxml, 0.5 to 2 GB with Arelle, task T12 | 0.5 to 2 seconds an instance with lxml: 28 a year at the default, 12 of them reports, or 2 to 7 minutes for a Backfill of 208 reports | None |
 | Exporter | 1, while it runs: a CronJob | 100 to 500 MB | A run a day | Its files, in Garage |
 | Query API | 1 or 2: a stateless Deployment | 30 to 100 MB | Each query's | None |
 | NATS JetStream | 3 ([NATS-1]) | 30 to 150 MB | Little | Its streams ([above](#the-queues-streams)) |
@@ -390,7 +395,7 @@ so its cost grows with the polls' rate and with time
 | The next reports' instances | The reports' sizes | Tasks T6, T7, and T9 |
 | Each component's memory and CPU, each volume's size, the archive's size in Garage, and Prometheus's series | The rest of this page's assumptions | The platform on kind, task T20, then each service as it's built: tasks T21 to T24 |
 | The cost of reading `gaps` and `coverage` | The polls read a second, in [reading the gaps](scale-and-limits.md#reading-the-gaps) | Measured on kind ([open question 4 of the telemetry][telemetry-open]), with the monitoring, task T28 |
-| Facts a report, a fact's row, a fact in the export, and the export's runs | The facts' and the export's growth | Tasks T17, T18, T25, and T27 |
+| Facts a filing, a fact's row, a fact in the export, and the export's runs | The facts' and the export's growth | Tasks T17, T18, T25, and T27 |
 | The pipeline's own polls, fetches, and filings | Requests, bytes, and rows | The record, once the fetcher and the discoverer run, tasks T23 and T24 |
 
 [0001]: ../decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
@@ -450,6 +455,7 @@ so its cost grows with the polls' rate and with time
 [SRC-9]: ../../investigation/edgar.md#findings-so-far
 [SRC-10]: ../../investigation/edgar.md#findings-so-far
 [SRC-14]: ../../investigation/edgar.md#findings-so-far
+[SRC-16]: ../../investigation/edgar.md#findings-so-far
 [SRC-18]: ../../investigation/edgar.md#findings-so-far
 [SRC-19]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far

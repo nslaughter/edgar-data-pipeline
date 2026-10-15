@@ -127,7 +127,7 @@ backups grow with the square of the time:
 | The default | 0.89 to 3.45 TB | 75% to 97% | 110 to 271 days |
 | The full budget | 7.3 to 28.5 TB | 75% to 97% | 22 to 91 days |
 | A larger feed | 1.8 to 14.3 TB | 31% to 97% | 18 to 191 days |
-| All filers | 0.81 to 33.5 TB | 77% to 95% | 41 to 283 days |
+| All filers | 0.84 to 39.0 TB | 76% to 95% | 37 to 279 days |
 
 These are the [estimates' figures](estimates.md#on-the-hosts-disk), at
 the reference of 500 GB free, an assumption, since no document names the
@@ -285,14 +285,16 @@ each part would stop:
 - **Fetching each new filing's files fits:** 0.07 to 0.15 requests a
   second on average, and about 1 at the evening's peak.
 - **Storage grows with the facts.** 24,000 to 49,000 reports a year, each
-  of 440 to 4,400 facts, add 1.6 to 86 GB a year to the database
-  ([estimates](estimates.md#postgresql)), and 0.21 to 12.8 GB to the
-  export, or 2.35 TB if every day's run is kept
+  of 440 to 4,400 facts, and 32,000 to 64,000 filings of other forms with
+  an XBRL instance, each of 40 to 580, add 1.8 to 101 GB a year to the
+  database ([estimates](estimates.md#postgresql)), and 0.24 to 15.1 GB to
+  the export, or 2.76 TB if every day's run is kept
   ([estimates](estimates.md#the-export)). With the database's backups and
-  the export, 500 GB of disk is full after 41 to 283 days.
-- **Parsing fits.** 67 to 133 reports a day, at an assumed 0.5 to 2
-  seconds each with lxml, are 0.6 to 4.4 minutes of a core a day. The
-  parser is still to be chosen, task T12 ([plan][plan-facts]).
+  the export, 500 GB of disk is full after 37 to 279 days.
+- **Parsing fits.** 155 to 310 instances a day, 67 to 133 of them
+  reports, at an assumed 0.5 to 2 seconds each with lxml, are 1.3 to 10.3
+  minutes of a core a day. The parser is still to be chosen, task T12
+  ([plan][plan-facts]).
 
 > **Analysis.** No task, decision record, or specification covers this.
 > To observe every filer, the pipeline could take its notices from a feed

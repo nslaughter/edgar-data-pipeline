@@ -110,7 +110,7 @@ Garage ([components][design-components], [0004]). As a CronJob, it runs on
 a schedule, rather than as a Deployment of long-running replicas. The
 export grows with the facts. The [estimates](estimates.md#the-export)
 assume 20 to 60 bytes a fact, so a year of the default scope's facts is 0.1
-to 3.2 MB, until the export's specification, task T18, gives its format.
+to 3.7 MB, until the export's specification, task T18, gives its format.
 
 ## How it fails
 
