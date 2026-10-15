@@ -124,8 +124,8 @@ build, and the site needs no job of its own ([0012]).
 
 **The charts, rendered and installed.** The deployment's invariants are
 checked by rendering each of the four charts with `helm template`, and the
-hook Jobs' scripts against fakes of `nats` and of Garage's admin API; the
-deployment's rules, on a kind cluster the charts are installed on
+hook Jobs' scripts against fakes of `nats`, of `psql`, and of Garage's
+admin API; the deployment's rules, on a kind cluster the charts are installed on
 ([T20], [chart tests and tests on kind](#chart-tests-and-tests-on-kind)).
 
 CI runs these checks in three jobs, one for each of Python 3.12, 3.13, and

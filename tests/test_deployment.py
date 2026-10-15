@@ -6,8 +6,9 @@ with, apart from the credentials and the database archive's server name, for
 which these tests give values of their own (spec/deployment.md, section 3).
 They need Helm, and jq for the JetStream Job's script; they reach neither a
 cluster nor the network. The hook Jobs' scripts run against fakes: of the
-`nats` command, and of Garage's admin API on a local server. Each test
-carries the IDs of the statements it checks, as @pytest.mark.spec(...).
+`nats` and `psql` commands, and of Garage's admin API on a local server.
+Each test carries the IDs of the statements it checks, as
+@pytest.mark.spec(...).
 """
 
 from __future__ import annotations
@@ -632,15 +633,103 @@ def test_the_database_job_connects_to_edgar_as_its_owner() -> None:
         assert env[name]["valueFrom"]["secretKeyRef"] == {"name": owners_secret, "key": key}
 
 
+# A fake of `psql`, as the database Job runs it. It applies no file, but logs
+# it. It answers a count of the roles in pg_roles from the roles that exist,
+# as its state's `roles` list gives them for each count in turn, the last of
+# them for the rest; or, where the list gives null, fails as psql does when
+# the database refuses its connection.
+FAKE_PSQL = """\
+import json, re, sys
+STATE = sys.argv[1]
+args = sys.argv[2:]
+with open(STATE) as f:
+    state = json.load(f)
+if "-f" in args:
+    state["log"].append(["apply", args[args.index("-f") + 1]])
+    status = 0
+else:
+    [query] = [args[i + 1] for i, a in enumerate(args[:-1]) if re.fullmatch("-[A-Za-z]*c", a)]
+    state["log"].append(["count", query])
+    existing = state["roles"].pop(0) if len(state["roles"]) > 1 else state["roles"][0]
+    asked = re.search(
+        r"FROM pg_roles WHERE rolname = ANY [(]string_to_array[(]'([^']*)', ' '[)][)]", query
+    )
+    if existing is None:
+        print("psql: error: connection to server failed: Connection refused", file=sys.stderr)
+        status = 2
+    elif asked is None:
+        print(f"psql: unexpected query {query}", file=sys.stderr)
+        status = 1
+    else:
+        print(len([role for role in asked.group(1).split() if role in existing]))
+        status = 0
+with open(STATE, "w") as f:
+    json.dump(state, f)
+sys.exit(status)
+"""
+
+
+def run_database_job(tmp_path: Path, existing: list[list[str] | None]) -> tuple[int, list[Any]]:
+    """Runs the database Job's script against a fake `psql`, without its
+    waits, with the roles that exist at each count, and gives its exit status
+    and the fake's log."""
+    [container] = containers(database_job())
+    env = {e["name"]: e["value"] for e in container["env"] if "value" in e}
+    sql = tmp_path / "sql"
+    sql.mkdir()
+    for name, content in config_map_data(UMBRELLA, "database-setup").items():
+        (sql / name).write_text(content)
+    script = sql / "setup.sh"
+    script.write_text(script.read_text().replace("sleep 5", "sleep 0"))
+    state = tmp_path / "state.json"
+    state.write_text(json.dumps({"roles": existing, "log": []}))
+    bin = tmp_path / "bin"
+    bin.mkdir()
+    (tmp_path / "fake_psql.py").write_text(FAKE_PSQL)
+    psql = bin / "psql"
+    psql.write_text(
+        f'#!/bin/sh\nexec "{sys.executable}" -I -S "{tmp_path / "fake_psql.py"}" "{state}" "$@"\n'
+    )
+    psql.chmod(0o755)
+    result = subprocess.run(
+        ["sh", str(script)],
+        env={
+            **os.environ,
+            "PATH": f"{bin}{os.pathsep}{os.environ['PATH']}",
+            "SQL": str(sql),
+            "ROLES": env["ROLES"],
+        },
+        capture_output=True,
+        text=True,
+    )
+    log = json.loads(state.read_text())["log"]
+    assert isinstance(log, list)
+    return result.returncode, log
+
+
 @pytest.mark.spec("PG-8", "PG-13")
-def test_the_database_job_waits_for_each_role() -> None:
+def test_the_database_job_waits_for_each_role(tmp_path: Path) -> None:
     [container] = containers(database_job())
     env = {e["name"]: e.get("value") for e in container["env"]}
-    script = config_map_data(UMBRELLA, "database-setup")["setup.sh"]
+    every = sorted(roles())
 
-    assert sorted(str(env["ROLES"]).split()) == sorted(roles())
-    assert "pg_roles" in script
-    assert script.index("pg_roles") < script.index("setup.sql")
+    status, log = run_database_job(tmp_path, [None, [], every[:1], every[1:], every])
+
+    assert sorted(str(env["ROLES"]).split()) == every
+    assert status == 0
+    assert [entry[0] for entry in log] == ["count"] * 5 + ["apply"]
+    assert log[-1] == ["apply", str(tmp_path / "sql" / "setup.sql")]
+
+
+@pytest.mark.spec("PG-8", "PG-13")
+def test_the_database_job_fails_when_a_role_never_exists(tmp_path: Path) -> None:
+    every = sorted(roles())
+
+    status, log = run_database_job(tmp_path, [every[1:]])
+
+    assert status != 0
+    assert len(log) > 1
+    assert {entry[0] for entry in log} == {"count"}
 
 
 @pytest.mark.spec("PG-8", "PG-12", "PG-13")
