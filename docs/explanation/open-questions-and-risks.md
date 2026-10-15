@@ -4,8 +4,8 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** The snapshot store in git.
-- **Specified:** Scheduler; Fetcher; NATS JetStream; Garage; PostgreSQL 18; Monitoring: traces; The snapshot store in the cluster; The transfer from the cluster to git; The controls; The documentation site (built in part).
-- **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part); Monitoring: logs; `edgar-asof`; The charts (specified in part).
+- **Specified:** Scheduler; Fetcher; Discoverer; NATS JetStream; Garage; PostgreSQL 18; Monitoring: traces; The snapshot store in the cluster; The transfer from the cluster to git; The controls; The charts; The documentation site (built in part).
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The fake EDGAR; The drills.
 <!-- end status -->
 
@@ -260,13 +260,28 @@ backfills is answered (Q5).
 ### Deployment
 
 [`deployment.md`][deployment] has no section of open questions. Its
+version 1.1.0 deploys what the notices and the telemetry left to it: the
+streams `ORDERS` and `NOTICES`, and the durable consumers of the
+discoverer, the scheduler, and the parse workers ([NATS-3], [NATS-5]); the
+discoverer's role and key ([PG-7], [GARAGE-4]); Grafana's role and its
+data source ([PG-11], [MON-5]); and the notices' tables and views and the
+dashboards' views, with their grants ([PG-12], [PG-13]). A stream kept
+by interest takes its subjects only once its consumers exist, so a notice
+published before `NOTICES` has its consumers is refused rather than kept
+for none. One such notice can still miss the scheduler: the gap notice the
+discoverer publishes when it starts, on a new install whose database was
+restored while NATS's data wasn't kept. It follows no message, so nothing
+delivers it again, and the notices don't yet say that the discoverer
+publishes a refused notice again ([GAP-3],
+[durable consumers][deployment-consumers]). The owner decided on October
+15, 2026 that a version of the notices of its own says so ([T38]). Its
 [§9][deployment-later] lists what later versions add: the pipeline's own
-services, with their replicas, credentials, and placement; the streams'
-durable consumers, each made before what it reads is published, since
-`RECORDS` keeps an event only for the consumers it has then; migrations
-for a later version of the store's table; each component's requests,
-limits, and probes, measured on kind; and Tempo, Loki, and Alloy. [T38]
-specifies the discoverer's deployment, and Grafana's database role.
+services, with their replicas, credentials, and placement; the fetcher's
+durable consumer of `JOBS`, a work queue, which keeps a job until it's
+acknowledged; migrations for later versions of the record's tables and
+views; each component's requests, limits, and probes, measured on kind;
+Tempo, Loki, and Alloy; and kube-state-metrics' access to the definitions
+of the pipeline's resources.
 
 ### Controls
 
@@ -507,6 +522,7 @@ revisit: whether to keep each company's `submissions` as the notice source
 [deployment-volumes]: ../../spec/deployment.md#volumes
 [deployment-dependencies]: ../../spec/deployment.md#5-dependencies
 [deployment-later]: ../../spec/deployment.md#9-later-versions
+[deployment-consumers]: ../../spec/deployment.md#durable-consumers
 [controls]: ../../spec/controls.md
 [controls-other]: ../../spec/controls.md#11-other-specifications
 [notices-questions]: ../../spec/notices.md#12-open-questions
@@ -550,16 +566,25 @@ revisit: whether to keep each company's `submissions` as the notice source
 [ACCESS-3]: ../../spec/controls.md#8-secaccess
 [KIND-2]: ../../spec/deployment.md#the-kind-cluster
 [VOL-2]: ../../spec/deployment.md#volumes
+[GARAGE-4]: ../../spec/deployment.md#garage
 [PG-4]: ../../spec/deployment.md#instances-and-backups
+[PG-7]: ../../spec/deployment.md#the-stores-database
 [PIN-3]: ../../spec/deployment.md#6-pins
 [CRD-4]: ../../spec/deployment.md#definitions
 [CRD-5]: ../../spec/deployment.md#definitions
 [MON-3]: ../../spec/deployment.md#monitoring
 [MON-4]: ../../spec/deployment.md#monitoring
+[MON-5]: ../../spec/deployment.md#monitoring
+[NATS-3]: ../../spec/deployment.md#nats
+[NATS-5]: ../../spec/deployment.md#durable-consumers
+[PG-11]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-12]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-13]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease
 [FILE-2]: ../../spec/notices.md#7-a-filings-files
 [FILE-4]: ../../spec/notices.md#7-a-filings-files
 [FILE-6]: ../../spec/notices.md#7-a-filings-files
+[GAP-3]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [LIST-2]: ../../spec/notices.md#8-backfills
 [LAG-1]: ../../spec/notices.md#10-times-and-lags
 [METRIC-4]: ../../spec/telemetry.md#the-fetchers-clock

@@ -1,7 +1,7 @@
 # The data model and its times
 
 <!-- status: The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; Discoverer; Parse workers; Query API; `edgar-asof`; Monitoring: metrics, alerts, and dashboards -->
-**Status** ([status page](../status.md)): The snapshot store in git: Built. The snapshot store in the cluster: Specified. The transfer from the cluster to git: Specified. Discoverer: Decided; specified in part. Parse workers: Decided. Query API: Decided. `edgar-asof`: Decided. Monitoring: metrics, alerts, and dashboards: Decided; specified in part.
+**Status** ([status page](../status.md)): The snapshot store in git: Built. The snapshot store in the cluster: Specified. The transfer from the cluster to git: Specified. Discoverer: Specified. Parse workers: Decided. Query API: Decided. `edgar-asof`: Decided. Monitoring: metrics, alerts, and dashboards: Decided; specified in part.
 <!-- end status -->
 
 This page covers what the pipeline stores: the snapshot store's objects and

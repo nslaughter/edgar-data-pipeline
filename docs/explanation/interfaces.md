@@ -1,7 +1,7 @@
 # The interfaces
 
 <!-- status: The controls; Scheduler; Fetcher; Discoverer; Parse workers; NATS JetStream; Query API; `edgar-asof` -->
-**Status** ([status page](../status.md)): The controls: Specified. Scheduler: Specified. Fetcher: Specified. Discoverer: Decided; specified in part. Parse workers: Decided. NATS JetStream: Specified. Query API: Decided. `edgar-asof`: Decided.
+**Status** ([status page](../status.md)): The controls: Specified. Scheduler: Specified. Fetcher: Specified. Discoverer: Specified. Parse workers: Decided. NATS JetStream: Specified. Query API: Decided. `edgar-asof`: Decided.
 <!-- end status -->
 
 This page covers the pipeline's three interfaces: the custom resources the
@@ -87,9 +87,8 @@ it's paused and polling, and its last successful poll
 The scheduler sets `lastPollTime` and `lastSuccessfulPollTime` from the
 polls' records ([SOURCE-4]), and `openGapSince` from the discoverer's gap
 notices ([NOTICE-1], [SOURCE-5]). The specifications don't name the path by
-which the scheduler reads the polls' records: the durable consumers they
-list for it are of gap and backfill notices ([left to other
-specifications][notices-left]).
+which the scheduler reads the polls' records: its one durable consumer,
+`scheduler-notices`, is of gap and backfill notices ([NATS-5]).
 
 ### `Backfill`
 
@@ -166,13 +165,15 @@ subject ends in its kind
 | `ORDERS` | `edgar.orders.backfill` | Orders, [`order.schema.json`][order-schema] | The scheduler | The discoverer | As a work queue, until the discoverer acknowledges the order |
 | `NOTICES` | `edgar.notices.filing`, `edgar.notices.gap`, `edgar.notices.backfill` | Notices, [`notice.schema.json`][notice-schema] | The discoverer | The scheduler, gap and backfill notices; the parse workers, filing notices | Until each of the stream's consumers acknowledges the notice |
 
-The deployment's version 1.0.0 installs `JOBS` and `RECORDS`, each kept in
-files and replicated on all three NATS servers ([NATS-3]). `ORDERS` and
-`NOTICES`, and the durable consumers of the discoverer, the scheduler, and
-the parse workers, are to be specified in task T38
-([plan][plan-observing]). An event is kept only for the consumers the
-stream has when it's published, so each consumer is made before what it
-reads is published ([§9 of deployment][deployment-later]).
+The deployment's version 1.1.0 installs all four, each kept in files and
+replicated on all three NATS servers ([NATS-3]). A stream kept by interest
+keeps a message only for the consumers it has when the message is
+published, so the same Job makes the durable consumers of the discoverer,
+the scheduler, and the parse workers, each right after its stream, with
+`NOTICES` first and `JOBS` last, and gives a stream kept by interest its
+subjects only once its consumers exist, so it accepts a message only then
+([NATS-5]). The fetcher's consumer of `JOBS` comes with the fetcher
+([§9 of deployment][deployment-later]).
 
 ### Jobs and events
 
@@ -292,8 +293,8 @@ narrow grants:
 | What | Schema | Written by | Read by |
 | --- | --- | --- | --- |
 | The table `records` | [`records.sql`][records-sql] | The fetcher only, inserts only ([LOG-3]) | Every other service's role, select only |
-| The notices' tables and views | [`notices.sql`][notices-sql] | The discoverer only, inserts only ([TABLE-3]) | Every other service's role, select only |
-| The views in the schema `dashboards` | [`dashboards.sql`][dashboards-sql] | Nothing: they're views | Grafana's role, which can't read the tables and views beneath them ([VIEW-3]) |
+| The notices' tables and views | [`notices.sql`][notices-sql] | The discoverer only, inserts only ([TABLE-3], [PG-12]) | Every other service's role, select only |
+| The views in the schema `dashboards` | [`dashboards.sql`][dashboards-sql] | Nothing: they're views | Grafana's role, `grafana`, which can't read the tables and views beneath them ([VIEW-3], [PG-13]) |
 | Objects in the bucket `snapshots` | Their names, by SHA-256 ([OBJ-1]) | The fetcher's key only ([GARAGE-4]) | Every other service's key, read only |
 
 The Python services hand the bodies they read from the bucket to
@@ -396,20 +397,21 @@ What the library's specification already fixes, for an answer of its own
 [MSG-1]: ../../spec/notices.md#streams
 [MSG-2]: ../../spec/notices.md#streams
 [NATS-3]: ../../spec/deployment.md#nats
+[NATS-5]: ../../spec/deployment.md#durable-consumers
 [NOTICE-1]: ../../spec/notices.md#8-backfills
 [NOTICE-2]: ../../spec/notices.md#8-backfills
 [notice-schema]: ../../spec/schemas/notice.schema.json
 [notices-backfills]: ../../spec/notices.md#8-backfills
 [notices-changes]: ../../spec/notices.md#13-changes-to-this-document
 [notices-files]: ../../spec/notices.md#7-a-filings-files
-[notices-left]: ../../spec/notices.md#left-to-other-specifications
 [notices-messages]: ../../spec/notices.md#9-messages-and-processing
 [notices-sql]: ../../spec/schemas/notices.sql
 [OBJ-1]: ../../spec/snapshots.md#5-objects
 [ORDER-1]: ../../spec/notices.md#8-backfills
 [order-schema]: ../../spec/schemas/order.schema.json
+[PG-12]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-13]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [plan-facts]: ../plan.md#facts
-[plan-observing]: ../plan.md#observing-filings
 [RBAC-1]: ../../spec/controls.md#9-who-may-change-what
 [RBAC-5]: ../../spec/controls.md#9-who-may-change-what
 [RBAC-6]: ../../spec/controls.md#9-who-may-change-what

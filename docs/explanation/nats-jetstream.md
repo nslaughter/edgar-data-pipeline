@@ -79,33 +79,74 @@ stream holds only what some consumer hasn't acknowledged: it stays small
 while its consumers keep up, and holds a backlog while one is stopped.
 
 An interest stream keeps a message only for the consumers it has when the
-message is published. So a service that reads events needs its durable
-consumer before the fetcher publishes what it should see ([deployment,
-§9][later]), and the notices list each consumer that has to exist first:
-the discoverer's of every subject of `RECORDS`, its poll events' with one
-unacknowledged at a time, and of `ORDERS`; the scheduler's of gap and
-backfill notices; and the parse workers' of filing notices ([notices, left
-to other specifications][notices-left]). How the parse workers find the
-complete filings whose notices they didn't read is left to the facts
-specification there too.
+message is published, and none for a consumer made later. So each service
+that reads one needs its durable consumer before what it should see is
+published ([durable consumers]). The notices list each consumer that has
+to exist first ([notices, left to other specifications][notices-left]), and
+the deployment makes them before any of the services that read them is
+built ([NATS-5]). How the parse workers find the complete filings whose
+notices they didn't read is left to the facts specification
+([notices, left to other specifications][notices-left]).
 
-### What the deployment specifies so far
+### What the deployment specifies
 
-The deployment's version 1.0.0 specifies `JOBS` and `RECORDS`, each kept in
+The deployment's version 1.1.0 specifies the four streams, each kept in
 files and replicated on all three servers ([NATS-3]):
 
 | Stream | Retention | Storage | Replicas |
 | --- | --- | --- | --- |
 | `JOBS` | Work queue | File | 3 |
 | `RECORDS` | Interest | File | 3 |
+| `ORDERS` | Work queue | File | 3 |
+| `NOTICES` | Interest | File | 3 |
 
-`ORDERS` and `NOTICES`, with their replicas, and the durable consumers of
-`RECORDS`, `ORDERS`, and `NOTICES`, are left to a later version of the
-deployment ([notices, left to other specifications][notices-left]), which
-task T38 specifies ([plan][plan-observing]). The fetcher's consumer of
-`JOBS` comes with the fetcher, in a later version too
-([deployment, §9][later]). Until T38 is done, the deployment's values list
-only `JOBS` and `RECORDS`.
+It also specifies five durable consumers, which the same Job makes
+([NATS-5]):
+
+| Consumer | Stream | Subjects | Read by | Unacknowledged at most |
+| --- | --- | --- | --- | --- |
+| `discoverer-polls` | `RECORDS` | `edgar.records.poll` | The discoverer, poll events one at a time, in the stream's order ([DISC-1]) | 1 |
+| `discoverer-jobs` | `RECORDS` | `edgar.records.filing`, `edgar.records.backfill` | The discoverer, the events of the jobs it queued, one at a time ([DISC-1], [FILE-5], [LIST-3]) | 1 |
+| `discoverer-orders` | `ORDERS` | `edgar.orders.backfill` | The discoverer, the scheduler's orders ([LIST-1]) | JetStream's default |
+| `scheduler-notices` | `NOTICES` | `edgar.notices.gap`, `edgar.notices.backfill` | The scheduler, gap and backfill notices ([NOTICE-1], [NOTICE-2]) | JetStream's default |
+| `parse-workers-notices` | `NOTICES` | `edgar.notices.filing` | The parse workers, filing notices, as the facts specification will say | JetStream's default |
+
+Each is a pull consumer, which every replica of its service reads from.
+Each message it delivers is acknowledged on its own, and one not
+acknowledged in time is delivered again, with no limit on how often, so a
+service that stops partway through a message gets it again. Delivery
+begins at the stream's first message, and each consumer has three
+replicas, as its stream has, so its place in the stream survives the loss
+of a node ([NATS-5], [NATS-6]).
+
+Helm creates the umbrella chart's services, and waits for them to be ready,
+before its hook Jobs run ([CHART-4]), so a service may publish before the
+Job has made what it publishes to. JetStream refuses a message that no
+stream's subjects take, so its publisher knows it wasn't kept; but an
+interest stream accepts a message it has no consumer for, and keeps it for
+none. So the Job makes each stream's consumers as soon as it has made the
+stream, and gives an interest stream its subjects only once its consumers
+exist. It makes the stream with only its name as its subject, then its
+consumers, which may filter subjects their stream doesn't yet take, and
+then gives the stream its subjects, so a message published to them sooner
+is refused ([NATS-5]). A refused message isn't kept for none, but the
+stream keeps it only once it's published again. A gap notice the
+discoverer publishes, when it starts, from polls the record already holds
+follows no message, so no message's delivery brings it again ([GAP-3],
+[DISC-2]): a new install has such polls when its database was restored
+while NATS's data wasn't kept. The notices don't yet say that the
+discoverer publishes a refused notice again, so until the gap changes or
+the discoverer starts again, the scheduler doesn't set the Source's
+`openGapSince` from it ([NOTICE-1], [durable consumers]).
+
+The Job also makes the streams in the order `NOTICES`, `RECORDS`, `ORDERS`,
+`JOBS`. An event follows a job, and a notice follows an event or an order,
+so neither an event nor a notice that follows a message is published
+before its stream takes it, and neither is refused ([NATS-5]).
+
+The fetcher's consumer of `JOBS` comes with the fetcher, in a later
+version. `JOBS` is a work queue, which keeps a job until it's acknowledged,
+so its consumer can come with its service ([deployment, §9][later]).
 
 ### Jobs that expire, and jobs that wait
 
@@ -192,15 +233,17 @@ worker node each ([PLACE-1]), and the kind cluster has three ([KIND-1]), so
 they run one on each ([PLACE-2]). The three form one cluster, and JetStream
 reports all three in its meta group, with a leader ([NATS-2]). Each stream
 is replicated on all three, so it keeps its messages and its leader through
-the loss of a node ([NATS](../../spec/deployment.md#nats)). That is the
-reason for three: so the loss of a node can be shown ([the kind
+the loss of a node ([NATS](../../spec/deployment.md#nats)), and so is each
+durable consumer, so it keeps its place in its stream ([NATS-5]). That is
+the reason for three: so the loss of a node can be shown ([the kind
 cluster][KIND-1]).
 
-A Job, run by Helm after each install and upgrade, creates each stream the
-umbrella chart's values list, or updates it to their configuration, through
-JetStream's API. It waits until JetStream accepts its requests, and
-succeeds when each stream already is as the values say ([NATS-3]), so
-running it again changes nothing ([NATS-4]).
+A Job, run by Helm after each install and upgrade, creates each stream and
+each durable consumer the umbrella chart's values list, or updates it to
+their configuration, through JetStream's API. It waits until JetStream
+accepts its requests, and succeeds when each stream and consumer already is
+as the values say ([NATS-3], [NATS-5]), so running it again changes nothing
+([NATS-4], [NATS-6]).
 
 NATS comes from the chart its project maintains, `nats`, from
 `https://nats-io.github.io/k8s/helm/charts/` ([CHART-2]), committed as a
@@ -216,7 +259,7 @@ with the same host directory ([VOL-3]), so the streams outlive the cluster
 ([deployment, §1][dep-guarantees]).
 
 Of the credentials the umbrella chart's components use, the deployment's
-version 1.0.0 lists none for NATS ([SECRET-1]), and no statement says which
+version 1.1.0 lists none for NATS ([SECRET-1]), and no statement says which
 service may publish or read which subject. Garage's keys and the database's
 roles, by contrast, each let a service do only what its specification needs
 ([GARAGE-4], [PG-7]; [Security and access](security-and-access.md)).
@@ -273,7 +316,7 @@ recovery](failures-and-recovery.md). For the streams:
 | The active fetcher | Jobs wait in `JOBS` until the standby takes the Lease over. Poll jobs that expire meanwhile are acknowledged without a request ([JOB-5]). Decision 0005 records every handover as a gap ([0005]); the notices' specification gives a gap only where the handover misses a poll ([notices, §5][gaps]). |
 | JetStream, for the scheduler | A poll that can't be queued before the next one is due is skipped ([SOURCE-2]) and counted ([METRIC-3]); its slot holds no successful poll, so the record shows a gap ([notices, §5][gaps]). |
 | All three servers, restarted | The streams are kept in files on retained claims ([NATS-1], [VOL-3]), so queued work survives the restart ([outages and recovery][outages]). |
-| A consumer that doesn't exist yet | An interest stream keeps nothing for it, which is why each durable consumer is made before what it reads is published ([deployment, §9][later]). |
+| A consumer that doesn't exist yet | An interest stream would keep nothing for it, which is why the Job makes each stream's durable consumers right after the stream, and gives an interest stream its subjects only once they exist, so a message published sooner is refused, not kept for none, and kept only once it's published again ([NATS-5], [NATS-6]). |
 | A malformed message | It's acknowledged without being acted on, and counted ([JOB-7], [MSG-2]). |
 
 Decision 0003 expects fetching to go on while PostgreSQL fails over, with
@@ -289,7 +332,7 @@ take a record.
   the class `edgar-retained`, which keeps each server's file store in the
   host directory ([VOL-1], [KIND-2]).
 - **The umbrella chart,** which installs NATS and runs the Job that creates
-  the streams ([NATS-3]).
+  the streams and their durable consumers ([NATS-3], [NATS-5]).
 - **Nothing else of the pipeline's.** The scheduler, the fetcher, the
   discoverer, and the parse workers depend on it; it depends on none of
   them.
@@ -300,8 +343,10 @@ take a record.
 | --- | --- | --- |
 | [NATS-1] | NATS is a cluster of three servers, with JetStream's file store on claims. | tests |
 | [NATS-2] | The three form one JetStream cluster, with a leader. | kind |
-| [NATS-3] | A hook Job creates or updates `JOBS` and `RECORDS`, each in files with three replicas. | tests |
+| [NATS-3] | A hook Job creates or updates `JOBS`, `RECORDS`, `ORDERS`, and `NOTICES`, each in files with three replicas. | tests |
 | [NATS-4] | Each stream is as the values say, on all three servers, and the Job can run again. | kind |
+| [NATS-5] | The Job creates or updates the five durable consumers, each right after its stream and before a stream kept by interest takes its subjects, with `NOTICES` first and `JOBS` last. | tests |
+| [NATS-6] | Each consumer is as the values say, on all three servers, and the Job can run again; a stream kept by interest refuses a message, or keeps it for each consumer, while the Job makes it. | kind |
 | [PLACE-1], [PLACE-2] | Each server needs a worker node of its own, and runs on one. | tests, kind |
 | [VOL-2], [VOL-3] | Its claims are of `edgar-retained`, whose data a new claim of the same name finds. | tests, kind |
 | [CHART-2], [PIN-1], [PIN-2], [PIN-4] | NATS's chart, from its project's repository, at an exact version, committed, with its images by digest. | tests |
@@ -315,9 +360,8 @@ take a record.
 | [DISC-1], [DISC-2] | The discoverer reads every event and order, poll events in order, and acknowledges each once its rows, jobs, and notices are done. | tests |
 | [TRACE-1] | Each message carries its trace context in its headers. | tests |
 
-The charts and their tests are task T20's, which isn't done; `ORDERS`,
-`NOTICES`, and the durable consumers of `RECORDS`, `ORDERS`, and `NOTICES`
-are T38's ([plan][plan-observing]).
+The charts and their tests are task T20's, which isn't done
+([plan][plan-observing]).
 
 ## The alternatives decision 0003 weighed
 
@@ -348,7 +392,9 @@ metrics workers scale by, and steps that are safe to repeat ([0003]).
 [SOURCE-2]: ../../spec/controls.md#6-source
 [VAL-3]: ../../spec/controls.md#5-the-charts-values
 [CHART-2]: ../../spec/deployment.md#5-dependencies
+[CHART-4]: ../../spec/deployment.md#5-dependencies
 [dep-guarantees]: ../../spec/deployment.md#1-guarantees
+[durable consumers]: ../../spec/deployment.md#durable-consumers
 [GARAGE-4]: ../../spec/deployment.md#garage
 [KIND-1]: ../../spec/deployment.md#the-kind-cluster
 [KIND-2]: ../../spec/deployment.md#the-kind-cluster
@@ -357,6 +403,8 @@ metrics workers scale by, and steps that are safe to repeat ([0003]).
 [NATS-2]: ../../spec/deployment.md#nats
 [NATS-3]: ../../spec/deployment.md#nats
 [NATS-4]: ../../spec/deployment.md#nats
+[NATS-5]: ../../spec/deployment.md#durable-consumers
+[NATS-6]: ../../spec/deployment.md#durable-consumers
 [PG-7]: ../../spec/deployment.md#the-stores-database
 [PIN-1]: ../../spec/deployment.md#6-pins
 [PIN-2]: ../../spec/deployment.md#6-pins
@@ -376,6 +424,7 @@ metrics workers scale by, and steps that are safe to repeat ([0003]).
 [gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [LIST-1]: ../../spec/notices.md#8-backfills
 [LIST-2]: ../../spec/notices.md#8-backfills
+[LIST-3]: ../../spec/notices.md#8-backfills
 [LIST-5]: ../../spec/notices.md#8-backfills
 [MSG-1]: ../../spec/notices.md#streams
 [MSG-2]: ../../spec/notices.md#streams

@@ -4,8 +4,8 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** The snapshot store in git.
-- **Specified:** Scheduler; Fetcher; NATS JetStream; Garage; PostgreSQL 18; Monitoring: traces; The snapshot store in the cluster; The transfer from the cluster to git; The controls; The documentation site (built in part).
-- **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part); Monitoring: logs; `edgar-asof`; The charts (specified in part).
+- **Specified:** Scheduler; Fetcher; Discoverer; NATS JetStream; Garage; PostgreSQL 18; Monitoring: traces; The snapshot store in the cluster; The transfer from the cluster to git; The controls; The charts; The documentation site (built in part).
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The fake EDGAR; The drills.
 <!-- end status -->
 
@@ -177,7 +177,8 @@ every Source, in order, to find where one doesn't follow the one before
 ([GAP-2], [`notices.sql`][notices-sql]), so each read reads every poll the
 record holds, and the polls only grow. Grafana's views `coverage` and
 `gaps` read every poll too, each time a dashboard refreshes
-([open question 4 of the telemetry][telemetry-open]).
+([open question 4 of the telemetry][telemetry-open]), though from the
+database's replicas, not the primary ([MON-5]).
 
 Assuming PostgreSQL reads 1 to 5 million polls a second in such a query,
 joining each to its record and sorting them by Source, which a measurement
@@ -324,6 +325,7 @@ each part would stop:
 [LOG-1]: ../../spec/snapshots.md#8-history
 [METRIC-2]: ../../spec/telemetry.md#4-metrics
 [METRIC-5]: ../../spec/telemetry.md#the-discoverer
+[MON-5]: ../../spec/deployment.md#monitoring
 [notices-sql]: ../../spec/schemas/notices.sql
 [PAGE-6]: ../../spec/site.md#7-the-pages-written-for-the-site
 [PAGE-7]: ../../spec/site.md#7-the-pages-written-for-the-site

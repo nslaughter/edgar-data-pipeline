@@ -1,7 +1,7 @@
 # Delivery and consistency
 
 <!-- status: NATS JetStream; Scheduler; Fetcher; Discoverer; Parse workers; Garage; PostgreSQL 18; The snapshot store in the cluster; The snapshot store in git -->
-**Status** ([status page](../status.md)): NATS JetStream: Specified. Scheduler: Specified. Fetcher: Specified. Discoverer: Decided; specified in part. Parse workers: Decided. Garage: Specified. PostgreSQL 18: Specified. The snapshot store in the cluster: Specified. The snapshot store in git: Built.
+**Status** ([status page](../status.md)): NATS JetStream: Specified. Scheduler: Specified. Fetcher: Specified. Discoverer: Specified. Parse workers: Decided. Garage: Specified. PostgreSQL 18: Specified. The snapshot store in the cluster: Specified. The snapshot store in git: Built.
 <!-- end status -->
 
 How the pipeline's services hand each other work, what each stream
@@ -47,25 +47,39 @@ event's ([JOB-1]), and an order's and a notice's ([MSG-1]); the
 fields it doesn't know, as a reader of records does, so a later version can
 add a field without breaking a consumer ([JOB-7], [MSG-2], [REC-9]).
 
-`JOBS` and `RECORDS` are kept in files and replicated on all three NATS
+All four streams are kept in files and replicated on all three NATS
 servers, one on each worker node, so each keeps its messages and its leader
 through the loss of a node ([NATS-1], [NATS-3], [PLACE-1],
 [the deployment's NATS]). Their volumes keep their data in a directory of
 the host, where a cluster recreated with it finds them ([VOL-2], [VOL-3],
-[KIND-2]). The replicas of `ORDERS` and `NOTICES`, and the durable consumers
-of the discoverer, the scheduler, and the parse workers, are for a version
-of the deployment specification that T38 writes
-([the notices, left to other specifications], [T38]); each other consumer
-comes with its service ([later versions][deployment-later]).
+[KIND-2]). The Job that makes the streams also makes the durable consumers
+of the discoverer, the scheduler, and the parse workers, each with three
+replicas, so each keeps its place in its stream through the loss of a node
+too ([NATS-5]); the fetcher's consumer of `JOBS` comes with the fetcher
+([later versions][deployment-later]).
 
 The two retentions differ in what a missing consumer costs. A work queue
 keeps each job until the fetcher acknowledges it, so jobs wait while no
 fetcher sends ([a filing's files][notices-files]). A stream kept until each
-of its consumers acknowledges keeps an event only for the consumers it has
-when the event is published, so a service that reads events needs its
-durable consumer before the fetcher publishes what it should see
-([later versions][deployment-later]). That's why each consumer is to be made
-before what it reads is published ([T38]).
+of its consumers acknowledges keeps a message only for the consumers it has
+when the message is published, so each service that reads one needs its
+durable consumer before what it should see is published. That's why the
+Job makes each stream's consumers as soon as it has made the stream, and
+gives a stream kept by interest its subjects only once its consumers exist,
+so a message published to them sooner is refused, as one is before the
+stream exists, and isn't accepted and kept for none ([NATS-5]). A refused
+message is kept only once it's published again. A gap notice published
+from polls the record already holds follows no message, so no message's
+delivery brings it again ([DISC-2]): on a new install whose database was
+restored while NATS's data wasn't kept, the discoverer publishes one when
+it starts. The notices don't yet say that the discoverer publishes a
+refused notice again, and it publishes the gap's notice again only when
+the gap changes or it starts again ([GAP-3]). Until then, the scheduler
+doesn't set the Source's `openGapSince` from it ([NOTICE-1],
+[durable consumers][deployment-consumers]). The Job also makes `NOTICES`
+first, then `RECORDS`, `ORDERS`, and `JOBS` last. An event follows a job,
+and a notice follows an event or an order, so no event, and no notice that
+follows a message, is published before its stream takes it ([NATS-5]).
 
 ## Acknowledgement and redelivery
 
@@ -104,12 +118,22 @@ Order matters in two places:
   fetcher's limit ([VAL-3]), leave the other half to the rest ([JOB-4]).
 - **The discoverer reads poll events one at a time,** in the order the
   stream holds them, so each Source's in the order the fetcher published
-  them ([DISC-1]); its consumer of them is to have one unacknowledged at a
-  time ([the notices, left to other specifications]). That keeps the bounds
+  them ([DISC-1]); its consumer of them, `discoverer-polls`, has one
+  unacknowledged at a time ([NATS-5]). That keeps the bounds
   of when a Source first showed a filing tight. When an event does arrive
   after a later poll's of the same Source, as when the fetcher publishes an
   event again after a restart, the bounds still hold, more loosely
   ([SEEN-3], [when each Source first showed each filing]).
+
+The events of the discoverer's jobs are handled one at a time too, though
+[DISC-1] asks for no order among them: their consumer, `discoverer-jobs`,
+has one unacknowledged at a time, and the discoverer acknowledges an event
+only once its transaction is committed ([NATS-5], [DISC-2]). So when an
+event's transaction checks whether a filing or a Backfill is complete, it
+sees the readings each event before it added ([FILE-5], [LIST-3]). Two
+events of one filing handled at once would, under PostgreSQL's default
+isolation, each miss the other's reading, and neither would find the
+filing complete.
 
 ## Why a message delivered twice does no harm
 
@@ -206,7 +230,9 @@ never names an object that isn't in the bucket.
   [DISC-2]). The facts specification is still to say how facts are written
   ([T17]).
 - **The store's table is created with its index in one transaction,** so the
-  table never exists without its index ([PG-8]).
+  table never exists without its index ([PG-8]). So are the notices' tables
+  and views, so none exists without the others, and the schema `dashboards`
+  with its views ([PG-12], [PG-13]).
 - **The controls' status isn't the record.** The scheduler sets a Source's
   status from its polls' records and its gap notices, and a Backfill's from
   backfill notices ([SOURCE-4], [NOTICE-1], [NOTICE-2]); the fetcher sets
@@ -220,9 +246,9 @@ While the services write the record, a reader of it can rely on these:
 - **A row never changes.** Records are only added: the fetcher's role may
   insert and select them, each other service's role may only select them,
   and none may update, delete, or truncate them ([LOG-3], [PG-9]). The
-  discoverer's rows are the same ([TABLE-3]). So a row read once reads the
-  same later, and each of the discoverer's rows says what it found when it
-  found it ([the record of notices]).
+  discoverer's rows are the same ([TABLE-3], [PG-14]). So a row read once
+  reads the same later, and each of the discoverer's rows says what it
+  found when it found it ([the record of notices]).
 - **A record's object is in the bucket, and is the body it names.** A record
   is added only after the object it names is in place ([FETCH-14]), and an
   object's decompressed bytes have the SHA-256 in its name ([OBJ-1]). Garage
@@ -250,7 +276,7 @@ While the services write the record, a reader of it can rely on these:
 - **A sighting's bounds hold** when events arrive out of order, more loosely
   ([SEEN-3], [when each Source first showed each filing]).
 - **Grafana reads only views made for it,** and can neither read nor change
-  the tables ([VIEW-3]).
+  the tables ([VIEW-3], [PG-13]).
 - **Status follows the record, a little behind.** The discoverer publishes a
   change in a Source's open gap within 10 seconds of the change ([GAP-3]),
   and the scheduler then sets the Source's status from it ([NOTICE-1]).
@@ -277,7 +303,6 @@ the same `tool` commit reads the same bytes ([IMP-1], [IMP-2], [IMP-3]).
 [SEEN-2]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [the design's outages and recovery]: ../design.md#outages-and-recovery
 [T17]: ../plan.md#facts
-[T38]: ../plan.md#observing-filings
 [store-guarantees]: ../../spec/snapshots.md#1-guarantees
 [store-ids]: ../../spec/snapshots.md#3-statement-ids
 [the store's jobs and events]: ../../spec/snapshots.md#jobs-and-events
@@ -310,13 +335,18 @@ the same `tool` commit reads the same bytes ([IMP-1], [IMP-2], [IMP-3]).
 [the deployment's NATS]: ../../spec/deployment.md#nats
 [NATS-1]: ../../spec/deployment.md#nats
 [NATS-3]: ../../spec/deployment.md#nats
+[NATS-5]: ../../spec/deployment.md#durable-consumers
 [PLACE-1]: ../../spec/deployment.md#placement
 [VOL-2]: ../../spec/deployment.md#volumes
 [VOL-3]: ../../spec/deployment.md#volumes
 [KIND-2]: ../../spec/deployment.md#the-kind-cluster
 [PG-8]: ../../spec/deployment.md#the-stores-database
 [PG-9]: ../../spec/deployment.md#the-stores-database
+[PG-12]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-13]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-14]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [deployment-later]: ../../spec/deployment.md#9-later-versions
+[deployment-consumers]: ../../spec/deployment.md#durable-consumers
 [VAL-3]: ../../spec/controls.md#5-the-charts-values
 [SOURCE-4]: ../../spec/controls.md#6-source
 [BACKFILL-2]: ../../spec/controls.md#7-backfill
@@ -336,6 +366,7 @@ the same `tool` commit reads the same bytes ([IMP-1], [IMP-2], [IMP-3]).
 [FILE-5]: ../../spec/notices.md#7-a-filings-files
 [ORDER-1]: ../../spec/notices.md#8-backfills
 [LIST-1]: ../../spec/notices.md#8-backfills
+[LIST-3]: ../../spec/notices.md#8-backfills
 [LIST-5]: ../../spec/notices.md#8-backfills
 [NOTICE-1]: ../../spec/notices.md#8-backfills
 [NOTICE-2]: ../../spec/notices.md#8-backfills

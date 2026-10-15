@@ -1,7 +1,7 @@
 # Failures and recovery
 
 <!-- status: Scheduler; Fetcher; Discoverer; NATS JetStream; Garage; PostgreSQL 18; The controls; Monitoring: metrics, alerts, and dashboards; The drills -->
-**Status** ([status page](../status.md)): Scheduler: Specified. Fetcher: Specified. Discoverer: Decided; specified in part. NATS JetStream: Specified. Garage: Specified. PostgreSQL 18: Specified. The controls: Specified. Monitoring: metrics, alerts, and dashboards: Decided; specified in part. The drills: Planned.
+**Status** ([status page](../status.md)): Scheduler: Specified. Fetcher: Specified. Discoverer: Specified. NATS JetStream: Specified. Garage: Specified. PostgreSQL 18: Specified. The controls: Specified. Monitoring: metrics, alerts, and dashboards: Decided; specified in part. The drills: Planned.
 <!-- end status -->
 
 For each failure that the design and the specifications consider: what
@@ -92,9 +92,10 @@ repeat, as [delivery and consistency](delivery-and-consistency.md) explains.
   of the gauges that `SourceGap` reads, so no gap alert fires ([ALERT-2],
   [METRIC-5]).
 - **The parse workers.** Filing notices wait in `NOTICES` until each of the
-  stream's consumers acknowledges them ([the notices' streams]). What the
-  parse workers do with them is for the facts specification
-  ([the notices, left to other specifications]).
+  stream's consumers acknowledges them ([the notices' streams]), and the
+  parse workers' durable consumer exists before the first is published
+  ([NATS-5]). What the parse workers do with them is for the facts
+  specification ([the notices, left to other specifications]).
 - **The query API** is a stateless Deployment, and **the exporter** a
   CronJob ([the design's components]).
 
@@ -169,11 +170,12 @@ leader election, which also uses a Lease ([0007],
 The kind cluster has one control-plane node and three worker nodes
 ([KIND-1]). NATS, Garage, and the database each run three replicas, one on
 each worker node ([PLACE-1], [PLACE-2]), so each keeps running when one
-worker node is lost: NATS keeps a copy of every stream on each, Garage a
-copy of every object, and the database an instance
-([deployment guarantees][the deployment's guarantees], [NATS-3], [GARAGE-3],
-[PG-3]). Where the pipeline's own services run is for a later version of the
-deployment specification ([later versions][deployment-later]).
+worker node is lost: NATS keeps a copy of every stream and every durable
+consumer on each, Garage a copy of every object, and the database an
+instance ([deployment guarantees][the deployment's guarantees], [NATS-3],
+[NATS-5], [GARAGE-3], [PG-3]). Where the pipeline's own services run is for
+a later version of the deployment specification ([later
+versions][deployment-later]).
 
 A lost node that ran the active fetcher, the active scheduler, or the
 database's primary fails as the sections on each say. kind runs every node
@@ -212,9 +214,10 @@ Garage can be shown ([PG-3], [PLACE-1], [0004]).
 ## Losing NATS
 
 NATS runs three servers with JetStream, each keeping its streams in files on
-a claim of its own ([NATS-1]), and `JOBS` and `RECORDS` are replicated on
+a claim of its own ([NATS-1]), and each of the four streams is replicated on
 all three, so each keeps its messages and its leader through the loss of one
-([the deployment's NATS], [NATS-3]).
+([the deployment's NATS], [NATS-3]). So is each durable consumer, which
+keeps its place in its stream ([NATS-5]).
 
 With all three down, nothing passes between the services:
 
@@ -481,6 +484,7 @@ blocks the SEC with a NetworkPolicy ([the design's outages and recovery],
 [the deployment's NATS]: ../../spec/deployment.md#nats
 [NATS-1]: ../../spec/deployment.md#nats
 [NATS-3]: ../../spec/deployment.md#nats
+[NATS-5]: ../../spec/deployment.md#durable-consumers
 [GARAGE-1]: ../../spec/deployment.md#garage
 [GARAGE-3]: ../../spec/deployment.md#garage
 [lease]: ../../spec/deployment.md#the-fetchers-lease

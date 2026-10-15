@@ -70,7 +70,7 @@ without the behavior it covers ([doing the next item][agents-next], step
 | Specification | Statements with tests now | Statements awaiting a task |
 | --- | --- | --- |
 | [`snapshots.md`][snapshots] 1.0.0 | Those `verify.py` checks, and `snapshot.py`'s rules, brought to this version by [T35], done October 13, 2026; and the schemas': [STORE-1], [REC-13], [JOB-1] | [T22], the scheduler's jobs; [T23], the fetcher and the cluster store; [T24], the discoverer's jobs and its use of `edgar-asof` ([FETCH-18]); [T36], the transfer ([XFER-1] to [XFER-3]) |
-| [`deployment.md`][deployment] 1.0.0 | None | [T20], the charts; [T21], the pipeline's images ([IMG-1] to [IMG-3]); [T23], the fetcher's Lease ([LEASE-1], [LEASE-2]) ([§3][deployment-ids]) |
+| [`deployment.md`][deployment] 1.1.0 | None | [T20], the charts, with the durable consumers, the notices' and the dashboards' tables and views, and Grafana's data source; [T21], the pipeline's images ([IMG-1] to [IMG-3]); [T23], the fetcher's Lease ([LEASE-1], [LEASE-2]) ([§3][deployment-ids]) |
 | [`controls.md`][controls] 1.0.0 | [API-1] | [T22], [T23], [T24], and [T28] ([§3][controls-ids]) |
 | [`notices.md`][notices] 0.1.0 | [TABLE-1], [MSG-1] | [T24], the discoverer, with the scheduler's side of the Backfills ([§3][notices-ids]) |
 | [`telemetry.md`][telemetry] 0.1.0 | [VIEW-1] | [T28], the monitoring of observing filings; [T29], the traces ([§3][telemetry-ids]) |
@@ -161,16 +161,22 @@ committed, packaged ([PIN-2]), and Garage's chart as a directory
 The deployment's rules, and every other statement checked by `kind`, are
 tested in the CI job that installs the charts on kind ([T20]). They cover
 what can't be seen without a cluster: that the three NATS servers form one
-JetStream cluster ([NATS-2]); that each replica of NATS, Garage, and the
-database runs on its own worker node ([PLACE-2]); that every database
-instance reports PostgreSQL 18 ([PG-2]) and a backup to Garage completes
-([PG-5]); that the database refuses a malformed record and lets no service
-change one ([STORE-2], [LOG-3], [PG-9]); that one fetcher pod holds the
-Lease ([LEASE-2]); that each ServiceAccount can do exactly what the table of
-grants allows ([RBAC-5]); and that the notices' and dashboards' views give
-what their sections define ([GAP-2], [LAG-1], [VIEW-4]). The cluster
-store's own invariants, that every object hashes to its name and every
-record finds its object, are checked the same way ([STORE-3]).
+JetStream cluster ([NATS-2]), each durable consumer has a replica on all
+three, and a stream kept by interest keeps what it accepts, while the Job
+makes it, for each of its consumers ([NATS-6]); that each replica of NATS,
+Garage, and the database runs on its own worker node ([PLACE-2]); that
+every database instance reports PostgreSQL 18 ([PG-2]) and a backup to
+Garage completes ([PG-5]); that the database refuses a malformed record
+and lets no service change one ([STORE-2], [LOG-3], [PG-9]), nor any but
+the discoverer add to the notices' tables, lets each service's role read
+the notices' views, and lets Grafana's role read only its views
+([PG-14]); that Grafana's data source connects, verifying the server ([MON-6]); that
+one fetcher pod holds the Lease ([LEASE-2]); that each ServiceAccount can
+do exactly what the table of grants allows ([RBAC-5]); and that the
+notices' and dashboards' views give what their sections define ([GAP-2],
+[LAG-1], [VIEW-4]). The cluster store's own invariants, that every object
+hashes to its name and every record finds its object, are checked the same
+way ([STORE-3]).
 
 ### The fake EDGAR
 
@@ -422,7 +428,10 @@ clock check relies on, waits on a finding
 [PG-5]: ../../spec/deployment.md#instances-and-backups
 [PG-9]: ../../spec/deployment.md#the-stores-database
 [PG-10]: ../../spec/deployment.md#instances-and-backups
+[PG-14]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [NATS-2]: ../../spec/deployment.md#nats
+[NATS-6]: ../../spec/deployment.md#durable-consumers
+[MON-6]: ../../spec/deployment.md#monitoring
 [PLACE-2]: ../../spec/deployment.md#placement
 [SECRET-4]: ../../spec/deployment.md#credentials
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease

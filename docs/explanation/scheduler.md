@@ -172,7 +172,7 @@ alert reads to tell a Source that's polling from one that isn't
 | Writes | The `status` of Sources and Backfills: `update`, `patch` | The API server | [RBAC-1] |
 | Publishes | Jobs of kind `poll` ([job.schema.json]) | `JOBS`, `edgar.jobs.poll` | [JOB-2] |
 | Publishes | Orders ([order.schema.json]) | `ORDERS`, `edgar.orders.backfill` | [ORDER-1] |
-| Reads | Gap and backfill notices ([notice.schema.json]) | `NOTICES`, `edgar.notices.gap` and `edgar.notices.backfill` | [NOTICE-1], [NOTICE-2], [MSG-2] |
+| Reads | Gap and backfill notices ([notice.schema.json]) | `NOTICES`, `edgar.notices.gap` and `edgar.notices.backfill`, through `scheduler-notices` | [NOTICE-1], [NOTICE-2], [MSG-2], [NATS-5] |
 | Reads | The records of its Sources' polls | Not yet specified | [SOURCE-4] |
 | Serves | Its metrics | `/metrics`, on its port `metrics` | [METRIC-1], [METRIC-3] |
 | Exports | Its spans, by OTLP | The endpoint `OTEL_EXPORTER_OTLP_ENDPOINT` gives | [TRACE-7] |
@@ -211,7 +211,7 @@ controller-runtime's leader election, which holds a Lease
 ([components][design-components], [0007]). The standby serves its metrics
 too, with `edgar_scheduler_leader` at 0 ([METRIC-1], [METRIC-3]).
 
-The deployment specification's version 1.0.0 doesn't yet state the
+The deployment specification's version 1.1.0 doesn't yet state the
 scheduler's replicas or its Lease, as it states the fetcher's Lease
 ([LEASE-1]): a later version adds each of the pipeline's services, with its
 replicas, as it's built ([§9 of deployment][deployment-later]).
@@ -276,11 +276,11 @@ which the discoverer derives from the polls the fetcher recorded ([GAP-1],
 - **The Kubernetes API server,** for the three resources, their status,
   and its Lease ([0007]).
 - **NATS JetStream,** to publish to `JOBS` and `ORDERS` and to read
-  `NOTICES` ([0003]). `JOBS` keeps its messages in files, replicated on all
-  three NATS servers ([NATS-3]). The streams `ORDERS` and `NOTICES`, their
-  replicas, and the scheduler's durable consumer of gap and backfill
-  notices are task T38's ([§12 of the notices][notices-left],
-  [plan][plan-observing]).
+  `NOTICES` ([0003]). Each keeps its messages in files, replicated on all
+  three NATS servers ([NATS-3]). Its durable consumer of gap and backfill
+  notices, `scheduler-notices`, is made as soon as `NOTICES` is, before the
+  streams whose messages a notice follows, so `NOTICES` keeps such a notice
+  until the scheduler acknowledges it ([NATS-5]).
 - **kube-state-metrics, Prometheus, and an OTLP endpoint** for its
   telemetry ([STATE-1], [SCRAPE-1], [TRACE-7]).
 
@@ -318,10 +318,11 @@ EDGAR's content ([0006]).
 
 - **How the scheduler reads the records that set `lastPollTime` and
   `lastSuccessfulPollTime`** ([SOURCE-4]). Decision 0007 says it updates
-  status from the events the other services publish ([0007]). The notices
-  specification leaves deployment the scheduler's durable consumer of gap
-  and backfill notices only ([§12 of the notices][notices-left]), and no
-  document gives it a consumer of `RECORDS` or a database role.
+  status from the events the other services publish ([0007]). The
+  deployment gives it one durable consumer, of gap and backfill notices
+  ([NATS-5]), as the notices specification asks
+  ([§12 of the notices][notices-left]), and no document gives it a consumer
+  of `RECORDS` or a database role.
 - **Its replicas and its Lease, as statements** that chart tests check, in
   a later version of the deployment specification
   ([§9 of deployment][deployment-later]).
@@ -348,6 +349,7 @@ EDGAR's content ([0006]).
 | [JOB-1], [JOB-2] | Each poll is a job of kind `poll`, as its schema describes it, that expires when the next is due. |
 | [ORDER-1] | It orders each Backfill not yet started, while requests are allowed. |
 | [NOTICE-1], [NOTICE-2] | It sets `openGapSince` and each Backfill's status from the latest notices. |
+| [NATS-5], [NATS-6] | Its durable consumer of gap and backfill notices, made as soon as `NOTICES` is, before `NOTICES` takes its subjects. |
 | [MSG-1], [MSG-2] | Orders and notices validate against their schemas; it ignores unknown fields and refuses malformed notices. |
 | [METRIC-1], [METRIC-2], [METRIC-3] | Its metrics, served by each replica, with labels from small sets. |
 | [TRACE-1], [TRACE-2], [TRACE-3], [TRACE-5], [TRACE-7], [TRACE-8] | Each poll and order starts a trace, carried in NATS headers. |
@@ -441,4 +443,6 @@ T28 and T29; and the others' await T22 and T24
 [deployment-later]: ../../spec/deployment.md#9-later-versions
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease
 [NATS-3]: ../../spec/deployment.md#nats
+[NATS-5]: ../../spec/deployment.md#durable-consumers
+[NATS-6]: ../../spec/deployment.md#durable-consumers
 [MON-2]: ../../spec/deployment.md#monitoring

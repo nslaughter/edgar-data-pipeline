@@ -1,7 +1,7 @@
 # Deployment
 
 <!-- status: The charts -->
-**Status** ([status page](../status.md)): The charts: Decided; specified in part.
+**Status** ([status page](../status.md)): The charts: Specified.
 <!-- end status -->
 
 The pipeline is installed on Kubernetes with Helm, by four charts in a
@@ -140,6 +140,8 @@ deploy/
   chart/                       release 4: the umbrella chart
     charts/garage/             Garage's chart, from its source tree
     files/records.sql          the store's table, from spec/schemas/
+    files/notices.sql          the notices' tables and views, from spec/schemas/
+    files/dashboards.sql       the views Grafana reads, from spec/schemas/
     values.schema.json         what its values must hold
   kind.yaml                    the kind cluster's configuration
 ```
@@ -343,6 +345,7 @@ literal environment, or a custom resource's `spec` ([SECRET-3]).
 | Garage's RPC secret and admin token | The umbrella chart's values | [SECRET-1] |
 | Each Garage key's ID and secret, which the setup Job imports | The umbrella chart's values | [SECRET-1], [GARAGE-2] |
 | Each service's database password | The umbrella chart's values | [SECRET-1], [PG-7] |
+| Grafana's database password, which its PostgreSQL data source reads from the role's Secret | The umbrella chart's values | [SECRET-1], [PG-11], [MON-5] |
 | Grafana's admin password | The umbrella chart's values | [SECRET-1] |
 | The database owner's password | CloudNativePG, which generates it in the cluster | [PG-6] |
 
@@ -405,25 +408,42 @@ drills are on [Testing and verification](testing-and-verification.md).
 ## What later versions add
 
 The deployment's version 1.0.0 deploys the platform and what the snapshot
-store needs. Later versions add ([deployment, §9][later]):
+store needs. Version 1.1.0 adds what the discoverer needs before it's
+built, and what Grafana needs to read the record ([deployment, from version
+1.0.0][from-1.0.0]):
+
+- **NATS:** the streams `ORDERS` and `NOTICES` ([NATS-3]), and the durable
+  consumers of the discoverer, the scheduler, and the parse workers, with
+  the order in which the Job makes the streams, and when a stream kept by
+  interest takes its subjects ([NATS-5], [NATS-6]).
+- **Garage:** the discoverer's key, which may only read the store's bucket
+  ([GARAGE-4]).
+- **PostgreSQL:** the discoverer's role ([PG-7]) and Grafana's ([PG-11]);
+  and the tables and views of `notices.sql` and the schema `dashboards`,
+  made after the store's table, with their grants ([PG-12] to [PG-14]).
+- **Grafana:** its PostgreSQL data source, which reads the database's
+  replicas as Grafana's role ([MON-5], [MON-6]), and that role's password
+  among the credentials ([SECRET-1]).
+
+Later versions add ([deployment, §9][later]):
 
 1. **The pipeline's services,** as each is built, with their replicas,
    credentials, and placement, and the database role and Garage key of each
-   service after the fetcher.
-2. **The streams' durable consumers,** each with its service, made before
-   the fetcher publishes what it should see.
-3. **Changes to the store's table,** with a migration, since the Job that
-   makes the table creates it only where there's none.
+   service after the discoverer.
+2. **The fetcher's durable consumer of `JOBS`,** with the fetcher. `JOBS`
+   is a work queue, which keeps a job until it's acknowledged, so its
+   consumer can come with its service.
+3. **Changes to the record's tables and views,** with a migration, since
+   the Job creates the store's table, the notices' tables, and the schema
+   `dashboards` only where there are none ([PG-12], [PG-13]).
 4. **Each component's resource requests and limits,** measured on kind, and
-   its probes.
-5. **Tempo, Loki, and Alloy.**
-
-Task T38 is the next of them: the streams `ORDERS` and `NOTICES`; the
-tables and views of `notices.sql`, with their grants; the discoverer's
-database role and its read-only Garage key; the durable consumers of the
-discoverer, the scheduler, and the parse workers; and, for Grafana, its
-database role, its password, its PostgreSQL data source, and the views of
-`dashboards.sql` with their grants ([plan][plan-observing]).
+   its probes. A service's readiness can't wait on its streams, consumers,
+   or tables, which the hook Jobs make only once the release's resources
+   are ready ([CHART-4], [NATS-5], [PG-12]).
+5. **Tempo, Loki, and Alloy,** with the endpoint the services export spans
+   to.
+6. **kube-state-metrics' access to the definitions** of the pipeline's
+   resources, beside its access to the resources themselves ([RBAC-3]).
 
 ## Where it's specified
 
@@ -436,10 +456,10 @@ database role, its password, its PostgreSQL data source, and the views of
 | `IMG` | [IMG-1] to [IMG-4] | The pipeline's images, tagged by commit and loaded into kind. | This page |
 | `SECRET` | [SECRET-1] to [SECRET-4] | Credentials as required values, only in Secrets. | This page |
 | `LEASE` | [LEASE-1], [LEASE-2] | The fetcher's Lease and its timings. | This page |
-| `NATS` | [NATS-1] to [NATS-4] | Three servers, and the streams. | [NATS JetStream](nats-jetstream.md) |
+| `NATS` | [NATS-1] to [NATS-6] | Three servers, the streams, and their durable consumers. | [NATS JetStream](nats-jetstream.md) |
 | `GARAGE` | [GARAGE-1] to [GARAGE-4] | Three nodes, the setup Job, the buckets, and the keys. | [Garage](garage.md) |
-| `PG` | [PG-1] to [PG-10] | PostgreSQL 18, three instances, the database, the roles, the table, and the backups. | [PostgreSQL 18](postgresql.md) |
-| `MON` | [MON-1] to [MON-4] | What's scraped, read-only Grafana, Alertmanager, and their replicas. | [Monitoring](monitoring.md) |
+| `PG` | [PG-1] to [PG-14] | PostgreSQL 18, three instances, the database, the roles, the store's table, the notices' tables and views, the dashboards' views, and the backups. | [PostgreSQL 18](postgresql.md) |
+| `MON` | [MON-1] to [MON-6] | What's scraped, read-only Grafana and its PostgreSQL data source, Alertmanager, and their replicas. | [Monitoring](monitoring.md) |
 
 [0001]: ../decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
 [0002]: ../decisions/0002-store-bodies-in-garage.md
@@ -456,6 +476,7 @@ database role, its password, its PostgreSQL data source, and the views of
 [asof-plan]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/docs/plan.md#the-first-release
 [README]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/README.md
 [API-2]: ../../spec/controls.md#4-the-resources
+[RBAC-3]: ../../spec/controls.md#9-who-may-change-what
 [RBAC-6]: ../../spec/controls.md#9-who-may-change-what
 [VAL-1]: ../../spec/controls.md#5-the-charts-values
 [CHART-1]: ../../spec/deployment.md#4-layout
@@ -471,6 +492,7 @@ database role, its password, its PostgreSQL data source, and the views of
 [definitions]: ../../spec/deployment.md#definitions
 [dep-guarantees]: ../../spec/deployment.md#1-guarantees
 [dependencies]: ../../spec/deployment.md#5-dependencies
+[from-1.0.0]: ../../spec/deployment.md#from-version-100
 [GARAGE-1]: ../../spec/deployment.md#garage
 [GARAGE-2]: ../../spec/deployment.md#garage
 [GARAGE-4]: ../../spec/deployment.md#garage
@@ -487,8 +509,12 @@ database role, its password, its PostgreSQL data source, and the views of
 [LEASE-2]: ../../spec/deployment.md#the-fetchers-lease
 [MON-1]: ../../spec/deployment.md#monitoring
 [MON-4]: ../../spec/deployment.md#monitoring
+[MON-5]: ../../spec/deployment.md#monitoring
+[MON-6]: ../../spec/deployment.md#monitoring
 [NATS-1]: ../../spec/deployment.md#nats
-[NATS-4]: ../../spec/deployment.md#nats
+[NATS-3]: ../../spec/deployment.md#nats
+[NATS-5]: ../../spec/deployment.md#durable-consumers
+[NATS-6]: ../../spec/deployment.md#durable-consumers
 [own-images]: ../../spec/deployment.md#the-pipelines-own-images
 [PG-1]: ../../spec/deployment.md#7-postgresql
 [PG-2]: ../../spec/deployment.md#7-postgresql
@@ -497,6 +523,10 @@ database role, its password, its PostgreSQL data source, and the views of
 [PG-6]: ../../spec/deployment.md#the-stores-database
 [PG-7]: ../../spec/deployment.md#the-stores-database
 [PG-10]: ../../spec/deployment.md#instances-and-backups
+[PG-11]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-12]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-13]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-14]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [pins]: ../../spec/deployment.md#6-pins
 [PIN-1]: ../../spec/deployment.md#6-pins
 [PIN-2]: ../../spec/deployment.md#6-pins
