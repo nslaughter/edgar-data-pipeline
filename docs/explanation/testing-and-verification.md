@@ -163,13 +163,14 @@ tested in the CI job that installs the charts on kind ([T20]). They cover
 what can't be seen without a cluster: that the three NATS servers form one
 JetStream cluster ([NATS-2]), each durable consumer has a replica on all
 three, and a stream kept by interest keeps what it accepts, while the Job
-makes it, for each of its consumers ([NATS-6]); that each replica of NATS, Garage, and the database
-runs on its own worker node ([PLACE-2]); that every database instance
-reports PostgreSQL 18 ([PG-2]) and a backup to Garage completes ([PG-5]);
-that the database refuses a malformed record and lets no service change one
-([STORE-2], [LOG-3], [PG-9]), nor any but the discoverer add to the
-notices' tables, and lets Grafana's role read only its views ([PG-14]);
-that Grafana's data source connects, verifying the server ([MON-6]); that
+makes it, for each of its consumers ([NATS-6]); that each replica of NATS,
+Garage, and the database runs on its own worker node ([PLACE-2]); that
+every database instance reports PostgreSQL 18 ([PG-2]) and a backup to
+Garage completes ([PG-5]); that the database refuses a malformed record
+and lets no service change one ([STORE-2], [LOG-3], [PG-9]), nor any but
+the discoverer add to the notices' tables, lets each service's role read
+the notices' views, and lets Grafana's role read only its views
+([PG-14]); that Grafana's data source connects, verifying the server ([MON-6]); that
 one fetcher pod holds the Lease ([LEASE-2]); that each ServiceAccount can
 do exactly what the table of grants allows ([RBAC-5]); and that the
 notices' and dashboards' views give what their sections define ([GAP-2],

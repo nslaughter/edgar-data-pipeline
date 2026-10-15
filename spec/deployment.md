@@ -778,11 +778,11 @@ keeps PostgreSQL's default, which lets every role execute it.
   tables and views as `notices.sql` defines them, and the schema
   `dashboards` with its views as `dashboards.sql` defines them ([TABLE-2],
   [VIEW-2]). The discoverer's role can insert a row in each of the notices'
-  tables and select it; every other service's role can select it; no
-  service's role can update, delete, or truncate a row, nor any but the
-  discoverer's insert one; and Grafana's role can select each view in
-  `dashboards`, and nothing `records.sql` or `notices.sql` defines
-  ([TABLE-3], [VIEW-3]).
+  tables and select it; every other service's role can select it; every
+  service's role can select each of the notices' views; no service's role
+  can update, delete, or truncate a row, nor any but the discoverer's
+  insert one; and Grafana's role can select each view in `dashboards`, and
+  nothing `records.sql` or `notices.sql` defines ([TABLE-3], [VIEW-3]).
 
 ## 8. Index
 
@@ -812,7 +812,7 @@ keeps PostgreSQL's default, which lets every role execute it.
 | PG-11 | invariant | tests | Grafana has a database role of its own, `grafana`, without special attributes, its password from a value. |
 | PG-12 | invariant | tests | The hook Job creates the notices' tables and views from a copy of `notices.sql`, in one transaction, and grants only the discoverer's role inserts. |
 | PG-13 | invariant | tests | The hook Job creates the schema `dashboards` from a copy of `dashboards.sql`, in one transaction, and grants only Grafana's role its views. |
-| PG-14 | rule | kind | The notices' tables and the dashboards' views are as their files define them; only the discoverer's role inserts, no service's role changes a row, and Grafana's role reads only the views. |
+| PG-14 | rule | kind | The notices' tables and the dashboards' views are as their files define them; only the discoverer's role inserts, every service's role reads the notices' views, no service's role changes a row, and Grafana's role reads only the dashboards' views. |
 | CRD-1 | invariant | tests | Every definition is a template, none from a `crds/` directory. |
 | CRD-2 | invariant | tests | Each definition is rendered by the chart the table gives it; the umbrella chart renders none. |
 | CRD-3 | invariant | tests | Each resource's definition, and any webhook that fails closed on it, comes from an earlier chart. |

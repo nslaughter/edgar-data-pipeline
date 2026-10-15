@@ -202,8 +202,8 @@ needs nothing on the tables beneath it, and a function a view calls, such
 as `header_instant`, keeps PostgreSQL's default, which lets every role
 execute it ([the notices and the dashboards][pg-notices]). On kind, the
 discoverer's role can insert a row in each table and select it, every
-other service's can select it, and none can update, delete, or truncate one
-([PG-14]). Since the Job creates them only where there are none, a later
+other service's can select it, every service's can select each view, and
+none can update, delete, or truncate a row ([PG-14]). Since the Job creates them only where there are none, a later
 version of `notices.sql` needs a migration, as `records.sql` does
 ([deployment, §9][later]).
 
@@ -365,7 +365,7 @@ the other services read them, and Grafana reads the views made for it.
 | [PG-8], [PG-9] | A hook Job creates `records` and its grants; only the fetcher's role inserts, and none changes a row. | tests, kind |
 | [PG-11] | Grafana reads `edgar` as a role of its own, `grafana`, without special attributes, its password from a value. | tests |
 | [PG-12], [PG-13] | The Job then creates the notices' tables and views from `notices.sql`, granting only the discoverer's role inserts, and then the schema `dashboards` from `dashboards.sql`, granting only Grafana's role its views. | tests |
-| [PG-14] | The notices' tables and the dashboards' views are as their files define them; only the discoverer's role inserts, no service's role changes a row, and Grafana's role reads only the views. | kind |
+| [PG-14] | The notices' tables and the dashboards' views are as their files define them; only the discoverer's role inserts, every service's role reads the notices' views, no service's role changes a row, and Grafana's role reads only the dashboards' views. | kind |
 | [PLACE-1], [PLACE-2] | Each instance needs a worker node of its own, and runs on one. | tests, kind |
 | [STORE-1], [STORE-2] | `records.sql` defines the table, and the database holds it and refuses a malformed record. | tests, kind |
 | [LOG-3] | Only the fetcher adds records, and no one changes them. | kind |
