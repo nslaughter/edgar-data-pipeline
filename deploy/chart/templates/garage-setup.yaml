@@ -9,6 +9,11 @@ Job to reach any node by.
 {{- $keys = concat $keys (keys $grants) }}
 {{- end }}
 {{- $keys = $keys | uniq | sortAlpha }}
+{{- /* Each key a bucket grants is a credential, whose Secret is rendered from
+it (SECRET-1). */}}
+{{- range $keys }}
+{{- $_ := required (printf "credentials.garageKeys.%s is required" .) (index $.Values.credentials.garageKeys .) }}
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:

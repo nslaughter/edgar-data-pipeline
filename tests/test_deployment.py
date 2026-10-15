@@ -1800,6 +1800,24 @@ def test_each_credential_is_required(path: tuple[str, str]) -> None:
 
 
 @pytest.mark.spec("SECRET-1")
+@pytest.mark.parametrize("credential", ["database", "garageKeys"])
+def test_a_role_or_key_the_values_add_requires_its_credential(credential: str) -> None:
+    given = copy.deepcopy(TEST_VALUES)
+    if credential == "database":
+        given["database"]["services"] = [*values(UMBRELLA)["database"]["services"], "added"]
+    else:
+        given["garageSetup"] = {"buckets": {"snapshots": {"added": {"read": True, "write": False}}}}
+    with_it = copy.deepcopy(given)
+    with_it["credentials"][credential]["added"] = CREDENTIALS[credential]["fetcher"]
+
+    without = render(UMBRELLA, given, check=False)
+
+    assert without.returncode != 0
+    assert f"credentials.{credential}.added is required" in without.stderr
+    assert render(UMBRELLA, with_it, check=False).returncode == 0
+
+
+@pytest.mark.spec("SECRET-1")
 def test_each_credential_is_rendered_into_a_secret() -> None:
     secrets = json.dumps([d for d in of_kind(UMBRELLA, "Secret")])
 
