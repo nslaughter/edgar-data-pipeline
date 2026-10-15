@@ -459,6 +459,15 @@ resource before it stores it. One whose `failurePolicy` is `Fail` refuses
 the resources it admits until its pods are ready ([0011]). No webhook
 checks the pipeline's own resources for now ([0010]).
 
+### Base backup
+
+A copy of the whole database as it is at one moment, which, with the WAL
+archived after it, restores the database to any later moment. The
+database takes one at least once a day, into Garage ([PG-4]). No statement
+says how long they're kept, so the
+[estimates](explanation/estimates.md#the-databases-archive) keep every
+one.
+
 ### Chart
 
 A Helm chart: Kubernetes manifests, templated from values, that Helm
@@ -563,6 +572,22 @@ Prometheus operator runs Prometheus and its rules ([0004], [0008],
 Prometheus's command-line tool. `promtool test rules` tests alert rules
 against series given over time, in CI ([0008]).
 
+### Retention
+
+How long a store keeps what it holds before it removes it. Nothing stored
+in the snapshot store is removed ([§1 of the store][store-guarantees]).
+Prometheus keeps its data for a set time, and the database's backups are
+kept as long as their policy says; no statement sets either, so the
+[estimates](explanation/estimates.md#the-inputs) take each tool's
+default.
+
+### Series
+
+As Prometheus has it: a metric with one set of its labels' values, sampled
+at each scrape. Each of the pipeline's labels takes its values from a small
+set, so its series grow with its Sources and Backfills, not with its
+filings ([METRIC-2]).
+
 ### Span and trace
 
 As OpenTelemetry has them: a trace follows one filing through the
@@ -583,6 +608,14 @@ queues, which keep a message until it's acknowledged; `RECORDS` and
 A node of the kind cluster other than its control plane. NATS, Garage, and
 the database each keep one replica on each of the three
 ([§2 of the deployment][deployment-terms], [PLACE-1]).
+
+### Write-ahead log (WAL)
+
+PostgreSQL's log of each change, written before the change itself, from
+which an instance recovers and its standbys follow it. The database
+archives it into Garage continuously, with its base backups, in segments
+of 16 MiB by PostgreSQL's default ([PG-4];
+[estimates](explanation/estimates.md#the-databases-archive)).
 
 ## The documents
 
@@ -738,6 +771,7 @@ open. A statement checked by `operator` is the owner's to keep
 [GARAGE-1]: ../spec/deployment.md#garage
 [PG-3]: ../spec/deployment.md#instances-and-backups
 [PG-4]: ../spec/deployment.md#instances-and-backups
+[METRIC-2]: ../spec/telemetry.md#4-metrics
 [LEASE-1]: ../spec/deployment.md#the-fetchers-lease
 [LAG-1]: ../spec/notices.md#10-times-and-lags
 [STATUS-1]: ../spec/site.md#6-status

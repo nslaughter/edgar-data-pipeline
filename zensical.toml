@@ -39,6 +39,7 @@ nav = [
     { "The design" = "docs/design.md" },
     "docs/explanation/the-problem.md",
     "docs/explanation/requirements.md",
+    "docs/explanation/estimates.md",
     "docs/explanation/architecture.md",
     "docs/explanation/data-model.md",
     "docs/explanation/interfaces.md",
@@ -61,6 +62,7 @@ nav = [
     "docs/explanation/observability.md",
     "docs/explanation/deployment.md",
     "docs/explanation/testing-and-verification.md",
+    "docs/explanation/scale-and-limits.md",
     "docs/explanation/tradeoffs.md",
     "docs/explanation/open-questions-and-risks.md",
     { "Decision records" = [
