@@ -278,7 +278,7 @@ new facts, as the base backups do ([above](#the-databases-archive)):
 | The default | 5,280 to 52,800 | 5,280 × 20 bytes ÷ 365 = 0.3 KB, to 52,800 × 60 ÷ 365 = 8.7 KB; 0.1 to 3.2 MB | 3.2 MB; 8.7 KB × 66,795 = 0.58 GB |
 | The full budget | 44,000 to 440,000 | 2.4 to 72 KB; 0.9 to 26 MB | 26 MB; 72 KB × 66,795 = 4.8 GB |
 | A larger feed | The default's | The default's | The default's |
-| All filers | 10.7 to 214 million | 0.59 to 35 MB; 0.21 to 12.8 GB | 12.8 GB; 35 MB × 66,795 = 2.35 TB |
+| All filers | 10.7 to 214 million | 0.59 to 35 MB; 0.21 to 12.8 GB | 12.8 GB; 35.2 MB × 66,795 = 2.35 TB |
 
 A Backfill of the three companies' 208 reports adds 92,000 to 915,000
 facts, 1.8 to 55 MB, to the export once in the low case, and to each run
