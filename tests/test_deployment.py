@@ -1263,6 +1263,34 @@ def test_the_job_succeeds_again_and_changes_nothing(jetstream: dict[str, Any]) -
     assert all(entry[2] for entry in log if entry[0] == "UPDATE")
 
 
+@pytest.mark.spec("NATS-5")
+def test_a_stream_by_interest_that_exists_takes_a_new_subject_after_its_consumer(
+    jetstream: dict[str, Any],
+) -> None:
+    first = run_jetstream_job(jetstream)
+    config = jetstream["config"]
+    stream = json.loads((config / "stream-NOTICES.json").read_text())
+    stream["subjects"].append("edgar.notices.new")
+    (config / "stream-NOTICES.json").write_text(json.dumps(stream))
+    consumers = config / "consumers-NOTICES"
+    consumers.write_text(consumers.read_text() + "new-notices\n")
+    (config / "consumer-NOTICES-new-notices.json").write_text(
+        json.dumps(
+            {
+                "stream_name": "NOTICES",
+                "config": {"durable_name": "new-notices", "filter_subjects": ["edgar.notices.new"]},
+            }
+        )
+    )
+
+    log = made(run_jetstream_job(jetstream)["log"][len(first["log"]) :])
+
+    notices = [entry for entry in log if entry[1] == "NOTICES"]
+    taken = [i for i, entry in enumerate(notices) if "edgar.notices.new" in entry[2]]
+    assert taken
+    assert notices.index(("CONSUMER", "NOTICES", "new-notices")) < taken[0]
+
+
 # GARAGE
 
 
