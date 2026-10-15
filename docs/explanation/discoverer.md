@@ -379,9 +379,13 @@ cadence ([open question 4 of telemetry][telemetry-open]). The discoverer
 reads its own `gaps` at least every 10 seconds ([METRIC-5]). How fast the
 views read is to be measured on kind, and a later version adds what they
 need, such as an index or a stored summary of each day, if they slow
-([open question 4 of telemetry][telemetry-open]). Task T42 estimates the
-growth of its tables and the CPU and memory it needs
-([plan][plan-documentation]).
+([open question 4 of telemetry][telemetry-open]). The
+[estimates](estimates.md#postgresql) give its tables' growth, with the
+store's records: 17 to 26 MB a day at the default scope.
+[Scale and limits](scale-and-limits.md#reading-the-gaps) estimates when a
+read of `gaps` would take longer than the 10 seconds between reads: after
+386 to 1,929 days at the default scope, or 46 to 231 at the full
+budget.
 
 ## How it fails, and what the record shows
 
@@ -525,7 +529,6 @@ these statements' tests await it, and T28 and T29 its metrics' and traces'
 [design-times]: ../design.md#times
 [design-components]: ../design.md#components
 [plan-observing]: ../plan.md#observing-filings
-[plan-documentation]: ../plan.md#documentation
 [SRC-1]: ../../investigation/edgar.md#findings-so-far
 [SRC-2]: ../../investigation/edgar.md#findings-so-far
 [SRC-4]: ../../investigation/edgar.md#findings-so-far

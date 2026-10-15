@@ -181,9 +181,12 @@ resource, and it weighs in each choice of component ([0001]). Memory
 weighed in choosing Garage over SeaweedFS ([0002]) and NATS JetStream over
 Kafka and RabbitMQ ([0003]), and the database's three instances and its
 operator are the design's largest steady memory cost ([0004]).
-kube-prometheus-stack is estimated at 1 GB ([0008]). Each component's requests and limits are
-measured on kind before they're set ([§9 of deployment][deployment-later]),
-and the estimates are task T42 ([plan][plan-documentation]).
+kube-prometheus-stack is estimated at 1 GB ([0008]). Each component's
+requests and limits are measured on kind before they're set
+([§9 of deployment][deployment-later]). Until then, the
+[estimates](estimates.md#cpu-memory-and-storage) put the whole pipeline at
+4.0 to 14.4 GB of memory, and [scale and limits](scale-and-limits.md#memory)
+says what that asks of the machine kind runs on.
 
 ## The limits the SEC sets
 
@@ -340,7 +343,6 @@ network; a fake EDGAR in the cluster serves stored versions instead
 [PIN-1]: ../../spec/deployment.md#6-pins
 [PIN-4]: ../../spec/deployment.md#6-pins
 [PLACE-1]: ../../spec/deployment.md#placement
-[plan-documentation]: ../plan.md#documentation
 [plan-facts]: ../plan.md#facts
 [plan-how]: ../plan.md#how-the-plan-works
 [plan-investigation]: ../plan.md#investigation

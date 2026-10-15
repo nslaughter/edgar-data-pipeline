@@ -234,10 +234,11 @@ the record shows ([plan][plan-observing]). Each poll also starts a trace,
 25,920 a day at the starting cadence
 ([open question 3 of telemetry][telemetry-open]).
 
-Task T42 estimates the CPU and memory it needs
-([plan][plan-documentation]), and its resource requests and limits are
-measured on kind before a later version of the deployment specification
-states them ([§9 of deployment][deployment-later]).
+The [estimates](estimates.md#cpu-memory-and-storage) assume 30 to 100 MB
+of memory a replica, and a few millicores at the default scope, until its
+resource requests and limits are measured on kind, before a later version
+of the deployment specification states them
+([§9 of deployment][deployment-later]).
 
 ## How it fails, and what the record shows
 
@@ -371,7 +372,6 @@ T28 and T29; and the others' await T22 and T24
 [design-outages]: ../design.md#outages-and-recovery
 [design-testing]: ../design.md#testing-on-kind
 [plan-observing]: ../plan.md#observing-filings
-[plan-documentation]: ../plan.md#documentation
 [job.schema.json]: ../../spec/schemas/job.schema.json
 [order.schema.json]: ../../spec/schemas/order.schema.json
 [notice.schema.json]: ../../spec/schemas/notice.schema.json

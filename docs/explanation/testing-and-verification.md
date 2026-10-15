@@ -74,7 +74,7 @@ without the behavior it covers ([doing the next item][agents-next], step
 | [`controls.md`][controls] 1.0.0 | [API-1] | [T22], [T23], [T24], and [T28] ([§3][controls-ids]) |
 | [`notices.md`][notices] 0.1.0 | [TABLE-1], [MSG-1] | [T24], the discoverer, with the scheduler's side of the Backfills ([§3][notices-ids]) |
 | [`telemetry.md`][telemetry] 0.1.0 | [VIEW-1] | [T28], the monitoring of observing filings; [T29], the traces ([§3][telemetry-ids]) |
-| [`site.md`][site] 0.1.0 | The site's statements checked by `tests`, written by [T40] | [T42], [PAGE-4]'s test, once every topic has its page ([§3][site-ids]) |
+| [`site.md`][site] 0.1.0 | The site's statements checked by `tests`, written by [T40], and [PAGE-4]'s, written by [T42] once every topic had its page | None |
 
 ## What the tests check today
 
@@ -116,10 +116,11 @@ services exist.
 
 **The site.** The tests build the site and check it, offline, by running
 `scripts/build_site.py` ([SITE-9]): every link resolves, with its anchor
-([SITE-3]); nothing loads from another host ([SITE-4]); and each part's
-status matches the plan, the specifications, and the decision records
-([STATUS-3]). So each of CI's jobs fails on a site that doesn't build, and
-the site needs no job of its own ([0012]).
+([SITE-3]); nothing loads from another host ([SITE-4]); the explanation
+pages cover their topics, each on its page, in order ([PAGE-4]); and each
+part's status matches the plan, the specifications, and the decision
+records ([STATUS-3]). So each of CI's jobs fails on a site that doesn't
+build, and the site needs no job of its own ([0012]).
 
 CI runs these checks in three jobs, one for each of Python 3.12, 3.13, and
 3.14: the format check, the lint, the type check, the tests, and

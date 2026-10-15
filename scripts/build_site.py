@@ -5,8 +5,9 @@
 It takes the commit built from `git rev-parse HEAD`, runs Zensical's build
 in its own process with the Markdown extension `scripts/site_links.py`, writes
 the commit into each page's footer, and checks the built site for SITE-1 to
-SITE-7 and STATUS-3. It prints each problem, starting with the statement it
-breaks, and exits 1 if there's any. The site is in `site/`, which git ignores.
+SITE-7 and STATUS-3, and the pages for PAGE-1 and PAGE-4. It prints each
+problem, starting with the statement it breaks, and exits 1 if there's any.
+The site is in `site/`, which git ignores.
 
 Zensical runs from an environment of its own, made from `uv.lock` without
 the network (`uv run --isolated --frozen --offline`), not from the project's
@@ -53,6 +54,31 @@ SPEC_ORDER = (
     "telemetry.md",
     "site.md",
 )
+# PAGE-4's topics, in its order. Each is the page titled with it, but the
+# components', which is a page for each component the design's table names,
+# in the table's order, titled with the component's name, after "The" if
+# the title begins with it.
+TOPICS = (
+    "The problem",
+    "Requirements",
+    "Estimates",
+    "The architecture",
+    "The data model and its times",
+    "The interfaces",
+    "The components",
+    "`edgar-asof`",
+    "Delivery and consistency",
+    "Failures and recovery",
+    "Security and access",
+    "Observability",
+    "Deployment",
+    "Testing and verification",
+    "Scale and limits",
+    "Tradeoffs",
+    "Open questions and risks",
+)
+COMPONENTS = "The components"
+EXPLANATION = "docs/explanation/"
 EDGAR = "the U.S. Securities and Exchange Commission's EDGAR system"
 UNAFFILIATED = "isn't affiliated with or endorsed by the SEC"
 # Link relations under which a page loads what an element names (SITE-4).
@@ -532,10 +558,59 @@ def flatten(entries: Any) -> list[str]:
     return paths
 
 
+def page_title(markdown: str) -> str | None:
+    """A page's title: its first line, when that's a heading of the first level."""
+    match = re.match(r"# (.+)\n", markdown)
+    return match.group(1).strip() if match else None
+
+
+def topics(root: Path) -> list[tuple[str, bool]]:
+    """PAGE-4's topics, each with whether it's a component; the components in the design's order."""
+    design = (root / "docs" / "design.md").read_text("utf-8")
+    listed: list[tuple[str, bool]] = []
+    for topic in TOPICS:
+        if topic == COMPONENTS:
+            listed += [(name, True) for name in site_status.design_components(design)]
+        else:
+            listed.append((topic, False))
+    return listed
+
+
+def explanation_pages(root: Path, held_files: list[str]) -> tuple[list[str], list[str]]:
+    """PAGE-4: the explanation pages in its topics' order, and each problem with them.
+
+    A page that's no topic's comes last, and is a problem.
+    """
+    pages = sorted(s for s in held_files if s.startswith(EXPLANATION) and s.endswith(".md"))
+    titles = {page: page_title((root / page).read_text("utf-8")) for page in pages}
+
+    def titled(title: str | None, topic: str, component: bool) -> bool:
+        if title is None:
+            return False
+        if component:
+            return title.removeprefix("The ").casefold() == topic.casefold()
+        return title == topic
+
+    ordered: list[str] = []
+    problems = []
+    for topic, component in topics(root):
+        matches = [page for page in pages if titled(titles[page], topic, component)]
+        if not matches:
+            problems.append(f"PAGE-4: no explanation page is titled {topic!r}")
+        elif len(matches) > 1:
+            problems.append(f"PAGE-4: {matches} are each titled {topic!r}")
+        ordered += [page for page in matches if page not in ordered]
+    for page in pages:
+        if page not in ordered:
+            problems.append(f"PAGE-4: {page}, titled {titles[page]!r}, is no topic's page")
+            ordered.append(page)
+    return ordered, problems
+
+
 def expected_nav(root: Path, held_files: list[str]) -> dict[str, list[str]]:
     """Each tab's pages, in the order SITE-7 gives, of the pages that exist."""
     held_md = [s for s in held_files if s.endswith(".md")]
-    explanation = sorted(s for s in held_md if s.startswith("docs/explanation/"))
+    explanation, _ = explanation_pages(root, held_md)
     records = sorted(
         s for s in held_md if s.startswith("docs/decisions/") and s != "docs/decisions/README.md"
     )
@@ -566,10 +641,6 @@ def check_nav(nav: list[Any], expected: dict[str, list[str]], home: Page | None)
     for entry in nav:
         name, value = next(iter(entry.items()))
         paths, wanted = flatten(value), expected[name]
-        if name == "Explanation" and set(paths) == set(wanted):
-            # The explanation pages' order is PAGE-4's, which T42 checks.
-            paths = [p for p in paths if not p.startswith("docs/explanation/")]
-            wanted = [p for p in wanted if not p.startswith("docs/explanation/")]
         if paths != wanted:
             problems.append(f"SITE-7: the {name} tab holds {paths}, not {wanted}")
     if NOTICES in flatten(nav):
@@ -586,12 +657,13 @@ def read_nav(root: Path) -> list[Any]:
 
 
 def check_site(root: Path, site: Path, commit: str) -> list[str]:
-    """Every problem with the built site (SITE-1, SITE-3 to SITE-7, PAGE-1, STATUS-3)."""
+    """Every problem with the built site (SITE-1, SITE-3 to SITE-7, PAGE-1, PAGE-4, STATUS-3)."""
     pages = html_pages(site)
     held_files = sources(root)
     return [
         *check_published(root, site, held_files),
         *check_pages(held_files),
+        *explanation_pages(root, held_files)[1],
         *check_links(root, site, commit, pages),
         *check_hosts(site, pages),
         *check_footers(root, site, commit, pages),

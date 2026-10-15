@@ -245,8 +245,10 @@ queues the fetches of a Backfill's filings as it reads each list
 ([LIST-2]), and at 5 requests a second a backfill of every filing a
 company's `submissions` lists takes from 15.6 minutes for Apple to at least
 30.7 for Microsoft ([SRC-20]). Those jobs wait in `JOBS`, behind the polls
-and new filings' fetches ([JOB-4]). How much the streams hold, a day and a
-year, is the estimates' to say ([PAGE-5]), in task T42.
+and new filings' fetches ([JOB-4]). While their consumers keep up, the
+streams hold a few messages; while one is down, they grow by what it would
+have taken, such as 29 to 36 MB of events a day while the discoverer is
+down, at the default scope ([estimates](estimates.md#the-queues-streams)).
 
 The consumers scale differently. The fetcher can't scale out: one replica
 is active, through a Lease, so that the limit holds across the cluster
@@ -383,7 +385,6 @@ metrics workers scale by, and steps that are safe to repeat ([0003]).
 [ORDER-1]: ../../spec/notices.md#8-backfills
 [sightings]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [streams]: ../../spec/notices.md#streams
-[PAGE-5]: ../../spec/site.md#7-the-pages-written-for-the-site
 [FETCH-6]: ../../spec/snapshots.md#10-fetching
 [FETCH-14]: ../../spec/snapshots.md#10-fetching
 [JOB-1]: ../../spec/snapshots.md#jobs-and-events

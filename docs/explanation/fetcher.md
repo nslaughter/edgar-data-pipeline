@@ -336,9 +336,11 @@ second, and one of only its XBRL 10-Ks, 10-Qs, and amendments about 40
 seconds ([SRC-20]). Behind the polls, the largest takes about an hour
 ([open question 4 of the store][snapshots-open]). The largest bodies are
 `companyfacts` and the XBRL instances of 10-Ks and 10-Qs, from 0.9 MB to
-10.9 MB each ([SRC-18]). Task T42 estimates the bytes fetched a day, and
-the CPU, memory, and storage the fetcher needs
-([plan][plan-documentation]).
+10.9 MB each ([SRC-18]). At the default scope, the fetcher fetches 4.1 to
+4.8 GB of bodies a day, nearly all of them polls
+([estimates](estimates.md#bytes-fetched-a-day)). The
+[estimates](estimates.md#cpu-memory-and-storage) assume 50 to 150 MB of
+memory a replica, until it's measured on kind.
 
 ## How it fails, and what the record shows
 
@@ -488,7 +490,6 @@ of deployment][deployment-ids], [§3 of telemetry][telemetry-ids]).
 [design-outages]: ../design.md#outages-and-recovery
 [design-testing]: ../design.md#testing-on-kind
 [plan-investigation]: ../plan.md#investigation
-[plan-documentation]: ../plan.md#documentation
 [plan-observing]: ../plan.md#observing-filings
 [plan-drills]: ../plan.md#traces-logs-and-drills
 [SRC-4]: ../../investigation/edgar.md#findings-so-far
