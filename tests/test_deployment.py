@@ -1396,6 +1396,25 @@ def test_a_stream_by_interest_that_exists_takes_a_new_subject_after_its_consumer
     assert notices.index(("CONSUMER", "NOTICES", "new-notices")) < taken[0]
 
 
+@pytest.mark.spec("NATS-3")
+def test_a_work_queue_that_exists_is_updated_to_the_values(jetstream: dict[str, Any]) -> None:
+    run_jetstream_job(jetstream)
+    config = jetstream["config"]
+    queues = [s["name"] for s in streams() if s["retention"] == "workqueue"]
+    changed: dict[str, Any] = {}
+    for name in queues:
+        stream = json.loads((config / f"stream-{name}.json").read_text())
+        stream["subjects"].append(f"edgar.{name.lower()}.new")
+        (config / f"stream-{name}.json").write_text(json.dumps(stream))
+        changed[name] = stream
+
+    state = run_jetstream_job(jetstream)
+
+    assert queues
+    for name in queues:
+        assert state["streams"][name] == changed[name]
+
+
 # GARAGE
 
 
