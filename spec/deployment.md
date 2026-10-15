@@ -1,22 +1,27 @@
 # Specification: deployment
 
-**Status:** Version 1.0.0, draft, October 13, 2026. This document governs
+**Status:** Version 1.1.0, draft, October 15, 2026. This document governs
 what the pipeline's Helm charts install, in which order and at which
 versions, and how they configure what they install: the charts, operators,
 and images they pin; the custom resource definitions they install; each
 component's replicas, storage, credentials, and placement; the cluster
 store's bucket, database, table, and streams, and the fetcher's Lease; the
-kind cluster they're installed on; the tools that install them; and the
-tests that check them. Where a chart and this document disagree, the chart
-is wrong or this document needs a new version; say which before changing
-either.
+discoverer's streams, tables, credentials, and durable consumers, and
+Grafana's access to the record; the kind cluster they're installed on; the
+tools that install them; and the tests that check them. Where a chart and
+this document disagree, the chart is wrong or this document needs a new
+version; say which before changing either.
 
 It rests on the decisions to deploy on Kubernetes with Helm, on kind
 ([0001]); to install the definitions and the operators before the umbrella
 chart, in four releases ([0011]); and to keep the record in PostgreSQL 18
 ([0004]); and on the decisions that chose the other components ([0002],
 [0003], [0005], [0008]). It deploys what the snapshot store's version 1.0.0
-leaves to it ([`snapshots.md`, §13](snapshots.md#left-to-other-specifications)).
+leaves to it ([`snapshots.md`, §13](snapshots.md#left-to-other-specifications)),
+what the notices' version 0.1.0 leaves to it
+([`notices.md`, §12](notices.md#left-to-other-specifications)), and, for
+Grafana, what the telemetry's version 0.1.0 leaves to it
+([`telemetry.md`, §11](telemetry.md#left-to-other-specifications)).
 Each component's resource requests and limits, which are measured on kind,
 aren't in this version ([§9](#9-later-versions)). The pipeline it deploys
 reads filings from the U.S. Securities and Exchange Commission's EDGAR
@@ -45,9 +50,9 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
    [CRD-2], [CRD-3], [CRD-4], [CRD-5], [CRD-6].
 7. **NATS, Garage, and the database keep running when one worker node is
    lost:** each keeps three replicas, one on each worker node; Garage keeps
-   a copy of every object on each, and NATS of every stream. [KIND-1],
-   [PLACE-1], [PLACE-2], [NATS-1], [NATS-3], [NATS-4], [GARAGE-1],
-   [GARAGE-3], [PG-3].
+   a copy of every object on each, and NATS of every stream and every
+   durable consumer. [KIND-1], [PLACE-1], [PLACE-2], [NATS-1], [NATS-3],
+   [NATS-4], [NATS-5], [NATS-6], [GARAGE-1], [GARAGE-3], [PG-3].
 8. **Stored data outlives the cluster.** Garage's objects, the database's
    backups among them, NATS's streams, and Prometheus's and Alertmanager's
    data are kept in a directory of the host, where a cluster recreated with
@@ -61,6 +66,13 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
     change a record:** each service has credentials of its own, and only
     the fetcher's may add records and objects ([LOG-3], [LOG-4]). [GARAGE-4],
     [PG-6], [PG-7], [PG-8], [PG-9].
+11. **Only the discoverer adds to the notices' tables, no service changes
+    them, and Grafana reads only the views made for it,** each with a
+    database role of its own ([TABLE-3], [VIEW-3]). [PG-7], [PG-11],
+    [PG-12], [PG-13], [PG-14], [MON-5].
+12. **A message that follows from another stream's reaches a stream kept by
+    interest only once that stream's durable consumers exist,** so the
+    stream keeps it for each service that reads it. [NATS-5], [NATS-6].
 
 ## 2. Terms
 
@@ -91,6 +103,14 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
 - **The cluster store:** the store's objects in Garage and records in
   PostgreSQL, as the snapshot store's specification describes it
   ([`snapshots.md`](snapshots.md#the-cluster-store)).
+- **The notices' tables and views:** those that
+  [`schemas/notices.sql`](schemas/notices.sql) defines, in which the
+  discoverer keeps what it finds
+  ([`notices.md`](notices.md#4-the-record-of-notices)).
+- **Durable consumer:** a JetStream consumer with a name, which keeps its
+  place in its stream, the messages it has delivered and those
+  acknowledged, for whichever of its service's replicas reads from it, and
+  across their restarts and NATS's ([0003]).
 
 ## 3. Statement IDs
 
@@ -141,6 +161,8 @@ deploy/
   chart/                       release 4: the umbrella chart
     charts/garage/             Garage's chart, from its source tree
     files/records.sql          the store's table, from spec/schemas/
+    files/notices.sql          the notices' tables and views, from spec/schemas/
+    files/dashboards.sql       the views Grafana reads, from spec/schemas/
     values.schema.json         what its values must hold
   kind.yaml                    the kind cluster's configuration
 ```
@@ -306,25 +328,88 @@ release.
   leader.
 
 The store's jobs and events travel in two streams
-([`snapshots.md`](snapshots.md#jobs-and-events)), each kept as that
-specification says, in files, and replicated on all three servers, so a
-stream keeps its messages and its leader through the loss of a node:
+([`snapshots.md`](snapshots.md#jobs-and-events)), and the discoverer's
+orders and notices in two more
+([`notices.md`](notices.md#streams)), each kept as its specification says,
+in files, and replicated on all three servers, so a stream keeps its
+messages and its leader through the loss of a node:
 
 | Stream | Subjects | Retention | Storage | Replicas |
 | --- | --- | --- | --- | --- |
 | `JOBS` | `edgar.jobs.poll`, `edgar.jobs.filing`, `edgar.jobs.backfill` | Work queue | File | 3 |
 | `RECORDS` | `edgar.records.poll`, `edgar.records.filing`, `edgar.records.backfill` | Interest | File | 3 |
+| `ORDERS` | `edgar.orders.backfill` | Work queue | File | 3 |
+| `NOTICES` | `edgar.notices.filing`, `edgar.notices.gap`, `edgar.notices.backfill` | Interest | File | 3 |
 
 - **NATS-3** (invariant) The umbrella chart renders a Job, a Helm hook run
   after each install and upgrade, that creates each stream the umbrella
   chart's values list, or updates it to their configuration, through
   JetStream's API. It waits until JetStream accepts its requests, and
   succeeds when each stream already is as the values say. In this version,
-  the values list the table's two streams, with the table's subjects,
+  the values list the table's four streams, with the table's subjects,
   retention, storage, and replicas ([0003]).
 - **NATS-4** (rule) In the installed charts, each stream the values list
   exists with their configuration, with a replica on each of the three
   servers, and the Job succeeds when it runs again.
+
+#### Durable consumers
+
+A work queue keeps a message until a consumer acknowledges it, whenever the
+consumer is made. A stream kept by interest keeps a message only for the
+consumers it has when the message is published, and none for a consumer
+made later, so each service that reads one needs its durable consumer
+before what it should see is published. This version makes the consumers of
+the discoverer, the scheduler, and the parse workers
+([`notices.md`, §12](notices.md#left-to-other-specifications)), before any
+of them is built, so each stream keeps what they read from the first
+message on, until they read it:
+
+| Consumer | Stream | Subjects | Read by | Unacknowledged at most |
+| --- | --- | --- | --- | --- |
+| `discoverer-polls` | `RECORDS` | `edgar.records.poll` | The discoverer: poll events one at a time, in the stream's order ([DISC-1]) | 1 |
+| `discoverer-jobs` | `RECORDS` | `edgar.records.filing`, `edgar.records.backfill` | The discoverer: the events of the jobs it queued ([DISC-1]) | JetStream's default |
+| `discoverer-orders` | `ORDERS` | `edgar.orders.backfill` | The discoverer: the scheduler's orders ([LIST-1]) | JetStream's default |
+| `scheduler-notices` | `NOTICES` | `edgar.notices.gap`, `edgar.notices.backfill` | The scheduler: gap and backfill notices ([NOTICE-1], [NOTICE-2]) | JetStream's default |
+| `parse-workers-notices` | `NOTICES` | `edgar.notices.filing` | The parse workers: filing notices, as the facts specification will say | JetStream's default |
+
+Each is a pull consumer, which every replica of its service reads from. A
+message it delivers is acknowledged one by one. One not acknowledged within
+JetStream's default of 30 seconds is delivered again, with no limit on how
+often, so a service that stops partway through a message gets it again
+([DISC-1]). It may go to another replica while the first is still at work
+on it, which [DISC-2] makes harmless: a message delivered again adds
+nothing twice. With one unacknowledged at most, `discoverer-polls` delivers
+a poll's event only once the one before it is acknowledged. Delivery begins
+at the stream's first message. Each consumer has three replicas, as its
+stream has, so its place in the stream survives the loss of a node.
+
+Helm creates the umbrella chart's services, and waits for them to be ready,
+before its hook Jobs run ([CHART-4]), and a message published before its
+stream exists isn't kept. So the Job makes each stream's consumers as soon
+as it has made the stream, and makes the streams in an order that keeps a
+message from reaching a stream kept by interest before its consumers: an
+event follows a job, and a notice follows an event or an order. It makes
+`NOTICES` first, then `RECORDS`, `ORDERS`, and `JOBS` last, so no event can
+be published before `RECORDS` has its consumers, and no notice that follows
+a message before `NOTICES` has its. A gap notice the discoverer publishes
+from polls the record already holds follows no message ([GAP-3]). A new
+install has such polls only when its database was restored while NATS's
+data wasn't kept, and such a notice published in the moment between
+`NOTICES`'s creation and its consumers' is kept for none.
+
+- **NATS-5** (invariant) The umbrella chart's values list the table's
+  durable consumers, each on its stream, with the table's subjects as its
+  filter subjects and, where the table gives one, its most unacknowledged
+  messages as its `max_ack_pending`. Each is a pull consumer with
+  `ack_policy: explicit`, `deliver_policy: all`, `max_deliver: -1`, and
+  three replicas. [NATS-3]'s Job creates each consumer the values list, or
+  updates it to their configuration, once it has created or updated the
+  consumer's stream and before the next stream. It creates or updates the
+  streams in the order `NOTICES`, `RECORDS`, `ORDERS`, `JOBS`, and succeeds
+  when each consumer already is as the values say.
+- **NATS-6** (rule) In the installed charts, each consumer the values list
+  exists on its stream with their configuration, with a replica on each of
+  the three servers, and the Job succeeds when it runs again.
 
 ### Garage
 
@@ -357,8 +442,10 @@ stream keeps its messages and its leader through the loss of a node:
   bucket: the fetcher's may read and write it, and each other service's
   may only read it ([LOG-4]). No key has Garage's `owner` permission on
   any bucket, which would let it change the bucket's configuration. In
-  this version, the values list one key for the bucket, the fetcher's;
-  each other service's comes with that service ([§9](#9-later-versions)).
+  this version, the values list two keys for the bucket: the fetcher's,
+  and the discoverer's, which may only read it
+  ([`notices.md`, §12](notices.md#left-to-other-specifications)). Each
+  other service's comes with that service ([§9](#9-later-versions)).
 
 ### Monitoring
 
@@ -380,6 +467,29 @@ stream keeps its messages and its leader through the loss of a node:
   replica. Prometheus and Alertmanager keep their data on claims
   ([VOL-2]). Grafana keeps none, since what it shows is provisioned.
 
+Grafana reads the record through the views made for it, as a role that may
+read nothing else ([VIEW-3], [PG-11], [PG-13]). It reads them from the
+database's replicas, so the dashboards' queries, which read every poll
+([`telemetry.md`, §11](telemetry.md#11-open-questions)), don't load the
+primary, where the fetcher and the discoverer write. CloudNativePG issues
+the database's server certificate from a certificate authority of its own,
+which Grafana checks the server against.
+
+- **MON-5** (invariant) Grafana's `datasources` value holds one PostgreSQL
+  data source, which isn't editable. It connects, at port 5432, to the
+  Service that CloudNativePG makes for the `Cluster`'s replicas, the
+  `Cluster`'s name followed by `-ro`, and reads the database `edgar` as
+  Grafana's role, `grafana` ([PG-11]). Its password is an environment
+  variable of Grafana's container that the data source names, set from the
+  role's Secret, so the value holds no credential ([SECRET-3]). It verifies
+  the server's certificate and name, with `sslmode: verify-full`, against
+  the `Cluster`'s certificate authority. Grafana's pod mounts the
+  authority's certificate alone, `ca.crt`, from the Secret CloudNativePG
+  keeps it in, without the authority's key.
+- **MON-6** (rule) In the installed charts, Grafana's PostgreSQL data
+  source connects to the database, verifying its certificate, and reads
+  each view in the schema `dashboards`.
+
 ### Credentials
 
 Each component keeps its own credentials in Secrets ([0001]). An operator
@@ -393,8 +503,8 @@ values, so the same values render the same chart.
   none of its committed values files sets it, so `helm template` fails
   without it. In this version: Garage's RPC secret and admin token, the ID
   and secret of each Garage key, the password of each service's database
-  role ([PG-7]), and Grafana's admin password. The chart renders each into
-  a Secret, from which its component reads it.
+  role ([PG-7]) and of Grafana's ([PG-11]), and Grafana's admin password.
+  The chart renders each into a Secret, from which its component reads it.
 - **SECRET-2** (invariant) The charts render the same manifests from the
   same values: nothing they render is generated as they render it, such as
   a random credential.
@@ -571,8 +681,9 @@ who could change a record.
   to log in, and without superuser, `createdb`, `createrole`,
   `replication`, or `bypassrls`. Its password comes from a Secret the
   umbrella chart renders from a required value ([SECRET-1]). In this
-  version, the values list one, `fetcher`; each other service's comes with
-  that service ([§9](#9-later-versions)).
+  version, the values list two, `fetcher` and `discoverer`
+  ([`notices.md`, §12](notices.md#left-to-other-specifications)); each
+  other service's comes with that service ([§9](#9-later-versions)).
 - **PG-8** (invariant) The umbrella chart renders a Job, a Helm hook run
   after each install and upgrade, that connects to `edgar` as its owner and:
   - creates the table `records` and its index from
@@ -593,6 +704,62 @@ who could change a record.
   insert a row and select it; every other service's role can select it;
   and no service's role can update, delete, or truncate a row, nor any but
   the fetcher's insert one.
+
+### The notices and the dashboards
+
+The discoverer keeps what it finds in the notices' tables, beside
+`records`, whose rows they reference
+([`notices.md`](notices.md#4-the-record-of-notices)), and Grafana reads the
+record through the views of `dashboards.sql`, which read the notices'
+([`telemetry.md`](telemetry.md#8-the-views-grafana-reads)). So [PG-8]'s Job
+makes each after what it reads, and grants what [TABLE-3] and [VIEW-3]
+allow. The views read the tables as their owner does, since none sets
+`security_invoker`, so a role granted a view needs nothing on the tables
+beneath it. A function a view calls, such as `notices.sql`'s
+`header_instant`, is executed as the role that reads the view, so each
+keeps PostgreSQL's default, which lets every role execute it.
+
+- **PG-11** (invariant) Grafana reads `edgar` as a role of its own,
+  `grafana`, which the `Cluster` declares in `managed.roles`, able to log
+  in, and without superuser, `createdb`, `createrole`, `replication`, or
+  `bypassrls`. Its password comes from a Secret the umbrella chart renders
+  from a required value ([SECRET-1]), from which Grafana's data source
+  reads it too ([MON-5]). It's not a service's role, so [PG-8] grants it
+  nothing on `records`.
+- **PG-12** (invariant) [PG-8]'s Job, once `records` exists, also:
+  - creates the notices' tables and views, and the functions they call,
+    from `deploy/chart/files/notices.sql`, unless its tables exist,
+    applying the file in one transaction, so none exists without the
+    others;
+  - grants the discoverer's role `INSERT` and `SELECT` on each of the
+    notices' tables, each other service's role `SELECT` only ([TABLE-3]),
+    and each service's role `SELECT` on each of the notices' views, and
+    no other role any privilege on them, but their owner.
+
+  `deploy/chart/files/notices.sql` is a copy of
+  [`spec/schemas/notices.sql`](schemas/notices.sql). The Job revokes no
+  privilege PostgreSQL gives every role on the functions.
+- **PG-13** (invariant) [PG-8]'s Job, once the notices' tables and views
+  exist, also:
+  - creates the schema `dashboards` and its views from
+    `deploy/chart/files/dashboards.sql`, unless the schema exists, applying
+    the file in one transaction;
+  - grants Grafana's role `USAGE` on the schema `dashboards` and `SELECT`
+    on each of its views ([VIEW-3]), and no other role any privilege on
+    the schema or its views, but their owner.
+
+  `deploy/chart/files/dashboards.sql` is a copy of
+  [`spec/schemas/dashboards.sql`](schemas/dashboards.sql). The Job waits
+  until Grafana's role exists too.
+- **PG-14** (rule) In the installed charts, `edgar` holds the notices'
+  tables and views as `notices.sql` defines them, and the schema
+  `dashboards` with its views as `dashboards.sql` defines them ([TABLE-2],
+  [VIEW-2]). The discoverer's role can insert a row in each of the notices'
+  tables and select it; every other service's role can select it; no
+  service's role can update, delete, or truncate a row, nor any but the
+  discoverer's insert one; and Grafana's role can select each view in
+  `dashboards`, and nothing `records.sql` or `notices.sql` defines
+  ([TABLE-3], [VIEW-3]).
 
 ## 8. Index
 
@@ -619,6 +786,10 @@ who could change a record.
 | PG-8 | invariant | tests | A hook Job creates the table from a copy of `records.sql`, in one transaction, and grants only the fetcher's role inserts. |
 | PG-9 | rule | kind | The table is as `records.sql` defines it; only the fetcher's role inserts, and no service's role changes a row. |
 | PG-10 | rule | review, operator | CI and the owner set a new archive server name for each cluster they create. |
+| PG-11 | invariant | tests | Grafana has a database role of its own, `grafana`, without special attributes, its password from a value. |
+| PG-12 | invariant | tests | The hook Job creates the notices' tables and views from a copy of `notices.sql`, in one transaction, and grants only the discoverer's role inserts. |
+| PG-13 | invariant | tests | The hook Job creates the schema `dashboards` from a copy of `dashboards.sql`, in one transaction, and grants only Grafana's role its views. |
+| PG-14 | rule | kind | The notices' tables and the dashboards' views are as their files define them; only the discoverer's role inserts, no service's role changes a row, and Grafana's role reads only the views. |
 | CRD-1 | invariant | tests | Every definition is a template, none from a `crds/` directory. |
 | CRD-2 | invariant | tests | Each definition is rendered by the chart the table gives it; the umbrella chart renders none. |
 | CRD-3 | invariant | tests | Each resource's definition, and any webhook that fails closed on it, comes from an earlier chart. |
@@ -638,8 +809,10 @@ who could change a record.
 | PLACE-2 | rule | kind | Their replicas run one on each worker node. |
 | NATS-1 | invariant | tests | NATS is a cluster of three servers, with JetStream on claims. |
 | NATS-2 | rule | kind | The three servers form one JetStream cluster, with a leader. |
-| NATS-3 | invariant | tests | A hook Job creates or updates the streams `JOBS` and `RECORDS`, each in files with three replicas. |
+| NATS-3 | invariant | tests | A hook Job creates or updates the streams `JOBS`, `RECORDS`, `ORDERS`, and `NOTICES`, each in files with three replicas. |
 | NATS-4 | rule | kind | Each stream is as the values say, on all three servers, and the Job can run again. |
+| NATS-5 | invariant | tests | The Job creates or updates the five durable consumers, each right after its stream, with `NOTICES` first and `JOBS` last. |
+| NATS-6 | rule | kind | Each consumer is as the values say, on all three servers, and the Job can run again. |
 | GARAGE-1 | invariant | tests | Garage is three nodes, replication factor 3, on claims, with no definition or ClusterRole of its own. |
 | GARAGE-2 | invariant | tests | A hook Job sets the layout, keys, buckets, and grants, and can run again. |
 | GARAGE-3 | rule | kind | Garage's layout, buckets, keys, and grants are as the values say. |
@@ -648,6 +821,8 @@ who could change a record.
 | MON-2 | invariant | tests | Grafana is read-only; its data sources come from its own value, which restarts it, and its sidecar provisions dashboards only. |
 | MON-3 | invariant | tests | Alertmanager sends nothing outside the cluster. |
 | MON-4 | invariant | tests | Prometheus, Alertmanager, and Grafana run one replica each. |
+| MON-5 | invariant | tests | Grafana's PostgreSQL data source reads `edgar`'s replicas as `grafana`, its password from the role's Secret, verifying the server against the `Cluster`'s authority. |
+| MON-6 | rule | kind | Grafana's PostgreSQL data source connects, verifying the server, and reads each view in `dashboards`. |
 | SECRET-1 | invariant | tests | Each credential is a required value, set by no committed file, rendered into a Secret. |
 | SECRET-2 | invariant | tests | The same values render the same manifests. |
 | SECRET-3 | invariant | tests | A credential appears only in a Secret. |
@@ -661,19 +836,29 @@ Later versions of this document will add:
 
 1. **The pipeline's own services,** as each is built, with their replicas,
    credentials, and placement, such as the fetcher's two replicas ([0005]),
-   and the database role and Garage key of each service after the fetcher
-   ([PG-7], [GARAGE-4]).
-2. **The streams' durable consumers,** each with its service. `RECORDS`
-   keeps an event only for the consumers it has when the event is
-   published, so a service that reads events needs its consumer before
-   the fetcher publishes what it should see.
-3. **Changes to the store's table.** [PG-8]'s Job creates the table only
-   where there's none, so a later version of `records.sql` needs a
-   migration, which a later version of this document specifies with the
-   snapshot store's version that changes the table.
+   and the database role and Garage key of each service after the
+   discoverer ([PG-7], [GARAGE-4]).
+2. **The fetcher's durable consumer of `JOBS`,** with the fetcher. `JOBS`
+   is a work queue, which keeps a job until it's acknowledged, so its
+   consumer can come with its service. A consumer of a stream kept by
+   interest comes in a version before the service that publishes what it
+   should see, as this version's do ([NATS-5]).
+3. **Changes to the record's tables and views.** [PG-8]'s Job creates
+   `records` only where there's none, and the notices' tables and the
+   schema `dashboards` only where there are none ([PG-12], [PG-13]), so a
+   later version of `records.sql`, `notices.sql`, or `dashboards.sql` needs
+   a migration, which a later version of this document specifies with the
+   version of the specification that changes the file.
 4. **Each component's resource requests and limits,** measured on kind
-   ([0001]), and its probes.
-5. **Tempo, Loki, and Alloy** ([0008]).
+   ([0001]), and its probes. A service's readiness can't wait on its
+   streams, consumers, or tables, which the hook Jobs make only once the
+   release's resources are ready ([CHART-4], [NATS-5], [PG-12]).
+5. **Tempo, Loki, and Alloy** ([0008]), with the endpoint the services
+   export spans to ([`telemetry.md`, §11](telemetry.md#left-to-other-specifications)).
+6. **kube-state-metrics' access to the definitions** of the pipeline's
+   resources, beside its access to the resources themselves ([RBAC-3]),
+   which the telemetry also leaves to this document
+   ([`telemetry.md`, §11](telemetry.md#left-to-other-specifications)).
 
 The owner decided on October 11, 2026 that each image built from this
 repository is tagged with the commit it's built from and loaded into kind
@@ -684,6 +869,10 @@ first service is built: [IMG-1] to [IMG-4]. The owner decided on October
 platform is built, checked the same way as the pins: this version's
 sections 4, 5, and 7. The owner decided on October 12, 2026 that this
 version also deploys what the snapshot store's version 1.0.0 leaves to it.
+The owner decided on October 14, 2026 that a version of its own deploys
+what the notices' version 0.1.0 leaves to this document, before the
+discoverer is built, and with it what the telemetry's version 0.1.0 leaves
+to it for Grafana: version 1.1.0.
 
 ## 10. Changes to this document
 
@@ -709,6 +898,27 @@ the fetcher's Lease, [LEASE-1] and [LEASE-2]. [GARAGE-2] creates the store's
 bucket and keys, and [SECRET-1] lists each service's database password
 among the credentials.
 
+### From version 1.0.0
+
+Version 1.1.0 deploys what the notices' version 0.1.0 leaves to this
+document, and what the telemetry's version 0.1.0 leaves to it for Grafana.
+It adds statements, and lengthens the lists that [NATS-3], [GARAGE-4],
+[PG-7], and [SECRET-1] give for this version, so it's a minor version: no
+statement's meaning changes.
+
+- **NATS:** the streams `ORDERS` and `NOTICES`, [NATS-3]; the durable
+  consumers of the discoverer, the scheduler, and the parse workers, and
+  the order in which the Job makes the streams, [NATS-5] and [NATS-6].
+- **Garage:** the discoverer's key, which may only read the store's
+  bucket, [GARAGE-4].
+- **PostgreSQL:** the discoverer's role, [PG-7], and Grafana's, [PG-11];
+  `notices.sql` and `dashboards.sql`, applied after `records.sql`, with
+  their grants, [PG-12] to [PG-14].
+- **Grafana:** its PostgreSQL data source, [MON-5] and [MON-6], and its
+  role's password among the credentials, [SECRET-1].
+
+Nothing was installed under version 1.0.0, so nothing installed changes.
+
 [0001]: ../docs/decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
 [0002]: ../docs/decisions/0002-store-bodies-in-garage.md
 [0003]: ../docs/decisions/0003-queue-work-in-nats-jetstream.md
@@ -727,7 +937,9 @@ among the credentials.
 [CRD-4]: #definitions
 [CRD-5]: #definitions
 [CRD-6]: #definitions
+[DISC-1]: notices.md#processing
 [FETCH-16]: snapshots.md#the-fetcher
+[GAP-3]: notices.md#5-polls-coverage-and-gaps
 [GARAGE-1]: #garage
 [GARAGE-2]: #garage
 [GARAGE-3]: #garage
@@ -740,11 +952,18 @@ among the credentials.
 [KIND-2]: #the-kind-cluster
 [LEASE-1]: #the-fetchers-lease
 [LEASE-2]: #the-fetchers-lease
+[LIST-1]: notices.md#8-backfills
 [LOG-3]: snapshots.md#8-history
 [LOG-4]: snapshots.md#8-history
+[MON-5]: #monitoring
+[MON-6]: #monitoring
 [NATS-1]: #nats
 [NATS-3]: #nats
 [NATS-4]: #nats
+[NATS-5]: #durable-consumers
+[NATS-6]: #durable-consumers
+[NOTICE-1]: notices.md#8-backfills
+[NOTICE-2]: notices.md#8-backfills
 [PG-1]: #7-postgresql
 [PG-2]: #7-postgresql
 [PG-3]: #instances-and-backups
@@ -755,6 +974,10 @@ among the credentials.
 [PG-8]: #the-stores-database
 [PG-9]: #the-stores-database
 [PG-10]: #instances-and-backups
+[PG-11]: #the-notices-and-the-dashboards
+[PG-12]: #the-notices-and-the-dashboards
+[PG-13]: #the-notices-and-the-dashboards
+[PG-14]: #the-notices-and-the-dashboards
 [PIN-1]: #6-pins
 [PIN-2]: #6-pins
 [PIN-3]: #6-pins
@@ -764,12 +987,17 @@ among the credentials.
 [PIN-7]: #6-pins
 [PLACE-1]: #placement
 [PLACE-2]: #placement
+[RBAC-3]: controls.md#9-who-may-change-what
 [SECRET-1]: #credentials
 [SECRET-2]: #credentials
 [SECRET-3]: #credentials
 [SECRET-4]: #credentials
 [STORE-1]: snapshots.md#the-cluster-store
 [STORE-2]: snapshots.md#the-cluster-store
+[TABLE-2]: notices.md#4-the-record-of-notices
+[TABLE-3]: notices.md#4-the-record-of-notices
+[VIEW-2]: telemetry.md#8-the-views-grafana-reads
+[VIEW-3]: telemetry.md#8-the-views-grafana-reads
 [VOL-1]: #volumes
 [VOL-2]: #volumes
 [VOL-3]: #volumes
