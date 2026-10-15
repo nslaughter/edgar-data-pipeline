@@ -176,14 +176,16 @@ and the investigation's refetches will show it (tasks T4 and T8).
 
 ### PostgreSQL
 
-Each poll adds a record and a row of `polls`, 654 to 722 bytes, and in the
-high case a reading of its new version, 263 more: 654 to 985 bytes a poll.
+Each poll adds a record and a row of `polls`, 654 to 722 bytes. In the
+high case, a poll of `submissions` adds a reading of its new version too,
+263 more, since the discoverer reads only `submissions` ([SEEN-1]): 654 to
+985 bytes a poll of `submissions`, and 654 to 722 a poll of another feed.
 
 | Scope | Arithmetic | A day | A year |
 | --- | --- | --- | --- |
 | The default | 25,920 polls × 654 to 985 bytes; filings and facts add under 0.1 MB a day | 17.0 to 25.6 MB | 6.2 to 9.3 GB |
 | The full budget | 216,000 × 654 to 985 | 141 to 213 MB | 52 to 78 GB |
-| A larger feed | 51,840 × 654 to 985 | 34 to 51 MB | 12 to 19 GB |
+| A larger feed | 25,920 polls of `submissions` × 654 to 985, and 25,920 of `companyfacts` × 654 to 722 | 34 to 44 MB | 12 to 16 GB |
 | All filers | 3,100 to 6,200 filings × 981; 6,355 to 12,710 fetches × 1,205; and 10.7 to 214 million facts a year × 150 to 400 | 15 to 256 MB | 5.5 to 93 GB |
 
 The first poll of each Source adds its list's filings, about 1,000 each
@@ -223,7 +225,7 @@ The archive is in Garage, under the bucket `database-backups` ([PG-4]).
   | --- | --- | --- | --- |
   | The default | 17.0 to 25.6 MB | 1.15 to 1.73 TB | 0.29 to 0.86 TB |
   | The full budget | 141 to 213 MB | 9.5 to 14.3 TB | 2.4 to 7.1 TB |
-  | A larger feed | 34 to 51 MB | 2.3 to 3.4 TB | 0.57 to 1.72 TB |
+  | A larger feed | 34 to 44 MB | 2.3 to 3.0 TB | 0.57 to 1.49 TB |
   | All filers | 15 to 256 MB | 1.0 to 17.1 TB | 0.26 to 8.6 TB |
 
 Kept forever, the base backups grow with the square of the time: each day
@@ -291,7 +293,7 @@ disk. After *d* days it holds:
 | --- | --- | --- | --- | --- |
 | The default | 12 to 98 GB | 0.89 to 3.45 TB | 75% to 97% | 110 to 271 days |
 | The full budget | 70 to 738 GB | 7.3 to 28.5 TB | 75% to 97% | 22 to 91 days |
-| A larger feed | 20 to 852 GB | 1.8 to 15.0 TB | 34% to 97% | 18 to 191 days |
+| A larger feed | 20 to 846 GB | 1.8 to 14.3 TB | 31% to 97% | 18 to 191 days |
 | All filers | 12 to 254 GB | 0.81 to 26.5 TB | 95% to 97% | 45 to 283 days |
 
 In each range, the shorter time is the high case, where each poll stores a
@@ -405,6 +407,7 @@ so its cost grows with the polls' rate and with time
 [prom-storage]: https://prometheus.io/docs/prometheus/latest/storage/#operational-aspects
 [questions]: ../../investigation/edgar.md#questions
 [records-sql]: ../../spec/schemas/records.sql
+[SEEN-1]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [SRC-4]: ../../investigation/edgar.md#findings-so-far
 [SRC-9]: ../../investigation/edgar.md#findings-so-far
 [SRC-10]: ../../investigation/edgar.md#findings-so-far

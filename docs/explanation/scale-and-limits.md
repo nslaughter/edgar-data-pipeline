@@ -117,7 +117,7 @@ backups grow with the square of the time:
 | --- | --- | --- | --- |
 | The default | 0.89 to 3.45 TB | 75% to 97% | 110 to 271 days |
 | The full budget | 7.3 to 28.5 TB | 75% to 97% | 22 to 91 days |
-| A larger feed | 1.8 to 15.0 TB | 34% to 97% | 18 to 191 days |
+| A larger feed | 1.8 to 14.3 TB | 31% to 97% | 18 to 191 days |
 | All filers | 0.81 to 26.5 TB | 95% to 97% | 45 to 283 days |
 
 These are the [estimates' figures](estimates.md#on-the-hosts-disk), at
