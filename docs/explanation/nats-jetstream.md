@@ -106,7 +106,7 @@ It also specifies five durable consumers, which the same Job makes
 | Consumer | Stream | Subjects | Read by | Unacknowledged at most |
 | --- | --- | --- | --- | --- |
 | `discoverer-polls` | `RECORDS` | `edgar.records.poll` | The discoverer, poll events one at a time, in the stream's order ([DISC-1]) | 1 |
-| `discoverer-jobs` | `RECORDS` | `edgar.records.filing`, `edgar.records.backfill` | The discoverer, the events of the jobs it queued ([DISC-1]) | JetStream's default |
+| `discoverer-jobs` | `RECORDS` | `edgar.records.filing`, `edgar.records.backfill` | The discoverer, the events of the jobs it queued, one at a time ([DISC-1], [FILE-5], [LIST-3]) | 1 |
 | `discoverer-orders` | `ORDERS` | `edgar.orders.backfill` | The discoverer, the scheduler's orders ([LIST-1]) | JetStream's default |
 | `scheduler-notices` | `NOTICES` | `edgar.notices.gap`, `edgar.notices.backfill` | The scheduler, gap and backfill notices ([NOTICE-1], [NOTICE-2]) | JetStream's default |
 | `parse-workers-notices` | `NOTICES` | `edgar.notices.filing` | The parse workers, filing notices, as the facts specification will say | JetStream's default |
@@ -419,6 +419,7 @@ metrics workers scale by, and steps that are safe to repeat ([0003]).
 [gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [LIST-1]: ../../spec/notices.md#8-backfills
 [LIST-2]: ../../spec/notices.md#8-backfills
+[LIST-3]: ../../spec/notices.md#8-backfills
 [LIST-5]: ../../spec/notices.md#8-backfills
 [MSG-1]: ../../spec/notices.md#streams
 [MSG-2]: ../../spec/notices.md#streams

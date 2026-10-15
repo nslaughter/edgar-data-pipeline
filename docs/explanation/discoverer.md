@@ -352,8 +352,9 @@ tables, only views of its own made from them ([VIEW-3]).
 
 Its place in `RECORDS` and `ORDERS` is kept by three durable consumers in
 NATS: `discoverer-polls`, of poll events, with one unacknowledged at a
-time; `discoverer-jobs`, of the events of the jobs it queued; and
-`discoverer-orders`, of the scheduler's orders. Each is a pull consumer that
+time; `discoverer-jobs`, of the events of the jobs it queued, with one
+unacknowledged at a time too; and `discoverer-orders`, of the scheduler's
+orders. Each is a pull consumer that
 every replica reads from, with no limit on redeliveries, and each is made
 right after its stream, so it reads every event and order from the first
 ([NATS-5]).
@@ -366,9 +367,12 @@ The design gives the discoverer a Deployment, without a count
 gauges at their greatest across them ([ALERT-2]). Its consumer of poll
 events, `discoverer-polls`, has one event unacknowledged at a time
 ([NATS-5], [DISC-1]), so poll events are handled one at a time however many
-replicas run. Its replica count isn't
-specified: the deployment specification adds each service's replicas in a
-later version ([§9 of deployment][deployment-later]).
+replicas run. So does its consumer of its jobs' events, `discoverer-jobs`,
+so that when an event's transaction checks whether a filing or a Backfill
+is complete, it sees the readings of each event before it ([NATS-5],
+[FILE-5], [LIST-3]). Its replica count isn't specified: the deployment
+specification adds each service's replicas in a later version
+([§9 of deployment][deployment-later]).
 
 ## How it scales
 
@@ -376,7 +380,8 @@ Poll events are handled one at a time, in order ([DISC-1]), and the chart
 holds the polls to 2.5 a second ([VAL-3]). At the starting cadence, three
 companies every 10 seconds, that's 0.3 a second, and 25,920 polls a day
 ([0010]), each a list of about 1,000 recent filings ([SRC-9]). [DISC-1]
-asks for order only of poll events.
+asks for order only of poll events, but the events of its jobs are handled
+one at a time too, however many replicas run ([NATS-5]).
 
 The views `coverage` and `gaps` that Grafana reads read every poll, so each
 read grows with the record: about 9.5 million polls a year at the starting
@@ -415,7 +420,7 @@ there instead of implying that nothing changed
   and `NOTICES`, which it publishes to ([0003]). Each of its durable
   consumers is made right after its stream, so it reads every event and
   order from the first: `discoverer-polls` and `discoverer-jobs` of
-  `RECORDS`, with one poll event unacknowledged at a time, and
+  `RECORDS`, each with one event unacknowledged at a time, and
   `discoverer-orders` of `ORDERS` ([NATS-5]).
 - **PostgreSQL:** its tables and views, made after the store's table
   ([PG-12]), its own role, `discoverer` ([PG-7]), and `SELECT` on `records`
@@ -525,7 +530,7 @@ in both languages ([0006]).
 | [BACKFILL-1] | A Backfill fetches its range's filings, except those already held. |
 | [METRIC-1], [METRIC-2], [METRIC-5] | Its metrics, each open gap and each Source with no successful poll among them. |
 | [TRACE-1], [TRACE-3], [TRACE-4], [TRACE-5], [TRACE-7], [TRACE-8] | Each filing's trace continues through it; a Backfill's filing gets its own. |
-| [NATS-5], [NATS-6] | Its three durable consumers, of `RECORDS` and `ORDERS`, each made right after its stream, with one poll event unacknowledged at a time. |
+| [NATS-5], [NATS-6] | Its three durable consumers, of `RECORDS` and `ORDERS`, each made right after its stream, those of `RECORDS` with one event unacknowledged at a time. |
 | [PG-7], [PG-12], [PG-14] | Its own role, `discoverer`, which alone may add to its tables, made after the store's table. |
 | [GARAGE-4] | Its own key, which may only read `snapshots`. |
 

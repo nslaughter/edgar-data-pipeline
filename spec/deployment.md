@@ -367,7 +367,7 @@ message on, until they read it:
 | Consumer | Stream | Subjects | Read by | Unacknowledged at most |
 | --- | --- | --- | --- | --- |
 | `discoverer-polls` | `RECORDS` | `edgar.records.poll` | The discoverer: poll events one at a time, in the stream's order ([DISC-1]) | 1 |
-| `discoverer-jobs` | `RECORDS` | `edgar.records.filing`, `edgar.records.backfill` | The discoverer: the events of the jobs it queued ([DISC-1]) | JetStream's default |
+| `discoverer-jobs` | `RECORDS` | `edgar.records.filing`, `edgar.records.backfill` | The discoverer: the events of the jobs it queued, one at a time ([DISC-1], [FILE-5], [LIST-3]) | 1 |
 | `discoverer-orders` | `ORDERS` | `edgar.orders.backfill` | The discoverer: the scheduler's orders ([LIST-1]) | JetStream's default |
 | `scheduler-notices` | `NOTICES` | `edgar.notices.gap`, `edgar.notices.backfill` | The scheduler: gap and backfill notices ([NOTICE-1], [NOTICE-2]) | JetStream's default |
 | `parse-workers-notices` | `NOTICES` | `edgar.notices.filing` | The parse workers: filing notices, as the facts specification will say | JetStream's default |
@@ -378,10 +378,18 @@ JetStream's default of 30 seconds is delivered again, with no limit on how
 often, so a service that stops partway through a message gets it again
 ([DISC-1]). It may go to another replica while the first is still at work
 on it, which [DISC-2] makes harmless: a message delivered again adds
-nothing twice. With one unacknowledged at most, `discoverer-polls` delivers
-a poll's event only once the one before it is acknowledged. Delivery begins
-at the stream's first message. Each consumer has three replicas, as its
-stream has, so its place in the stream survives the loss of a node.
+nothing twice. With one unacknowledged at most, each of the discoverer's
+consumers of `RECORDS` delivers an event only once the one before it is
+acknowledged, which the discoverer does only once the event's transaction
+is committed ([DISC-2]). So it handles poll events in the stream's order
+([DISC-1]), and the events of its jobs one at a time: when an event's
+transaction checks whether a filing or a Backfill is now complete, it sees
+the readings each event before it added ([FILE-5], [LIST-3]). Were two
+events of one filing or Backfill handled at once, under PostgreSQL's
+default isolation neither transaction would see the other's reading, so
+neither would find it complete. Delivery begins at the stream's first
+message. Each consumer has three replicas, as its stream has, so its place
+in the stream survives the loss of a node.
 
 Helm creates the umbrella chart's services, and waits for them to be ready,
 before its hook Jobs run ([CHART-4]), so a service may publish before the
@@ -954,7 +962,9 @@ Nothing was installed under version 1.0.0, so nothing installed changes.
 [CRD-5]: #definitions
 [CRD-6]: #definitions
 [DISC-1]: notices.md#processing
+[DISC-2]: notices.md#processing
 [FETCH-16]: snapshots.md#the-fetcher
+[FILE-5]: notices.md#7-a-filings-files
 [GAP-3]: notices.md#5-polls-coverage-and-gaps
 [GARAGE-1]: #garage
 [GARAGE-2]: #garage
@@ -969,6 +979,7 @@ Nothing was installed under version 1.0.0, so nothing installed changes.
 [LEASE-1]: #the-fetchers-lease
 [LEASE-2]: #the-fetchers-lease
 [LIST-1]: notices.md#8-backfills
+[LIST-3]: notices.md#8-backfills
 [LOG-3]: snapshots.md#8-history
 [LOG-4]: snapshots.md#8-history
 [MON-5]: #monitoring

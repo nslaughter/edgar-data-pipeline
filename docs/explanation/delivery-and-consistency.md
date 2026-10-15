@@ -120,6 +120,16 @@ Order matters in two places:
   event again after a restart, the bounds still hold, more loosely
   ([SEEN-3], [when each Source first showed each filing]).
 
+The events of the discoverer's jobs are handled one at a time too, though
+[DISC-1] asks for no order among them: their consumer, `discoverer-jobs`,
+has one unacknowledged at a time, and the discoverer acknowledges an event
+only once its transaction is committed ([NATS-5], [DISC-2]). So when an
+event's transaction checks whether a filing or a Backfill is complete, it
+sees the readings each event before it added ([FILE-5], [LIST-3]). Two
+events of one filing handled at once would, under PostgreSQL's default
+isolation, each miss the other's reading, and neither would find the
+filing complete.
+
 ## Why a message delivered twice does no harm
 
 A message may be delivered more than once, so each step is safe to repeat
@@ -351,6 +361,7 @@ the same `tool` commit reads the same bytes ([IMP-1], [IMP-2], [IMP-3]).
 [FILE-5]: ../../spec/notices.md#7-a-filings-files
 [ORDER-1]: ../../spec/notices.md#8-backfills
 [LIST-1]: ../../spec/notices.md#8-backfills
+[LIST-3]: ../../spec/notices.md#8-backfills
 [LIST-5]: ../../spec/notices.md#8-backfills
 [NOTICE-1]: ../../spec/notices.md#8-backfills
 [NOTICE-2]: ../../spec/notices.md#8-backfills
