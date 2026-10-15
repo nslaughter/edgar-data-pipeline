@@ -102,6 +102,7 @@ files takes and stores, not that feed's own polls.
 | Facts a report | 440 to 4,400 | `companyfacts` holds 2,641 values of the six stored reports, 440 each: only their facts of `us-gaap` and `dei` concepts with a unit and without dimensions ([SRC-14]). Assumption: an instance holds up to 10 times as many. Replaced by the facts the parse workers write, task T25. |
 | A fact's row | 150 to 400 bytes, with its indexes | Assumption: the fact table is the facts specification's, task T17, still to be written. |
 | A fact in the export | 20 to 60 bytes | Assumption: the export's format is task T18's. |
+| The export's runs | A run a day. Low: the export holds each fact once. High: each run writes every fact, and every run's files are kept | Assumption: how often the export runs and what it keeps are task T18's, and no statement removes its files. Replaced by the export's specification, task T18, and the export's size in Garage on kind. |
 | Prometheus | A scrape every 30 seconds, kept 10 days, at 1 to 2 bytes a sample | Assumption: kube-prometheus-stack's defaults ([its values][kps-values]), which no statement changes, and Prometheus's own figure for a sample ([its storage][prom-storage]). Replaced by Prometheus's own metrics on kind. |
 | The platform's own series | 20,000 to 60,000 | Assumption: what kube-prometheus-stack scrapes of a cluster of four nodes: the API server, kubelets and containers, node-exporter, and kube-state-metrics. Replaced by `prometheus_tsdb_head_series` on kind. |
 | The pipeline's own series | 18 to 23 a Source, 6 a Backfill, and 320 to 550 more | From the metrics and labels of [§4][telemetry-metrics] and [§5][telemetry-state] of the telemetry. Assumption: up to 8 statuses seen of each kind of job, one or two discoverer replicas, and 40 to 80 series of each replica's own client library. Replaced by Prometheus's count on kind. |
@@ -238,13 +239,23 @@ with the objects ([below](#on-the-hosts-disk)).
 A job waits in `JOBS` until the fetcher takes it, and an event in `RECORDS`
 until each of its consumers acknowledges it ([jobs and events][store-jobs]).
 While they keep up, the streams hold a few messages. They grow while a
-consumer is down, and each message is on all three servers ([NATS-3]):
+consumer is down, and each message is on all three servers ([NATS-3]). A
+poll's job stays until it's taken, though it has expired ([JOB-5]):
 
-| What waits | At the default | At the full budget |
+| Scope | Polls' jobs, while no fetcher runs | Events, while the discoverer is down |
 | --- | --- | --- |
-| Polls' jobs, while no fetcher runs: each stays until it's taken, though it has expired ([JOB-5]) | 25,920 a day × 400 to 500 bytes = 10 to 13 MB a day | 86 to 108 MB a day |
-| Events, while the discoverer is down | 25,920 a day × 1,100 to 1,400 bytes = 29 to 36 MB a day | 238 to 302 MB a day |
-| A Backfill's jobs, of every filing of the three companies | 22,904 × 400 to 500 bytes = 9.2 to 11.5 MB, taken in 70 to 81 minutes | The same, taken in 2.2 to 2.5 hours |
+| The default | 25,920 a day × 400 to 500 bytes = 10 to 13 MB a day | 25,920 a day × 1,100 to 1,400 bytes = 29 to 36 MB a day |
+| The full budget | 216,000 × 400 to 500 = 86 to 108 MB a day | 216,000 × 1,100 to 1,400 = 238 to 302 MB a day |
+| A larger feed | 51,840 × 400 to 500 = 21 to 26 MB a day | 51,840 × 1,100 to 1,400 = 57 to 73 MB a day |
+| All filers | That feed's polls', which this page doesn't estimate | That feed's polls', which this page doesn't estimate |
+
+New filings' fetches add nothing meanwhile: the discoverer queues them as
+it reads the polls' events ([FILE-2]), so none is queued while no poll is
+made or no event read. A Backfill's jobs wait behind the polls and new
+filings' fetches ([JOB-4]): one of every filing the three companies'
+`submissions` list, 22,904 jobs × 400 to 500 bytes, holds 9.2 to 11.5 MB
+in `JOBS`, taken in 70 to 81 minutes at the default, and 2.2 to 2.5 hours
+at the full budget.
 
 `ORDERS` and `NOTICES` carry an order for each Backfill and a notice for
 each filing, gap, and step of a Backfill ([streams][notices-streams]): a
@@ -252,11 +263,29 @@ few a day at the default.
 
 ### The export
 
-The export's format and how often it runs are the export's specification's,
-task T18 ([plan][plan-facts]). At 20 to 60 bytes a fact, a year of the
-default's facts, 5,280 to 52,800, is 0.1 to 3.2 MB, and the three companies'
-208 reports, 92,000 to 915,000 facts, 1.8 to 55 MB. If each run wrote every
-fact and kept its files, a run a day would store 365 copies a year.
+The export's format, how often it runs, and what it keeps are the export's
+specification's, task T18 ([plan][plan-facts]). Until then, a fact takes
+20 to 60 bytes in it, and it runs once a day. In the low case, the export
+holds each fact once: each run writes only the facts new since the one
+before, or replaces it. In the high case, each run writes every fact, and
+every run's files are kept, so a day adds as many bytes as every fact so
+far, and the first year's runs add up to (1 + 2 + … + 365) = 66,795 days'
+new facts, as the base backups do ([above](#the-databases-archive)):
+
+| Scope | Facts a year | Each fact once: a day, and a year | Every run kept: a day after a year, and the first year |
+| --- | --- | --- | --- |
+| The default | 5,280 to 52,800 | 5,280 × 20 bytes ÷ 365 = 0.3 KB, to 52,800 × 60 ÷ 365 = 8.7 KB; 0.1 to 3.2 MB | 3.2 MB; 8.7 KB × 66,795 = 0.58 GB |
+| The full budget | 44,000 to 440,000 | 2.4 to 72 KB; 0.9 to 26 MB | 26 MB; 72 KB × 66,795 = 4.8 GB |
+| A larger feed | The default's | The default's | The default's |
+| All filers | 10.7 to 214 million | 0.59 to 35 MB; 0.21 to 12.8 GB | 12.8 GB; 35 MB × 66,795 = 2.35 TB |
+
+A Backfill of the three companies' 208 reports adds 92,000 to 915,000
+facts, 1.8 to 55 MB, to the export once in the low case, and to each run
+after it in the high case. Garage keeps each file on each of its three
+nodes ([GARAGE-3]), so the export takes three times its size on the
+host's disk. That's much only for all filers in the high case: 3 × 2.35 =
+7.0 TB after a year, and 17% of the disk by the time it's full
+([below](#on-the-hosts-disk)).
 
 ### Prometheus
 
@@ -267,6 +296,8 @@ series grow with the Sources and Backfills, not with the filings:
 | --- | --- | --- | --- |
 | The default | 320 to 550 + 3 × 18 to 23 = 374 to 619 | 20,374 to 60,619 | 20,374 × 2,880 scrapes a day × 1 byte × 10 = 0.59 GB, to 60,619 × 2,880 × 2 × 10 = 3.49 GB |
 | The full budget | 320 to 550 + 25 × 18 to 23 = 770 to 1,125 | 20,770 to 61,125 | 0.60 to 3.52 GB |
+| A larger feed | 320 to 550 + 6 × 18 to 23 = 428 to 688 | 20,428 to 60,688 | 0.59 to 3.50 GB |
+| All filers | 320 to 550, and 18 to 23 for each of that feed's Sources | 20,320 to 60,550, and that feed's | 0.59 to 3.49 GB, and 0.5 to 1.3 MB for each of that feed's Sources |
 
 Each Source adds 18 to 23 series, 0.5 to 1.3 MB at 10 days. Prometheus's
 storage stops growing once its oldest data is 10 days old, and
@@ -285,7 +316,9 @@ later version of the deployment ([§9 of the deployment][deployment-later]).
 Every volume is in one host directory ([KIND-2]), so the stores share one
 disk. After *d* days it holds:
 
-- 3 × Garage's: the objects, the WAL archived, and the base backups ([GARAGE-3]);
+- 3 × Garage's: the objects, the export, the WAL archived, and the base
+  backups ([GARAGE-3]), with the export's low case in the low case and its
+  high case in the high ([above](#the-export));
 - 3 × the database's, and each instance's WAL ([PG-3]);
 - Prometheus's 0.6 to 3.5 GB, and the streams' few MB.
 
@@ -294,7 +327,7 @@ disk. After *d* days it holds:
 | The default | 12 to 98 GB | 0.89 to 3.45 TB | 75% to 97% | 110 to 271 days |
 | The full budget | 70 to 738 GB | 7.3 to 28.5 TB | 75% to 97% | 22 to 91 days |
 | A larger feed | 20 to 846 GB | 1.8 to 14.3 TB | 31% to 97% | 18 to 191 days |
-| All filers | 12 to 254 GB | 0.81 to 26.5 TB | 95% to 97% | 45 to 283 days |
+| All filers | 12 to 303 GB | 0.81 to 33.5 TB | 77% to 95% | 41 to 283 days |
 
 In each range, the shorter time is the high case, where each poll stores a
 new version: at the default, after 110 days, its objects take 234 GB of
@@ -352,7 +385,7 @@ so its cost grows with the polls' rate and with time
 | The next reports' instances | The reports' sizes | Tasks T6, T7, and T9 |
 | Each component's memory and CPU, each volume's size, the archive's size in Garage, and Prometheus's series | The rest of this page's assumptions | The platform on kind, task T20, then each service as it's built: tasks T21 to T24 |
 | The cost of reading `gaps` and `coverage` | The polls read a second, in [reading the gaps](scale-and-limits.md#reading-the-gaps) | Measured on kind ([open question 4 of the telemetry][telemetry-open]), with the monitoring, task T28 |
-| Facts a report, a fact's row, and a fact in the export | The facts' and the export's growth | Tasks T17, T18, T25, and T27 |
+| Facts a report, a fact's row, a fact in the export, and the export's runs | The facts' and the export's growth | Tasks T17, T18, T25, and T27 |
 | The pipeline's own polls, fetches, and filings | Requests, bytes, and rows | The record, once the fetcher and the discoverer run, tasks T23 and T24 |
 
 [0001]: ../decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
