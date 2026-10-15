@@ -574,6 +574,13 @@ def test_the_status_pages_generated_columns_are_current() -> None:
     assert site_status.check(ROOT) == []
 
 
+def block_names(page: Path) -> set[str]:
+    """The parts a page's status block names."""
+    match = site_status.BLOCK.search(page.read_text("utf-8"))
+    assert match is not None
+    return set(match.group(1).split("; "))
+
+
 @pytest.mark.spec("STATUS-3")
 def test_a_task_marked_done_makes_the_status_page_out_of_date(tmp_path: Path) -> None:
     root = copy_sources(tmp_path)
@@ -584,9 +591,19 @@ def test_a_task_marked_done_makes_the_status_page_out_of_date(tmp_path: Path) ->
         "utf-8",
     )
 
+    # T22 builds the scheduler and the controls, so their statuses change: on
+    # the status page, on the home page, and on each explanation page whose
+    # status block names either of them, or all the parts.
+    changed = {"Scheduler", "The controls", "all"}
+    explanation = sorted(
+        path.relative_to(root).as_posix()
+        for path in (root / "docs" / "explanation").glob("*.md")
+        if changed & block_names(path)
+    )
+
     assert site_status.check(root) == [
         f"STATUS-3: {page}'s generated parts are out of date; run `uv run scripts/site_status.py`"
-        for page in ("docs/status.md", "index.md")
+        for page in ("docs/status.md", "index.md", *explanation)
     ]
     pages, _ = site_status.generate(root)
     assert "| The controls | Built |" in pages["docs/status.md"]

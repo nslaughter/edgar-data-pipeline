@@ -41,7 +41,7 @@ the plan's tasks wait on.
 | NATS JetStream | Specified | [0003](decisions/0003-queue-work-in-nats-jetstream.md) | [`deployment.md`](../spec/deployment.md) 1.0.0 | T13 (done), T34 (done) | T20 (not done) | — |
 | Garage | Specified | [0002](decisions/0002-store-bodies-in-garage.md) | [`deployment.md`](../spec/deployment.md) 1.0.0, [`snapshots.md`](../spec/snapshots.md) 1.0.0 | T13 (done), T15 (done), T34 (done) | T20 (not done) | — |
 | PostgreSQL 18 | Specified | [0004](decisions/0004-keep-the-record-in-postgresql-18.md) | [`deployment.md`](../spec/deployment.md) 1.0.0, [`snapshots.md`](../spec/snapshots.md) 1.0.0 | T13 (done), T15 (done), T34 (done) | T20 (not done) | — |
-| Monitoring: metrics, alerts, and dashboards | Decided; specified in part | [0008](decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md) | [`telemetry.md`](../spec/telemetry.md) 0.1.0, [`deployment.md`](../spec/deployment.md) 1.0.0 | T19 (done), T32 (not done) | T28 (not done), T33 (not done) | — |
+| Monitoring: metrics, alerts, and dashboards | Decided; specified in part | [0008](decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md) | [`telemetry.md`](../spec/telemetry.md) 0.1.0, [`deployment.md`](../spec/deployment.md) 1.0.0 | T19 (done), T32 (not done) | T20 (not done), T28 (not done), T33 (not done) | — |
 | Monitoring: traces | Specified | [0008](decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md) | [`telemetry.md`](../spec/telemetry.md) 0.1.0 | T19 (done) | T29 (not done) | — |
 | Monitoring: logs | Decided | [0008](decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md) | — | — | T30 (not done) | — |
 | `edgar-asof` | Decided | [0009](decisions/0009-read-edgar-through-a-public-point-in-time-library.md) | — | — | `edgar-asof`'s first release (T24); an `edgar-asof` release that specifies the fact model (T17); an `edgar-asof` release that reads XBRL instances (T25); pinned in `uv.lock`: none | — |
@@ -52,7 +52,7 @@ the plan's tasks wait on.
 | The charts | Decided; specified in part | [0001](decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md), [0011](decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md) | [`deployment.md`](../spec/deployment.md) 1.0.0 | T13 (done), T34 (done), T38 (not done) | T20 (not done) | — |
 | The fake EDGAR | Planned | — | — | — | T21 (not done) | — |
 | The drills | Planned | — | — | — | T31 (not done) | — |
-| The documentation site | Specified; built in part | [0012](decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md) | [`site.md`](../spec/site.md) 0.1.0 | T39 (done) | T40 (done), T41 (not done), T42 (not done), T43 (not done) | — |
+| The documentation site | Specified; built in part | [0012](decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md) | [`site.md`](../spec/site.md) 0.1.0 | T39 (done) | T40 (done), T41 (done), T42 (not done), T43 (not done) | — |
 <!-- end generated: parts -->
 
 ## The investigation
