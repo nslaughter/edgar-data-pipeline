@@ -172,8 +172,9 @@ facts from PostgreSQL ([components][design-components]). Its database role
 is its own ([PG-7]), and may only select the store's records ([LOG-3]) and
 the discoverer's tables ([TABLE-3]).
 Decision 0004 puts the scale at millions of rows, even after a backfill, so
-speed doesn't decide the database ([0004]). Task T42 estimates the CPU and
-memory it needs ([plan][plan-documentation]).
+speed doesn't decide the database ([0004]). The
+[estimates](estimates.md#cpu-memory-and-storage) assume 30 to 100 MB of
+memory a replica, until it's built and measured.
 
 > **Analysis.** No task, decision record, or specification covers this.
 > Being stateless, the query API could scale by adding replicas behind one
@@ -243,7 +244,6 @@ T32, which specify it; and T26, which builds it ([status page][status]).
 [design-filing]: ../design.md#one-filing-end-to-end
 [design-testing]: ../design.md#testing-on-kind
 [design-waits]: ../design.md#what-waits-on-the-investigation
-[plan-documentation]: ../plan.md#documentation
 [plan-facts]: ../plan.md#facts
 [SRC-1]: ../../investigation/edgar.md#findings-so-far
 [SRC-2]: ../../investigation/edgar.md#findings-so-far

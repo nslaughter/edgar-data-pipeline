@@ -295,8 +295,12 @@ from Garage, which the drills are still to show.
   Each component's requests and limits come in a later version of the
   deployment ([deployment, §9][later]).
 
-How fast the tables, their indexes, the write-ahead log, and the backups
-grow is the estimates' to say ([PAGE-5]), in task T42.
+The [estimates](estimates.md#postgresql) put the tables and their indexes
+at 6.2 to 9.3 GB a year at the default scope, and give the growth of the
+write-ahead log and the backups. With a base backup a day, and none
+removed, the backups grow with the square of the time, and are most of
+what fills the host's disk
+([scale and limits](scale-and-limits.md#the-hosts-disk)).
 
 ## How it fails
 
@@ -422,7 +426,6 @@ DuckDB, pandas, or Polars without the cluster ([0004]).
 [dashboards-sql]: ../../spec/schemas/dashboards.sql
 [notices-sql]: ../../spec/schemas/notices.sql
 [records-sql]: ../../spec/schemas/records.sql
-[PAGE-5]: ../../spec/site.md#7-the-pages-written-for-the-site
 [FETCH-4]: ../../spec/snapshots.md#10-fetching
 [JOB-6]: ../../spec/snapshots.md#jobs-and-events
 [LOG-3]: ../../spec/snapshots.md#8-history

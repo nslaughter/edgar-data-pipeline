@@ -81,8 +81,13 @@ and the cluster][scope-cluster], [FILE-1], [LIST-2]):
 | The XBRL instance of an 8-K/A | 9,836 to 11,695 | 1,381 to 2,165 |
 
 The fetcher's gzip may differ from `snapshot.py`'s ([OBJ-1]), so these are
-the git store's sizes, not the cluster's. How fast the bucket grows is for
-the estimates ([PAGE-5]), task T42.
+the git store's sizes, not the cluster's. The
+[estimates](estimates.md#objects-in-garage) put the bucket's growth at the
+default scope at 14 MB to 259 GB a year, depending on whether each
+company's `submissions` changes only with a new filing or at each poll,
+which the investigation's refetches will show. The database's backups,
+which nothing removes, grow faster still
+([estimates](estimates.md#the-databases-archive)).
 
 ## Kept, not locked
 
@@ -330,7 +335,6 @@ would use SeaweedFS, which also offers object lock ([0002]).
 [LIST-2]: ../../spec/notices.md#8-backfills
 [notices-left]: ../../spec/notices.md#left-to-other-specifications
 [SEEN-1]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
-[PAGE-5]: ../../spec/site.md#7-the-pages-written-for-the-site
 [FETCH-6]: ../../spec/snapshots.md#10-fetching
 [FETCH-18]: ../../spec/snapshots.md#the-fetcher
 [IMP-3]: ../../spec/snapshots.md#11-imports

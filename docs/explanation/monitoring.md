@@ -209,8 +209,9 @@ specifications][telemetry-left]), and task T30 builds them, after T29
   read every poll, about 9.5 million a year at the starting cadence
   ([telemetry, open question 4][telemetry-questions]).
 
-How fast Prometheus's series and storage grow is the estimates' to say
-([PAGE-5]), in task T42.
+The [estimates](estimates.md#prometheus) put the pipeline's own series at
+a few hundred, among 20,000 to 60,000 of the platform's, and Prometheus's
+storage at 0.6 to 3.5 GB once it holds 10 days.
 
 ## How it fails
 
@@ -291,7 +292,6 @@ specification ([plan][plan-observing], [plan][plan-traces]).
 [VOL-2]: ../../spec/deployment.md#volumes
 [VOL-3]: ../../spec/deployment.md#volumes
 [GAP-2]: ../../spec/notices.md#5-polls-coverage-and-gaps
-[PAGE-5]: ../../spec/site.md#7-the-pages-written-for-the-site
 [ALERT-4]: ../../spec/telemetry.md#7-alerts
 [METRIC-1]: ../../spec/telemetry.md#4-metrics
 [METRIC-2]: ../../spec/telemetry.md#4-metrics

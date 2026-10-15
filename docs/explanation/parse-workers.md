@@ -164,9 +164,11 @@ file: the three companies filed 126 times in the 13 weeks to October 7,
 2026, mostly Form 4s ([0010]). A Backfill brings many at once: the three
 companies' XBRL 10-Ks, 10-Qs, and amendments are 208 filings ([SRC-20]).
 The six stored XBRL instances of 10-Ks and 10-Qs are from 0.9 MB to
-10.9 MB each ([SRC-18]). Task T42
-estimates the CPU and memory the parse workers need
-([plan][plan-documentation]).
+10.9 MB each ([SRC-18]). The
+[estimates](estimates.md#cpu-memory-and-storage) assume 150 to 250 MB of
+memory a worker with lxml, or 0.5 to 2 GB with Arelle, and 0.5 to 2
+seconds an instance with lxml, until the parser is chosen, task T12, and
+the workers are measured.
 
 > **Analysis.** No task, decision record, or specification covers this.
 > Scaling a Deployment by a queue's depth on Kubernetes could be done by
@@ -270,7 +272,6 @@ decide them ([status page][status]).
 [design-testing]: ../design.md#testing-on-kind
 [design-waits]: ../design.md#what-waits-on-the-investigation
 [design-decisions]: ../design.md#decisions
-[plan-documentation]: ../plan.md#documentation
 [plan-facts]: ../plan.md#facts
 [plan-drills]: ../plan.md#traces-logs-and-drills
 [SRC-14]: ../../investigation/edgar.md#findings-so-far

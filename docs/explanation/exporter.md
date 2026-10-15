@@ -108,10 +108,9 @@ sections ([plan][plan-facts], [plan][plan-documentation]).
 The exporter reads the facts from PostgreSQL and writes the export to
 Garage ([components][design-components], [0004]). As a CronJob, it runs on
 a schedule, rather than as a Deployment of long-running replicas. The
-export grows with the facts: task T42 estimates the growth of the export,
-a day and a year, at the chart's default scope and wider ones, with the
-CPU, memory, and storage the exporter needs ([PAGE-5],
-[plan][plan-documentation]).
+export grows with the facts. The [estimates](estimates.md#the-export)
+assume 20 to 60 bytes a fact, so a year of the default scope's facts is 0.1
+to 3.2 MB, until the export's specification, task T18, gives its format.
 
 ## How it fails
 
@@ -191,4 +190,3 @@ T32, which specify it; and T27, which builds it ([status page][status]).
 [IMG-1]: ../../spec/deployment.md#the-pipelines-own-images
 [IMG-2]: ../../spec/deployment.md#the-pipelines-own-images
 [PAGE-1]: ../../spec/site.md#7-the-pages-written-for-the-site
-[PAGE-5]: ../../spec/site.md#7-the-pages-written-for-the-site
