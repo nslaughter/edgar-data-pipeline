@@ -1,0 +1,6 @@
+prometheus-operator-crds:
+  crds:
+    # Helm never deletes a definition, and with it every resource of its
+    # kind, when a release is uninstalled or an upgrade drops it (CRD-4).
+    annotations:
+      helm.sh/resource-policy: keep

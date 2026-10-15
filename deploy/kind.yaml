@@ -1,0 +1,29 @@
+# The kind cluster the charts are installed on (spec/deployment.md, section
+# 4): one control-plane node and three workers (KIND-1), each node's image,
+# and with it the cluster's Kubernetes version, pinned by digest (PIN-6).
+#
+# Every worker keeps its volumes in one directory of the host, outside the
+# repository, where kind's storage provisioner keeps each volume, so a
+# cluster recreated with it finds their data (KIND-2, VOL-3). Docker creates
+# it if it doesn't exist.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: edgar
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
+  - role: worker
+    image: kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
+    extraMounts:
+      - hostPath: /var/tmp/edgar-kind/volumes
+        containerPath: /var/local-path-provisioner
+  - role: worker
+    image: kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
+    extraMounts:
+      - hostPath: /var/tmp/edgar-kind/volumes
+        containerPath: /var/local-path-provisioner
+  - role: worker
+    image: kindest/node:v1.36.1@sha256:3489c7674813ba5d8b1a9977baea8a6e553784dab7b84759d1014dbd78f7ebd5
+    extraMounts:
+      - hostPath: /var/tmp/edgar-kind/volumes
+        containerPath: /var/local-path-provisioner

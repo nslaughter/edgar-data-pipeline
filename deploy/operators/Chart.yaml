@@ -1,0 +1,15 @@
+# Release 3 of 4: the CloudNativePG operator and its Barman Cloud plugin,
+# with their definitions; Garage's definition; and the pipeline's own
+# (spec/deployment.md, section 5).
+apiVersion: v2
+name: operators
+description: The operators and definitions the EDGAR data pipeline's umbrella chart relies on.
+type: application
+version: 0.1.0
+dependencies:
+  - name: cloudnative-pg
+    version: 0.29.1
+    repository: https://cloudnative-pg.github.io/charts
+  - name: plugin-barman-cloud
+    version: 0.8.1
+    repository: https://cloudnative-pg.github.io/charts
