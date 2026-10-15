@@ -198,8 +198,12 @@ never names an object that isn't in the bucket.
 - **A filing's facts are one transaction.** A parse worker writes an import
   manifest, reads the XBRL instance from Garage, and inserts the facts in
   one transaction with the filing's acceptance time
-  ([one filing, end to end]), so a filing, its parse, and its facts can't
-  disagree ([0004]). The facts specification is still to say how ([T17]).
+  ([one filing, end to end]). Decision 0004 has one transaction record a
+  filing, its parse, and its facts, so they can't disagree ([0004]); the
+  notices' specification records the filing apart from its parse, in the
+  discoverer's own transaction, when a poll's list names it ([SEEN-2],
+  [DISC-2]). The facts specification is still to say how facts are written
+  ([T17]).
 - **The store's table is created with its index in one transaction,** so the
   table never exists without its index ([PG-8]).
 - **The controls' status isn't the record.** The scheduler sets a Source's
@@ -270,6 +274,7 @@ the same `tool` commit reads the same bytes ([IMP-1], [IMP-2], [IMP-3]).
 [0007]: ../decisions/0007-control-the-pipeline-through-custom-resources.md
 [one filing, end to end]: ../design.md#one-filing-end-to-end
 [the design's outages and recovery]: ../design.md#outages-and-recovery
+[SEEN-2]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [T17]: ../plan.md#facts
 [T38]: ../plan.md#observing-filings
 [store-guarantees]: ../../spec/snapshots.md#1-guarantees

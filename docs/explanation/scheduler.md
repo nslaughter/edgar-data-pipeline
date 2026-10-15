@@ -256,8 +256,12 @@ known to be bounded more loosely ([LAG-1]).
 | The Sources on the cluster exceed the budget | Nothing | `WithinBudget` `False` on each Source ([SOURCE-3]) | The owner's values bring them within it |
 | A notice is malformed | Nothing | It's counted, and acknowledged without effect ([MSG-2]) | — |
 
-While requests are paused or stopped, nothing is queued, and the time is
-recorded as a gap like any other ([the design's controls][design-controls]).
+While requests are paused or stopped, the scheduler queues no poll and
+nothing for a Backfill ([ACCESS-2]), and the time is recorded as a gap like
+any other ([the design's controls][design-controls]). The design says more
+broadly that nothing is queued then; the notices' specification has the
+discoverer still queue a filing's fetches, which wait until requests are
+allowed ([§7 of the notices][notices-files]).
 While the scheduler is down, no service updates a Source's or a Backfill's
 status, since only the scheduler sets it
 ([§9 of the controls][controls-rbac]). The gaps still reach the record,
@@ -402,6 +406,7 @@ those tasks, and T28 and T29 for its metrics and traces
 [notices-messages]: ../../spec/notices.md#9-messages-and-processing
 [notices-open]: ../../spec/notices.md#12-open-questions
 [notices-left]: ../../spec/notices.md#left-to-other-specifications
+[notices-files]: ../../spec/notices.md#7-a-filings-files
 [GAP-1]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [GAP-2]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [ORDER-1]: ../../spec/notices.md#8-backfills

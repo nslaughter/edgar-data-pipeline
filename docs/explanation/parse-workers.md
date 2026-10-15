@@ -146,8 +146,12 @@ XBRL parser ([decisions][design-decisions]), which are T10 and T12.
 
 The parse workers write facts to PostgreSQL, in the same database as the
 records, filings, and coverage ([0004]), and read stored instances from
-Garage ([IMP-3]). One transaction records a filing, its parse, and its
-facts, so they can't disagree ([0004]).
+Garage ([IMP-3]). Decision 0004 has one transaction record a filing, its
+parse, and its facts, so they can't disagree ([0004]). The notices'
+specification records the filing apart from its parse: the discoverer adds
+it to `filings` when a poll's list names it, in that message's own
+transaction, before any parse ([SEEN-2], [DISC-2]). How the facts are
+written is the facts specification's to say ([T17]).
 
 They run as a Deployment scaled by queue depth
 ([components][design-components]). Queue depth, redeliveries, and consumer
@@ -177,9 +181,13 @@ estimates the CPU and memory the parse workers need
 
 The documents say this much now:
 
-- **A database failover pauses parsing, not fetching.** The parse workers'
-  work waits in its stream and is delivered when the database is back
-  ([0003], [outages and recovery][design-outages]).
+- **A database failover pauses parsing.** The parse workers' work waits in
+  its stream and is delivered when the database is back ([0003],
+  [outages and recovery][design-outages]). Decision 0003 and the design
+  have fetching go on meanwhile; the store's specification has the fetcher
+  add each record before it acknowledges its job ([JOB-6]), and doesn't
+  yet say what it does while the database is down
+  ([Failures and recovery](failures-and-recovery.md#losing-the-databases-primary)).
 - **A message delivered twice repeats its step harmlessly,** since filings
   are named by their accession numbers and bodies by their SHA-256
   ([one filing, end to end][design-filing], [0003]).
@@ -250,6 +258,9 @@ decide them ([status page][status]).
 [0006]: ../decisions/0006-write-the-services-in-go-and-python.md
 [0009]: ../decisions/0009-read-edgar-through-a-public-point-in-time-library.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
+[DISC-2]: ../../spec/notices.md#processing
+[JOB-6]: ../../spec/snapshots.md#jobs-and-events
+[SEEN-2]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [status]: ../status.md
 [design-keeps]: ../design.md#what-the-pipeline-keeps
 [design-times]: ../design.md#times
@@ -277,6 +288,7 @@ decide them ([status page][status]).
 [FETCH-18]: ../../spec/snapshots.md#the-fetcher
 [notices-messages]: ../../spec/notices.md#9-messages-and-processing
 [notices-left]: ../../spec/notices.md#left-to-other-specifications
+[T17]: ../plan.md#facts
 [TABLE-3]: ../../spec/notices.md#4-the-record-of-notices
 [FILE-5]: ../../spec/notices.md#7-a-filings-files
 [MSG-2]: ../../spec/notices.md#streams

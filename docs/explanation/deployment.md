@@ -376,8 +376,10 @@ deadline not shorter than the duration, a retry period not shorter than the
 renewal deadline, or a renewal deadline not greater than 1.2 times the
 retry period. It grants the fetcher's ServiceAccount `create` on Leases,
 and `get` and `update` on the Lease `fetcher` only ([LEASE-1]). A handover
-after the active replica is lost takes up to the duration, which the record
-shows as a gap ([lease]).
+after the active replica is lost takes up to the duration, which this
+specification and decision 0005 record as a gap ([lease], [0005]); the
+notices' specification gives a gap only where the handover misses a poll
+([§5 of the notices][notices-gaps]).
 
 ## How the charts are checked
 
@@ -447,6 +449,7 @@ database role, its password, its PostgreSQL data source, and the views of
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
 [0011]: ../decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md
 [components]: ../design.md#components
+[notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [plan-facts]: ../plan.md#facts
 [plan-observing]: ../plan.md#observing-filings
 [status]: ../status.md

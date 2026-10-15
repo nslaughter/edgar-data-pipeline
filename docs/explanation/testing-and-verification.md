@@ -234,7 +234,7 @@ recovering and the gaps it recorded ([outages and recovery][design-outages]).
 
 | Drill | What the design expects | Behind it |
 | --- | --- | --- |
-| Delete the active fetcher | The standby takes the Lease only once its duration has passed without a renewal, 15 seconds by default; a handover that misses a poll leaves a gap, and a stop after a `403` carries over through the SecAccess | [0005], [LEASE-1], [§5 of the notices][notices-gaps], [ACCESS-3] |
+| Delete the active fetcher | The standby takes the Lease only once its duration has passed without a renewal, 15 seconds by default; the handover leaves a gap, by decision 0005, or only if it misses a poll, by the notices; and a stop after a `403` carries over through the SecAccess | [0005], [LEASE-1], [§5 of the notices][notices-gaps], [ACCESS-3] |
 | Fail over the database | Parsing pauses, and parse jobs wait in their stream until the database is back | [0003], [outages and recovery][design-outages] |
 | Block the SEC | Polls fail, so a gap opens in each Source's coverage, and `SourceGap` fires while it lasts longer than the Source's cadence | [GAP-2], [ALERT-2] |
 | Restore the database from its backups in Garage | The backups are shown to restore before they're relied on | [0002], [0004], [PG-4] |

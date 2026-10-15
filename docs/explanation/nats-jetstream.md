@@ -262,7 +262,7 @@ recovery](failures-and-recovery.md). For the streams:
 | --- | --- |
 | One server, or its node | The other two keep each replicated stream, with its messages and a leader, and the pipeline goes on ([deployment, §1][dep-guarantees]). |
 | A consumer's pod, partway through a message | The message isn't acknowledged, so it's delivered again, and the steps above make the repeat harmless ([DISC-1], [DISC-2], [JOB-6]). |
-| The active fetcher | Jobs wait in `JOBS` until the standby takes the Lease over. Poll jobs that expire meanwhile are acknowledged without a request ([JOB-5]), and a handover that misses a poll leaves a gap in the record ([notices, §5][gaps]). |
+| The active fetcher | Jobs wait in `JOBS` until the standby takes the Lease over. Poll jobs that expire meanwhile are acknowledged without a request ([JOB-5]). Decision 0005 records every handover as a gap ([0005]); the notices' specification gives a gap only where the handover misses a poll ([notices, §5][gaps]). |
 | JetStream, for the scheduler | A poll that can't be queued before the next one is due is skipped ([SOURCE-2]) and counted ([METRIC-3]); its slot holds no successful poll, so the record shows a gap ([notices, §5][gaps]). |
 | All three servers, restarted | The streams are kept in files on retained claims ([NATS-1], [VOL-3]), so queued work survives the restart ([outages and recovery][outages]). |
 | A consumer that doesn't exist yet | An interest stream keeps nothing for it, which is why each durable consumer is made before what it reads is published ([deployment, §9][later]). |

@@ -28,9 +28,12 @@ Three properties come with that choice:
 - **Writes are checked as they happen,** by the tables' constraints, so the
   database refuses a malformed row ([STORE-2], [TABLE-2]).
 - **One transaction can hold what must agree.** The discoverer adds the
-  rows each message calls for in one transaction ([DISC-2]), and a filing,
-  its parse, and its facts are to be recorded in one, so they can't
-  disagree ([0004]).
+  rows each message calls for in one transaction ([DISC-2]). Decision 0004
+  has a filing, its parse, and its facts recorded in one, so they can't
+  disagree ([0004]); the notices' specification has the discoverer add the
+  filing in its own transaction, when a poll's list names it, before any
+  parse ([SEEN-2], [DISC-2]), and how facts are written waits on the facts
+  specification ([T17]).
 
 The times are the SEC's, not the database's. Every time is an explicit
 column, kept as its source gives it, and never the database's write time
@@ -393,6 +396,7 @@ DuckDB, pandas, or Polars without the cluster ([0004]).
 [PLACE-2]: ../../spec/deployment.md#placement
 [SECRET-1]: ../../spec/deployment.md#credentials
 [VOL-2]: ../../spec/deployment.md#volumes
+[T17]: ../plan.md#facts
 [volumes]: ../../spec/deployment.md#volumes
 [DISC-1]: ../../spec/notices.md#processing
 [DISC-2]: ../../spec/notices.md#processing

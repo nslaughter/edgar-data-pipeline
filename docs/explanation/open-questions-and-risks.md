@@ -394,9 +394,10 @@ revisit: whether to keep each company's `submissions` as the notice source
 ### To operation
 
 - **A handover can leave a gap.** A new fetcher takes the Lease only once
-  its duration has passed without a renewal, 15 seconds by default, and a
-  handover that misses a poll leaves a gap ([0005], [LEASE-1],
-  [§5 of the notices][notices-gaps]).
+  its duration has passed without a renewal, 15 seconds by default
+  ([LEASE-1]). Decision 0005 records every handover as a gap ([0005]); the
+  notices' specification gives a gap only where the handover misses a poll
+  ([§5 of the notices][notices-gaps]).
 - **A `403` stops everything until the owner acts.** The stop survives
   restarts and handovers, and holds until the owner acknowledges it
   ([ACCESS-3]); `SecRequestsStopped` fires meanwhile ([ALERT-1]).

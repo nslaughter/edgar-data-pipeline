@@ -65,7 +65,7 @@ each failure across them.
 | [The active fetcher](#losing-the-active-fetcher) | Every request to the SEC, for up to the Lease's duration | The jobs, and any stop after a `403` | None; `edgar_fetcher_leader` shows which pod holds the Lease |
 | [The active scheduler](#losing-the-active-scheduler) | Queuing polls and orders, and setting status | The controls, in the API server | None; `edgar_scheduler_leader` shows the active replica |
 | [A worker node](#losing-a-worker-node) | The pods on it | A replica of each stream, every object, and the database, on each other worker node | None of its own |
-| [The database's primary](#losing-the-databases-primary) | The discoverer's writes, and parsing | Every message not acknowledged, and the archive and backups in Garage | `DatabaseBackupStale`, if backups stop |
+| [The database's primary](#losing-the-databases-primary) | The discoverer's writes, and parsing; the fetcher's records, not yet specified | Every message not acknowledged, and the archive and backups in Garage | `DatabaseBackupStale`, if backups stop |
 | [All of NATS](#losing-nats) | Every hand-off between services | The streams, in files | `SourceGap`, once a gap is long enough |
 | [All of Garage](#losing-garage) | Storing and reading bodies, and the database's backups | The objects, on the nodes' volumes | `DatabaseBackupStale`, if backups stop for over a day |
 | [A `403` from the SEC](#a-403-from-the-sec) | Every request, until the owner acknowledges the stop | The stop, in the `SecAccess`'s status | `SecRequestsStopped` |
@@ -135,9 +135,11 @@ sequenceDiagram
   A poll whose job expired during the handover is acknowledged without a
   request ([JOB-5]); the jobs of filings and Backfills don't expire, so
   they're fetched after it ([JOB-3]).
-- **What the record shows:** a handover that misses a poll leaves a gap,
-  like any other ([coverage and gaps], [0005]). The gauge
-  `edgar_fetcher_leader` is 1 on the replica that holds the Lease
+- **What the record shows:** decision 0005 records every handover as a gap
+  like any other, and the deployment's specification a handover after the
+  active replica is lost ([0005], [lease]); the notices' specification gives
+  a gap only where the handover misses a poll ([coverage and gaps]). The
+  gauge `edgar_fetcher_leader` is 1 on the replica that holds the Lease
   ([the fetcher's metrics]).
 
 ## Losing the active scheduler
@@ -356,7 +358,8 @@ way: a pause is a gap ([0007]).
   `False` and the reason `Paused`; while the `SecAccess` is paused, every
   Source's, with the reason `RequestsPaused` ([SOURCE-1]). While requests
   are paused, the scheduler queues nothing, and the fetcher sends nothing
-  ([ACCESS-1], [ACCESS-2]).
+  ([ACCESS-1], [ACCESS-2]). The discoverer still queues the fetches of
+  filings' files, and the jobs wait ([a filing's files][notices-files]).
 - **What's kept:** the control, as the owner set it in the chart's values,
   which the API server keeps ([the controls' guarantees], [RBAC-6]). The
   chart's default values pause the `SecAccess`, so a new install sends

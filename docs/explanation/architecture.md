@@ -18,7 +18,7 @@ kind ([components][design-components], [0001]).
 
 | Component | What it does | Language | On the cluster | What it keeps |
 | --- | --- | --- | --- | --- |
-| Scheduler | A controller: queues each Source's polls at its cadence, hands each Backfill to the discoverer, and keeps Sources' and Backfills' status ([0007]) | Go, with controller-runtime | A Deployment of two, one active through leader election | Nothing of its own: status, in the API server. It never fetches and never writes the record ([0007]). |
+| Scheduler | A controller: queues each Source's polls at its cadence, hands each Backfill to the discoverer ([ORDER-1], [LIST-1]), and keeps Sources' and Backfills' status ([0007]) | Go, with controller-runtime | A Deployment of two, one active through leader election | Nothing of its own: status, in the API server. It never fetches and never writes the record ([0007]). |
 | Fetcher | Sends every request to the SEC, stores each body, adds each record, and announces it ([0005]) | Go, with client-go's leader election, `golang.org/x/time/rate`, nats.go, the AWS SDK for Go v2, and pgx | A Deployment of two, one active through the Lease `fetcher` | Objects in Garage, rows of `records`, and the `SecAccess` status |
 | Discoverer | Reads each version of a company's `submissions`, records each filing and when each Source first showed it, queues the fetches of its files, lists each Backfill's filings, and publishes notices ([`notices.md`][notices]) | Python, with nats-py, psycopg, boto3, and `edgar-asof` | A Deployment | The notices' tables |
 | Parse workers | Read a stored XBRL instance and write its facts, with the filing's acceptance time, under an import manifest | Python, with an XBRL parser still to choose | A Deployment, scaled by queue depth | The facts |
@@ -309,14 +309,17 @@ bucket in NATS or PostgreSQL, with more moving parts and a `403` every
 worker must check; and an egress proxy with a global rate-limit service,
 realistic for many upstreams but heavy for one ([0005]).
 
-What it costs: the whole pipeline is capped at 5 requests a second
-([0005]). A handover after the active replica is lost takes up to the
-Lease's duration, 15 seconds by default, recorded as a gap; the active
+What it costs: the whole pipeline is capped at 5 requests a second ([0005]).
+A handover after the active replica is lost takes up to the Lease's
+duration, 15 seconds by default, which decision 0005 and the deployment's
+specification record as a gap ([0005], [the fetcher's
+Lease][deployment-lease]); the notices' specification gives a gap only where
+the handover misses a poll ([§5 of the notices][notices-gaps]). The active
 replica stops sending when it can't renew the Lease within its renewal
-deadline, 10 seconds, before another can take the Lease over
-([the fetcher's Lease][deployment-lease], [LEASE-1]). The stop after a
-`403` is kept in `SecAccess`, not in the active replica's memory, so the
-standby reads it there ([ACCESS-3], [0007]).
+deadline, 10 seconds, before another can take the Lease over ([the fetcher's
+Lease][deployment-lease], [LEASE-1]). The stop after a `403` is kept in
+`SecAccess`, not in the active replica's memory, so the standby reads it
+there ([ACCESS-3], [0007]).
 
 ### Go where bytes move, Python where EDGAR is read (0006)
 
@@ -412,6 +415,7 @@ library publishes, so both answer "as of T" the same way ([0009]).
 [job-schema]: ../../spec/schemas/job.schema.json
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease
 [LOG-3]: ../../spec/snapshots.md#8-history
+[LIST-1]: ../../spec/notices.md#8-backfills
 [METRIC-1]: ../../spec/telemetry.md#4-metrics
 [NATS-1]: ../../spec/deployment.md#nats
 [NATS-3]: ../../spec/deployment.md#nats

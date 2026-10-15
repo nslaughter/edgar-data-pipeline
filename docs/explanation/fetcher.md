@@ -240,12 +240,14 @@ sequenceDiagram
 ```
 
 A handover after the active replica is lost takes up to the Lease's
-duration, which the record shows as a gap
-([the fetcher's Lease][deployment-lease], [0005]). Jobs the lost replica
-didn't acknowledge are delivered again ([outages and recovery][design-outages]), and those it
-had recorded are announced again, not fetched again ([JOB-6]). The chart
-grants the fetcher's ServiceAccount `create` on Leases, and `get` and
-`update` on the Lease `fetcher` only ([LEASE-1]). Each replica serves
+duration, which decision 0005 and the deployment's specification record as a
+gap ([the fetcher's Lease][deployment-lease], [0005]); the notices'
+specification gives a gap only where the handover misses a poll ([§5 of the
+notices][notices-gaps]). Jobs the lost replica didn't acknowledge are
+delivered again ([outages and recovery][design-outages]), and those it had
+recorded are announced again, not fetched again ([JOB-6]). The chart grants
+the fetcher's ServiceAccount `create` on Leases, and `get` and `update` on
+the Lease `fetcher` only ([LEASE-1]). Each replica serves
 `edgar_fetcher_leader`, 1 while it holds the Lease ([METRIC-4]).
 
 ## The fetcher's clock
@@ -416,7 +418,9 @@ Decision 0005 chose one active fetcher, held by a Lease, over these
 | An egress proxy with a global rate-limit service, such as Envoy's | Realistic for many upstreams; heavy for one. |
 
 The choice caps the whole pipeline at 5 requests a second, and makes a
-handover a short pause in fetching, recorded as a gap ([0005]).
+handover a short pause in fetching, recorded as a gap ([0005]), which the
+notices' specification gives only where the handover misses a poll
+([§5 of the notices][notices-gaps]).
 
 Decision 0006 put the fetcher in Go. The alternative was a Python fetcher
 built from `snapshot.py`, which would implement the fetching rules once,

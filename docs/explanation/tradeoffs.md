@@ -190,11 +190,15 @@ do ([0004]).
   accepted the filing, so it would need explicit time columns anyway; it's
   also heavier, and less familiar to the teams the project addresses.
 
-**What it gains and costs.** One transaction records a filing, its parse,
-and its facts, so they can't disagree, and the pipeline's role can insert
-but not update or delete, so the database itself enforces the append-only
-record ([0004], [LOG-3]). The cost is memory: three always-on instances and
-the operator are the design's largest steady memory cost ([0004]).
+**What it gains and costs.** Decision 0004 has one transaction record a
+filing, its parse, and its facts, so they can't disagree ([0004]). The
+notices' specification records the filing apart from its parse, in the
+discoverer's own transaction, when a poll's list names it ([SEEN-2],
+[DISC-2]), and leaves how facts are written to the facts specification
+([T17]). The pipeline's role can insert but not update or delete, so the
+database itself enforces the append-only record ([0004], [LOG-3]). The
+cost is memory: three always-on instances and the operator are the
+design's largest steady memory cost ([0004]).
 
 **What would change it.** The record says a minor upgrade changes the image
 catalog, and a major upgrade is a new decision record ([0004],
@@ -232,10 +236,12 @@ one pod's ([0005]).
 **What it costs.** The whole pipeline is capped at 5 requests a second,
 half the SEC's limit. A handover leaves a short pause in fetching, recorded
 as a gap like any other, and takes up to the Lease's duration, 15 seconds
-by default ([0005], [LEASE-1]). After a `403`, nothing is sent until the
-owner acknowledges the stop ([ACCESS-3]). In return, "one process at a
-time" becomes "one Lease holder", which a test on kind can show by deleting
-the active pod ([0005]).
+by default ([0005], [LEASE-1]). The notices' specification gives a gap
+only where the handover misses a poll ([§5 of the notices][notices-gaps]).
+After a `403`, nothing is sent until the owner acknowledges the stop
+([ACCESS-3]). In return, "one process at a time" becomes "one Lease
+holder", which a test on kind can show by deleting the active pod
+([0005]).
 
 **What would change it.** The record doesn't say.
 
@@ -290,8 +296,10 @@ are three custom resources: `Source`, one feed polled at a cadence, which
 can be paused; `Backfill`, a company's past filings over a range of dates;
 and `SecAccess`, one per cluster, which says whether the pipeline may send
 requests to the SEC at all and keeps the stop after a `403`. The dashboard
-is read-only ([0007]). The owner sets every control in the umbrella chart's
-values, and Helm applies it ([RBAC-6], [0010]).
+is read-only ([0007]). The record made `kubectl apply` on a resource the
+control ([0007]). A later record and the controls' specification render
+the resources from the umbrella chart's values, and have the owner set
+every control there, for Helm to apply ([0010], [VAL-1], [RBAC-6]).
 
 **Why.** Each control is rare and deliberate, and changes the record: a
 pause is a gap, and a new source widens the scope, which is the owner's to
@@ -307,9 +315,10 @@ forgotten when the standby takes over ([0007]).
 - **An admin API with a command-line client,** on one of the Go services:
   explicit, but it rebuilds the authentication, authorization, and history
   the API server already has.
-- **Helm values and scaling:** no new code, but a pause looks like a
-  failure, status is shown nowhere, and resuming after a `403` has no place
-  to be recorded.
+- **Helm values and scaling,** with cadence and scope in values, and a
+  pause by scaling the fetcher to zero: no new code, but a pause looks like
+  a failure, status is shown nowhere, and resuming after a `403` has no
+  place to be recorded.
 - **A separate operator** beside the scheduler: the same resources, with
   one more Deployment for work the scheduler exists to do.
 
@@ -580,10 +589,12 @@ pipeline has releases ([§9 of the site][site-questions]).
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
 [0011]: ../decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md
 [0012]: ../decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md
+[notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [design-decisions]: ../design.md#decisions
 [T5]: ../plan.md#investigation
 [T10]: ../plan.md#facts
 [T11]: ../plan.md#observing-filings
+[T17]: ../plan.md#facts
 [T12]: ../plan.md#facts
 [T28]: ../plan.md#observing-filings
 [T31]: ../plan.md#traces-logs-and-drills
@@ -607,10 +618,12 @@ pipeline has releases ([§9 of the site][site-questions]).
 [FETCH-9]: ../../spec/snapshots.md#10-fetching
 [FETCH-18]: ../../spec/snapshots.md#the-fetcher
 [JOB-6]: ../../spec/snapshots.md#jobs-and-events
+[SEEN-2]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [DISC-2]: ../../spec/notices.md#processing
 [API-1]: ../../spec/controls.md#4-the-resources
 [API-2]: ../../spec/controls.md#4-the-resources
 [VAL-3]: ../../spec/controls.md#5-the-charts-values
+[VAL-1]: ../../spec/controls.md#5-the-charts-values
 [ACCESS-3]: ../../spec/controls.md#8-secaccess
 [RBAC-6]: ../../spec/controls.md#9-who-may-change-what
 [CHART-4]: ../../spec/deployment.md#5-dependencies

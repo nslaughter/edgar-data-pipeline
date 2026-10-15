@@ -387,9 +387,13 @@ For one key, an instant T, and an interpreter, which of the key's facts
 were known at T, by the acceptance of their filings alone. The facts placed
 at the latest instant at or before T are `known`, those placed earlier
 `earlier`, those after T `later`, and those the interpreter couldn't place
-`unplaced` ([ASOF-1] to [ASOF-3]). The design gives the same rule: the
-value from the latest filing accepted at or before T
-([times][design-times]). The pipeline's query API answers it ([T26]).
+`unplaced` ([ASOF-1] to [ASOF-3]). The design summarizes the answer as
+the value from the latest filing accepted at or before T, for a key that
+includes dimensions ([times][design-times]). The library's answer has four
+parts, and its key has no dimensions; the
+[query API](explanation/query-api.md#where-the-design-and-the-librarys-specification-differ-in-detail)
+page sets out where the two differ. The pipeline's query API answers it
+([T26]).
 
 ### Cache
 

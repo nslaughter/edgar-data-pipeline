@@ -295,7 +295,9 @@ T" returns, and add how the pipeline stores facts ([plan][plan-facts],
   under an import manifest, with the filing's acceptance time
   ([one filing, end to end][design-filing]). Decision 0004 has one
   transaction record a filing, its parse, and its facts, so that they can't
-  disagree ([0004]).
+  disagree ([0004]). The notices' specification records the filing apart
+  from its parse: the discoverer adds it to `filings` when a poll's list
+  names it, in that message's own transaction ([SEEN-2], [DISC-2]).
 - **Facts come from each filing's XBRL instance.** The SEC's summaries are
   kept as evidence of what it published, not as the facts' source
   ([what the pipeline keeps][design-keeps]).
@@ -398,8 +400,10 @@ it returns the value from the latest filing accepted at or before T. A
 restated value appears from its filing's acceptance on, and earlier answers
 stay reproducible ([times][design-times]).
 
-`edgar-asof`'s specification makes this exact ([`edgar-asof`'s facts
-specification, §7][asof-facts-7]):
+`edgar-asof`'s specification gives an answer of its own, which differs
+from the design's summary in detail, as the
+[query API](query-api.md#where-the-design-and-the-librarys-specification-differ-in-detail)
+page sets out ([`edgar-asof`'s facts specification, §7][asof-facts-7]):
 
 - **An answer is for one key, one instant T, and one interpreter,** all
   passed by the caller ([ASOF-1]). The interpreter places each filing at an
@@ -465,6 +469,7 @@ recovery][design-outages]).
 [design-times]: ../design.md#times
 [design-waits]: ../design.md#what-waits-on-the-investigation
 [FACT-5]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#4-reading-a-companys-facts
+[DISC-2]: ../../spec/notices.md#processing
 [FACT-6]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#5-facts
 [FACT-7]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#5-facts
 [FACT-8]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#5-facts
