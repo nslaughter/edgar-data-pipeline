@@ -52,7 +52,7 @@ the plan's tasks wait on.
 | The charts | Decided; specified in part | [0001](decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md), [0011](decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md) | [`deployment.md`](../spec/deployment.md) 1.0.0 | T13 (done), T34 (done), T38 (not done) | T20 (not done) | — |
 | The fake EDGAR | Planned | — | — | — | T21 (not done) | — |
 | The drills | Planned | — | — | — | T31 (not done) | — |
-| The documentation site | Specified; built in part | [0012](decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md) | [`site.md`](../spec/site.md) 0.1.0 | T39 (done) | T40 (done), T41 (done), T42 (not done), T43 (not done) | — |
+| The documentation site | Specified; built in part | [0012](decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md) | [`site.md`](../spec/site.md) 0.1.0 | T39 (done) | T40 (done), T41 (done), T42 (done), T43 (not done) | — |
 <!-- end generated: parts -->
 
 ## The investigation
