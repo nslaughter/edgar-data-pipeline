@@ -59,8 +59,10 @@ trade against each other:
 | 1 day | 216,000 |
 
 A cadence bounds how well the record knows when a Source first showed a
-filing: at 10 seconds, within about 10 seconds plus the source's own delay
-([0010]). So more companies cost each filing's first-seen time its
+filing: between the last poll that didn't show it and the first that did,
+about one cadence apart ([SEEN-3]). It bounds, too, when the filing became
+available: at 10 seconds, within about 10 seconds plus the source's own
+delay ([0010]). So more companies cost each filing's first-seen time its
 precision. Decision 0010 expects that past about 25 companies, a feed that
 covers every company becomes the better notice source ([0010]), and task
 T11 revisits the notice source and its cadence from the lags the record
@@ -321,6 +323,7 @@ each part would stop:
 [plan-observing]: ../plan.md#observing-filings
 [SCOPE-4]: ../../spec/snapshots.md#9-scope
 [SCOPE-5]: ../../spec/snapshots.md#9-scope
+[SEEN-3]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [SRC-5]: ../../investigation/edgar.md#findings-so-far
 [SRC-18]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far
