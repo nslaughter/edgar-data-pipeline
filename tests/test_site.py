@@ -466,6 +466,75 @@ def test_a_navigation_out_of_order_or_missing_a_page_is_reported() -> None:
     ]
 
 
+# --- The explanation's topics -----------------------------------------------
+
+
+@pytest.mark.spec("PAGE-4")
+def test_the_explanation_pages_cover_the_topics_in_order(built: list[str]) -> None:
+    ordered, problems = build_site.explanation_pages(ROOT, build_site.sources(ROOT))
+    design = (ROOT / "docs" / "design.md").read_text("utf-8")
+    components = site_status.design_components(design)
+    explanation = build_site.flatten(dict(build_site.read_nav(ROOT)[1])["Explanation"])
+
+    assert problems == []
+    assert [problem for problem in built if problem.startswith("PAGE-4")] == []
+    assert len(ordered) == len(build_site.TOPICS) - 1 + len(components)
+    assert [path for path in explanation if path.startswith("docs/explanation/")] == ordered
+    titles = [build_site.page_title((ROOT / path).read_text("utf-8")) for path in ordered]
+    assert titles[:3] == ["The problem", "Requirements", "Estimates"]
+    assert titles[-3:] == ["Scale and limits", "Tradeoffs", "Open questions and risks"]
+
+
+@pytest.mark.spec("PAGE-4")
+def test_a_missing_topic_a_shared_title_or_a_stray_page_is_reported(tmp_path: Path) -> None:
+    shutil.copytree(ROOT / "docs" / "explanation", tmp_path / "docs" / "explanation")
+    shutil.copy(ROOT / "docs" / "design.md", tmp_path / "docs" / "design.md")
+    (tmp_path / "docs" / "explanation" / "estimates.md").unlink()
+    write(
+        tmp_path,
+        {
+            "docs/explanation/scheduler.md": "# Scheduler\n",
+            "docs/explanation/more-requirements.md": "# Requirements\n",
+            "docs/explanation/notes.md": "# Notes\n",
+        },
+    )
+    held_files = sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*.md"))
+
+    ordered, problems = build_site.explanation_pages(tmp_path, held_files)
+
+    assert problems == [
+        "PAGE-4: ['docs/explanation/more-requirements.md', 'docs/explanation/requirements.md'] "
+        "are each titled 'Requirements'",
+        "PAGE-4: no explanation page is titled 'Estimates'",
+        "PAGE-4: docs/explanation/notes.md, titled 'Notes', is no topic's page",
+    ]
+    assert ordered[1:4] == [
+        "docs/explanation/more-requirements.md",
+        "docs/explanation/requirements.md",
+        "docs/explanation/architecture.md",
+    ]
+    assert "docs/explanation/scheduler.md" in ordered
+    assert ordered[-1] == "docs/explanation/notes.md"
+
+
+@pytest.mark.spec("PAGE-4", "SITE-7")
+def test_explanation_pages_out_of_the_topics_order_are_reported() -> None:
+    nav = build_site.read_nav(ROOT)
+    expected = build_site.expected_nav(ROOT, build_site.sources(ROOT))
+    explanation = list(nav[1]["Explanation"])
+    first, second = (
+        explanation.index("docs/explanation/estimates.md"),
+        explanation.index("docs/explanation/architecture.md"),
+    )
+    explanation[first], explanation[second] = explanation[second], explanation[first]
+    swapped = [nav[0], {"Explanation": explanation}, *nav[2:]]
+
+    problems = build_site.check_nav(swapped, expected, None)
+
+    assert len(problems) == 1
+    assert problems[0].startswith("SITE-7: the Explanation tab holds")
+
+
 # --- Statuses ---------------------------------------------------------------
 
 
