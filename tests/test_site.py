@@ -535,6 +535,21 @@ def test_explanation_pages_out_of_the_topics_order_are_reported() -> None:
     assert problems[0].startswith("SITE-7: the Explanation tab holds")
 
 
+@pytest.mark.spec("PAGE-4")
+def test_the_build_reports_a_problem_with_the_explanation_pages(
+    built: list[str], commit: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    explanation_pages = build_site.explanation_pages
+
+    def with_a_problem(root: Path, held_files: list[str]) -> tuple[list[str], list[str]]:
+        ordered, problems = explanation_pages(root, held_files)
+        return ordered, [*problems, "PAGE-4: a problem"]
+
+    monkeypatch.setattr(build_site, "explanation_pages", with_a_problem)
+
+    assert build_site.check_site(ROOT, SITE, commit) == ["PAGE-4: a problem"]
+
+
 # --- Statuses ---------------------------------------------------------------
 
 
