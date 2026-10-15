@@ -4,8 +4,9 @@
 #
 # Every worker keeps its volumes in one directory of the host, outside the
 # repository, where kind's storage provisioner keeps each volume, so a
-# cluster recreated with it finds their data (KIND-2, VOL-3). Docker creates
-# it if it doesn't exist.
+# cluster recreated with it finds their data (KIND-2, VOL-3). The host is the
+# machine Docker runs the nodes on: on macOS, Docker's Linux VM. Docker
+# creates the directory if it doesn't exist.
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: edgar
