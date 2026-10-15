@@ -1,7 +1,7 @@
 # Monitoring
 
 <!-- status: Monitoring: metrics, alerts, and dashboards; Monitoring: traces; Monitoring: logs -->
-**Status** ([status page](../status.md)): Monitoring: metrics, alerts, and dashboards: Decided; specified in part. Monitoring: traces: Specified. Monitoring: logs: Decided.
+**Status** ([status page](../status.md)): Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. Monitoring: traces: Specified. Monitoring: logs: Decided.
 <!-- end status -->
 
 Monitoring collects what the pipeline reports about itself, evaluates its
@@ -263,9 +263,9 @@ storage at 0.6 to 3.5 GB once it holds 10 days.
 | [TRACE-7] | Spans are exported by OTLP to the endpoint given, and none without one. | tests |
 | [SECRET-1] | Grafana's admin password, and its database role's, are required values, in Secrets. | tests |
 
-The umbrella chart, with kube-prometheus-stack, Grafana's role, and its
-PostgreSQL data source, is task T20's; the monitoring of observing filings,
-with its dashboards and rules, T28's; Tempo, T29's; and Loki, T30's
+Task T20 built the umbrella chart, with kube-prometheus-stack, Grafana's
+role, and its PostgreSQL data source; the monitoring of observing filings,
+with its dashboards and rules, is T28's; Tempo, T29's; and Loki, T30's
 ([plan][plan-observing], [plan][plan-traces]).
 
 ## The alternatives decision 0008 weighed

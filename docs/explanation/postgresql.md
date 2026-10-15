@@ -1,7 +1,7 @@
 # PostgreSQL 18
 
 <!-- status: PostgreSQL 18 -->
-**Status** ([status page](../status.md)): PostgreSQL 18: Specified.
+**Status** ([status page](../status.md)): PostgreSQL 18: Built.
 <!-- end status -->
 
 PostgreSQL 18 holds the pipeline's record: a row for every fetch, what the
@@ -374,8 +374,8 @@ the other services read them, and Grafana reads the views made for it.
 | [VIEW-1] to [VIEW-3] | `dashboards.sql` defines Grafana's views; the database holds them; Grafana's role reads only them. | tests, kind |
 | [ALERT-3], [SCRAPE-1] | The alert on a stale backup, and the scraping of the instances' metrics. | tests |
 
-The database, its roles, its tables and views, and its backups are built by
-task T20, which isn't done ([plan][plan-observing]).
+Task T20 built the database, its roles, its tables and views, and its
+backups ([plan][plan-observing]).
 
 ## The alternatives decision 0004 weighed
 

@@ -8,3 +8,6 @@ __pycache__/
 # The documentation site, which scripts/build_site.py builds (spec/site.md,
 # SITE-2). Zensical ignores its own cache, .cache/.
 /site/
+# The owner's values for the umbrella chart, with its credentials
+# (spec/deployment.md, SECRET-4); never committed.
+/deploy/edgar-values.yaml
