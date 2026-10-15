@@ -4,8 +4,8 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** The snapshot store in git.
-- **Specified:** Scheduler; Fetcher; NATS JetStream; Garage; PostgreSQL 18; Monitoring: traces; The snapshot store in the cluster; The transfer from the cluster to git; The controls; The documentation site (built in part).
-- **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part); Monitoring: logs; `edgar-asof`; The charts (specified in part).
+- **Specified:** Scheduler; Fetcher; Discoverer; NATS JetStream; Garage; PostgreSQL 18; Monitoring: traces; The snapshot store in the cluster; The transfer from the cluster to git; The controls; The charts; The documentation site (built in part).
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The fake EDGAR; The drills.
 <!-- end status -->
 

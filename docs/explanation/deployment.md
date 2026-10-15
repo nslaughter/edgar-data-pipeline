@@ -1,7 +1,7 @@
 # Deployment
 
 <!-- status: The charts -->
-**Status** ([status page](../status.md)): The charts: Decided; specified in part.
+**Status** ([status page](../status.md)): The charts: Specified.
 <!-- end status -->
 
 The pipeline is installed on Kubernetes with Helm, by four charts in a
