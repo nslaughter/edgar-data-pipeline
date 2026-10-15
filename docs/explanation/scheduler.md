@@ -349,7 +349,7 @@ EDGAR's content ([0006]).
 | [JOB-1], [JOB-2] | Each poll is a job of kind `poll`, as its schema describes it, that expires when the next is due. |
 | [ORDER-1] | It orders each Backfill not yet started, while requests are allowed. |
 | [NOTICE-1], [NOTICE-2] | It sets `openGapSince` and each Backfill's status from the latest notices. |
-| [NATS-5], [NATS-6] | Its durable consumer of gap and backfill notices, made as soon as `NOTICES` is. |
+| [NATS-5], [NATS-6] | Its durable consumer of gap and backfill notices, made as soon as `NOTICES` is, before `NOTICES` takes its subjects. |
 | [MSG-1], [MSG-2] | Orders and notices validate against their schemas; it ignores unknown fields and refuses malformed notices. |
 | [METRIC-1], [METRIC-2], [METRIC-3] | Its metrics, served by each replica, with labels from small sets. |
 | [TRACE-1], [TRACE-2], [TRACE-3], [TRACE-5], [TRACE-7], [TRACE-8] | Each poll and order starts a trace, carried in NATS headers. |

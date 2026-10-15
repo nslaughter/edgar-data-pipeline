@@ -70,9 +70,9 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
     them, and Grafana reads only the views made for it,** each with a
     database role of its own ([TABLE-3], [VIEW-3]). [PG-7], [PG-11],
     [PG-12], [PG-13], [PG-14], [MON-5].
-12. **A message that follows from another stream's reaches a stream kept by
-    interest only once that stream's durable consumers exist,** so the
-    stream keeps it for each service that reads it. [NATS-5], [NATS-6].
+12. **A stream kept by interest accepts a message only once its durable
+    consumers exist,** so it keeps each message it accepts for each service
+    that reads it, and refuses one published sooner. [NATS-5], [NATS-6].
 
 ## 2. Terms
 
@@ -384,18 +384,26 @@ at the stream's first message. Each consumer has three replicas, as its
 stream has, so its place in the stream survives the loss of a node.
 
 Helm creates the umbrella chart's services, and waits for them to be ready,
-before its hook Jobs run ([CHART-4]), and a message published before its
-stream exists isn't kept. So the Job makes each stream's consumers as soon
-as it has made the stream, and makes the streams in an order that keeps a
-message from reaching a stream kept by interest before its consumers: an
-event follows a job, and a notice follows an event or an order. It makes
-`NOTICES` first, then `RECORDS`, `ORDERS`, and `JOBS` last, so no event can
-be published before `RECORDS` has its consumers, and no notice that follows
-a message before `NOTICES` has its. A gap notice the discoverer publishes
-from polls the record already holds follows no message ([GAP-3]). A new
-install has such polls only when its database was restored while NATS's
-data wasn't kept, and such a notice published in the moment between
-`NOTICES`'s creation and its consumers' is kept for none.
+before its hook Jobs run ([CHART-4]), so a service may publish before the
+Job has made what it publishes to. JetStream refuses a message that no
+stream's subjects take, so its publisher knows it wasn't kept, but a stream
+kept by interest accepts a message it has no consumer for, and keeps it for
+none. So the Job makes each stream's consumers as soon as it has made the
+stream, and gives a stream kept by interest its subjects only once its
+consumers exist: it makes the stream with only its name as its subject,
+JetStream's default when none is given, then its consumers, which
+JetStream lets filter subjects their stream doesn't yet take, and then
+gives the stream its subjects. Until then, a message published to them is
+refused, as one is before the stream exists. That covers a gap notice the discoverer
+publishes, when it starts, from polls the record already holds, which
+follows no message ([GAP-3]): a new install has such polls when its
+database was restored while NATS's data wasn't kept.
+
+The Job also makes the streams in an order that keeps a message that
+follows another from being refused: an event follows a job, and a notice
+follows an event or an order. It makes `NOTICES` first, then `RECORDS`,
+`ORDERS`, and `JOBS` last, so no event can be published before `RECORDS`
+takes it, and no notice that follows a message before `NOTICES` does.
 
 - **NATS-5** (invariant) The umbrella chart's values list the table's
   durable consumers, each on its stream, with the table's subjects as its
@@ -406,10 +414,17 @@ data wasn't kept, and such a notice published in the moment between
   updates it to their configuration, once it has created or updated the
   consumer's stream and before the next stream. It creates or updates the
   streams in the order `NOTICES`, `RECORDS`, `ORDERS`, `JOBS`, and succeeds
-  when each consumer already is as the values say.
+  when each consumer already is as the values say. It gives a stream kept
+  by interest a subject only once each consumer the values list on that
+  stream exists: when it creates such a stream, it creates it with only its
+  name as its subject, and it updates the stream to the values' subjects
+  once it has created or updated the stream's consumers.
 - **NATS-6** (rule) In the installed charts, each consumer the values list
   exists on its stream with their configuration, with a replica on each of
-  the three servers, and the Job succeeds when it runs again.
+  the three servers, and the Job succeeds when it runs again. While the Job
+  makes a stream kept by interest, each message published to the subjects
+  the values give the stream is either refused or kept for each of the
+  stream's consumers whose filter subjects match it.
 
 ### Garage
 
@@ -811,8 +826,8 @@ keeps PostgreSQL's default, which lets every role execute it.
 | NATS-2 | rule | kind | The three servers form one JetStream cluster, with a leader. |
 | NATS-3 | invariant | tests | A hook Job creates or updates the streams `JOBS`, `RECORDS`, `ORDERS`, and `NOTICES`, each in files with three replicas. |
 | NATS-4 | rule | kind | Each stream is as the values say, on all three servers, and the Job can run again. |
-| NATS-5 | invariant | tests | The Job creates or updates the five durable consumers, each right after its stream, with `NOTICES` first and `JOBS` last. |
-| NATS-6 | rule | kind | Each consumer is as the values say, on all three servers, and the Job can run again. |
+| NATS-5 | invariant | tests | The Job creates or updates the five durable consumers, each right after its stream and before a stream kept by interest takes its subjects, with `NOTICES` first and `JOBS` last. |
+| NATS-6 | rule | kind | Each consumer is as the values say, on all three servers, and the Job can run again; a stream kept by interest refuses a message, or keeps it for each consumer, while the Job makes it. |
 | GARAGE-1 | invariant | tests | Garage is three nodes, replication factor 3, on claims, with no definition or ClusterRole of its own. |
 | GARAGE-2 | invariant | tests | A hook Job sets the layout, keys, buckets, and grants, and can run again. |
 | GARAGE-3 | rule | kind | Garage's layout, buckets, keys, and grants are as the values say. |
@@ -907,8 +922,9 @@ It adds statements, and lengthens the lists that [NATS-3], [GARAGE-4],
 statement's meaning changes.
 
 - **NATS:** the streams `ORDERS` and `NOTICES`, [NATS-3]; the durable
-  consumers of the discoverer, the scheduler, and the parse workers, and
-  the order in which the Job makes the streams, [NATS-5] and [NATS-6].
+  consumers of the discoverer, the scheduler, and the parse workers, the
+  order in which the Job makes the streams, and when a stream kept by
+  interest takes its subjects, [NATS-5] and [NATS-6].
 - **Garage:** the discoverer's key, which may only read the store's
   bucket, [GARAGE-4].
 - **PostgreSQL:** the discoverer's role, [PG-7], and Grafana's, [PG-11];

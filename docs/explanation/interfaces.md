@@ -170,8 +170,8 @@ replicated on all three NATS servers ([NATS-3]). A stream kept by interest
 keeps a message only for the consumers it has when the message is
 published, so the same Job makes the durable consumers of the discoverer,
 the scheduler, and the parse workers, each right after its stream, with
-`NOTICES` first and `JOBS` last, so a message that follows from another
-stream's reaches a stream kept by interest only once its consumers exist
+`NOTICES` first and `JOBS` last, and gives a stream kept by interest its
+subjects only once its consumers exist, so it accepts a message only then
 ([NATS-5]). The fetcher's consumer of `JOBS` comes with the fetcher
 ([§9 of deployment][deployment-later]).
 

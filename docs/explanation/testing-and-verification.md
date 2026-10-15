@@ -161,8 +161,9 @@ committed, packaged ([PIN-2]), and Garage's chart as a directory
 The deployment's rules, and every other statement checked by `kind`, are
 tested in the CI job that installs the charts on kind ([T20]). They cover
 what can't be seen without a cluster: that the three NATS servers form one
-JetStream cluster ([NATS-2]), and each durable consumer has a replica on
-all three ([NATS-6]); that each replica of NATS, Garage, and the database
+JetStream cluster ([NATS-2]), each durable consumer has a replica on all
+three, and a stream kept by interest keeps what it accepts, while the Job
+makes it, for each of its consumers ([NATS-6]); that each replica of NATS, Garage, and the database
 runs on its own worker node ([PLACE-2]); that every database instance
 reports PostgreSQL 18 ([PG-2]) and a backup to Garage completes ([PG-5]);
 that the database refuses a malformed record and lets no service change one

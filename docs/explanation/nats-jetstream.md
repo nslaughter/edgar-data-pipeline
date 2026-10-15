@@ -120,17 +120,24 @@ replicas, as its stream has, so its place in the stream survives the loss
 of a node ([NATS-5], [NATS-6]).
 
 Helm creates the umbrella chart's services, and waits for them to be ready,
-before its hook Jobs run ([CHART-4]), and a message published before its
-stream exists isn't kept. So the Job makes each stream's consumers as soon
-as it has made the stream, and makes the streams in the order `NOTICES`,
-`RECORDS`, `ORDERS`, `JOBS`. An event follows a job, and a notice follows
-an event or an order, so no event is published before `RECORDS` has its
-consumers, and no notice that follows a message before `NOTICES` has its
-([NATS-5]). A gap notice the discoverer publishes from polls the record
-already holds follows no message ([GAP-3]). A new install has such polls
-only when its database was restored while NATS's data wasn't kept, and such
-a notice published between `NOTICES`'s creation and its consumers' is kept
-for none ([durable consumers]).
+before its hook Jobs run ([CHART-4]), so a service may publish before the
+Job has made what it publishes to. JetStream refuses a message that no
+stream's subjects take, so its publisher knows it wasn't kept; but an
+interest stream accepts a message it has no consumer for, and keeps it for
+none. So the Job makes each stream's consumers as soon as it has made the
+stream, and gives an interest stream its subjects only once its consumers
+exist. It makes the stream with only its name as its subject, then its
+consumers, which may filter subjects their stream doesn't yet take, and
+then gives the stream its subjects, so a message published to them sooner
+is refused ([NATS-5]). That covers a gap notice the discoverer publishes,
+when it starts, from polls the record already holds, which follows no
+message ([GAP-3]): a new install has such polls when its database was
+restored while NATS's data wasn't kept ([durable consumers]).
+
+The Job also makes the streams in the order `NOTICES`, `RECORDS`, `ORDERS`,
+`JOBS`. An event follows a job, and a notice follows an event or an order,
+so neither an event nor a notice that follows a message is published
+before its stream takes it, and neither is refused ([NATS-5]).
 
 The fetcher's consumer of `JOBS` comes with the fetcher, in a later
 version. `JOBS` is a work queue, which keeps a job until it's acknowledged,
@@ -304,7 +311,7 @@ recovery](failures-and-recovery.md). For the streams:
 | The active fetcher | Jobs wait in `JOBS` until the standby takes the Lease over. Poll jobs that expire meanwhile are acknowledged without a request ([JOB-5]). Decision 0005 records every handover as a gap ([0005]); the notices' specification gives a gap only where the handover misses a poll ([notices, §5][gaps]). |
 | JetStream, for the scheduler | A poll that can't be queued before the next one is due is skipped ([SOURCE-2]) and counted ([METRIC-3]); its slot holds no successful poll, so the record shows a gap ([notices, §5][gaps]). |
 | All three servers, restarted | The streams are kept in files on retained claims ([NATS-1], [VOL-3]), so queued work survives the restart ([outages and recovery][outages]). |
-| A consumer that doesn't exist yet | An interest stream keeps nothing for it, which is why the Job makes each stream's durable consumers right after the stream, and the streams in an order that keeps a message from reaching an interest stream before its consumers ([NATS-5]). |
+| A consumer that doesn't exist yet | An interest stream would keep nothing for it, which is why the Job makes each stream's durable consumers right after the stream, and gives an interest stream its subjects only once they exist, so a message published sooner is refused, not lost ([NATS-5], [NATS-6]). |
 | A malformed message | It's acknowledged without being acted on, and counted ([JOB-7], [MSG-2]). |
 
 Decision 0003 expects fetching to go on while PostgreSQL fails over, with
@@ -333,8 +340,8 @@ take a record.
 | [NATS-2] | The three form one JetStream cluster, with a leader. | kind |
 | [NATS-3] | A hook Job creates or updates `JOBS`, `RECORDS`, `ORDERS`, and `NOTICES`, each in files with three replicas. | tests |
 | [NATS-4] | Each stream is as the values say, on all three servers, and the Job can run again. | kind |
-| [NATS-5] | The Job creates or updates the five durable consumers, each right after its stream, with `NOTICES` first and `JOBS` last. | tests |
-| [NATS-6] | Each consumer is as the values say, on all three servers, and the Job can run again. | kind |
+| [NATS-5] | The Job creates or updates the five durable consumers, each right after its stream and before a stream kept by interest takes its subjects, with `NOTICES` first and `JOBS` last. | tests |
+| [NATS-6] | Each consumer is as the values say, on all three servers, and the Job can run again; a stream kept by interest refuses a message, or keeps it for each consumer, while the Job makes it. | kind |
 | [PLACE-1], [PLACE-2] | Each server needs a worker node of its own, and runs on one. | tests, kind |
 | [VOL-2], [VOL-3] | Its claims are of `edgar-retained`, whose data a new claim of the same name finds. | tests, kind |
 | [CHART-2], [PIN-1], [PIN-2], [PIN-4] | NATS's chart, from its project's repository, at an exact version, committed, with its images by digest. | tests |

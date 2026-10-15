@@ -265,11 +265,12 @@ streams `ORDERS` and `NOTICES`, and the durable consumers of the
 discoverer, the scheduler, and the parse workers ([NATS-3], [NATS-5]); the
 discoverer's role and key ([PG-7], [GARAGE-4]); Grafana's role and its
 data source ([PG-11], [MON-5]); and the notices' tables and views and the
-dashboards' views, with their grants ([PG-12], [PG-13]). One gap notice
-can still be kept for no consumer: on a new install whose database was
-restored while NATS's data wasn't kept, one published between `NOTICES`'s
-creation and its consumers' ([durable consumers][deployment-consumers]).
-Its [§9][deployment-later] lists what later versions add: the pipeline's
+dashboards' views, with their grants ([PG-12], [PG-13]). A stream kept
+by interest takes its subjects only once its consumers exist, so a notice
+published before `NOTICES` has its consumers is refused rather than kept
+for none: even the gap notice the discoverer publishes when it starts on a
+new install whose database was restored while NATS's data wasn't kept
+([durable consumers][deployment-consumers]). Its [§9][deployment-later] lists what later versions add: the pipeline's
 own services, with their replicas, credentials, and placement; the
 fetcher's durable consumer of `JOBS`, a work queue, which keeps a job until
 it's acknowledged; migrations for later versions of the record's tables

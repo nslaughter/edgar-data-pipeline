@@ -65,13 +65,16 @@ of its consumers acknowledges keeps a message only for the consumers it has
 when the message is published, so each service that reads one needs its
 durable consumer before what it should see is published. That's why the
 Job makes each stream's consumers as soon as it has made the stream, and
-makes `NOTICES` first, then `RECORDS`, `ORDERS`, and `JOBS` last. An event
-follows a job, and a notice follows an event or an order, so no event, and
-no notice that follows a message, reaches its stream before the stream's
-consumers ([NATS-5]). Only a gap notice published from polls the record
-already holds follows no message, and on a new install whose database was
-restored while NATS's data wasn't kept, one published before `NOTICES` has
-its consumers is kept for none ([durable consumers][deployment-consumers]).
+gives a stream kept by interest its subjects only once its consumers exist,
+so a message published to them sooner is refused, as one is before the
+stream exists, and isn't accepted and kept for none ([NATS-5]). That covers
+a gap notice published from polls the record already holds, which follows
+no message: on a new install whose database was restored while NATS's data
+wasn't kept, the discoverer publishes one when it starts
+([durable consumers][deployment-consumers]). The Job also makes `NOTICES`
+first, then `RECORDS`, `ORDERS`, and `JOBS` last. An event follows a job,
+and a notice follows an event or an order, so no event, and no notice that
+follows a message, is published before its stream takes it ([NATS-5]).
 
 ## Acknowledgement and redelivery
 

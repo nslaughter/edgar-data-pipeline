@@ -414,7 +414,8 @@ built, and what Grafana needs to read the record ([deployment, from version
 
 - **NATS:** the streams `ORDERS` and `NOTICES` ([NATS-3]), and the durable
   consumers of the discoverer, the scheduler, and the parse workers, with
-  the order in which the Job makes the streams ([NATS-5], [NATS-6]).
+  the order in which the Job makes the streams, and when a stream kept by
+  interest takes its subjects ([NATS-5], [NATS-6]).
 - **Garage:** the discoverer's key, which may only read the store's bucket
   ([GARAGE-4]).
 - **PostgreSQL:** the discoverer's role ([PG-7]) and Grafana's ([PG-11]);

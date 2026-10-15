@@ -509,10 +509,10 @@ messages it has delivered and those acknowledged, for whichever of its
 service's replicas reads from it, and across their restarts and NATS's. A
 stream kept by interest keeps a message only for the consumers it has when
 the message is published, so the deployment makes each durable consumer
-right after its stream, before the streams whose messages lead to what it
-reads. Each of the pipeline's is a pull
-consumer, from which its service's replicas ask for messages
-([§2 of the deployment][deployment-terms], [NATS-5]).
+right after its stream, before a stream kept by interest takes its
+subjects, and before the streams whose messages lead to what it reads. Each
+of the pipeline's is a pull consumer, from which its service's replicas ask
+for messages ([§2 of the deployment][deployment-terms], [NATS-5]).
 
 ### envtest
 
