@@ -253,15 +253,22 @@ example, would carry about 3.
 
 The git store holds only its declared scope, kept small enough to commit
 ([§9 of the store][store-scope]): no file over 50 MiB, and 1 GB in all
-([SCOPE-4], [SCOPE-5]). The transfer brings the cluster's records into it
-for the ranges the owner names ([XFER-1]). At the default, the polls add
+([SCOPE-4], [SCOPE-5]). The transfer brings the cluster's records into it,
+each with its object, for the ranges the owner names, and copies nothing
+that would break either limit ([XFER-1]). At the default, the polls add
 25,920 records a day, about 15 MB at some 600 bytes a record, so the
 `submissions` log would pass 50 MiB within four days of polls
 ([§9 of the store][store-scope]); at the full budget, within about 10 hours.
-A log is only appended to ([LOG-1]), so that's for every transfer
-together, not for each. The store's open question 2 says that a log nearing
-50 MiB needs a new layout, such as a log per feed and year, in a major
-version ([open questions of the store][store-open]).
+Their objects can reach the 1 GB first. In the high case, each poll brings
+a new object of up to 27,325 bytes ([SRC-18]), so a day of the default's
+polls is 25,920 × (27,325 + 600) = 0.72 GB with their records, and the
+1 GB is full after about a day and a half of polls; at the full budget,
+after about 4 hours. In the low case, a list's new objects are a few a
+day, and the log's 50 MiB comes first. A log is only appended to
+([LOG-1]), so these are for every transfer together, not for each. The
+store's open question 2 says that a log nearing 50 MiB needs a new layout,
+such as a log per feed and year, in a major version
+([open questions of the store][store-open]).
 
 So the git store limits how many polls findings can cite, not what the
 pipeline keeps: the cluster store keeps every record.
