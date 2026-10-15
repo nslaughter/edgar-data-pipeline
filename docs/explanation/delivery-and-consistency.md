@@ -67,11 +67,16 @@ durable consumer before what it should see is published. That's why the
 Job makes each stream's consumers as soon as it has made the stream, and
 gives a stream kept by interest its subjects only once its consumers exist,
 so a message published to them sooner is refused, as one is before the
-stream exists, and isn't accepted and kept for none ([NATS-5]). That covers
-a gap notice published from polls the record already holds, which follows
-no message: on a new install whose database was restored while NATS's data
-wasn't kept, the discoverer publishes one when it starts
-([durable consumers][deployment-consumers]). The Job also makes `NOTICES`
+stream exists, and isn't accepted and kept for none ([NATS-5]). A refused
+message is kept only once it's published again. A gap notice published
+from polls the record already holds follows no message, so no message's
+delivery brings it again ([DISC-2]): on a new install whose database was
+restored while NATS's data wasn't kept, the discoverer publishes one when
+it starts. The notices don't yet say that the discoverer publishes a
+refused notice again, and it publishes the gap's notice again only when
+the gap changes or it starts again ([GAP-3]). Until then, the scheduler
+doesn't set the Source's `openGapSince` from it ([NOTICE-1],
+[durable consumers][deployment-consumers]). The Job also makes `NOTICES`
 first, then `RECORDS`, `ORDERS`, and `JOBS` last. An event follows a job,
 and a notice follows an event or an order, so no event, and no notice that
 follows a message, is published before its stream takes it ([NATS-5]).

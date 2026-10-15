@@ -268,15 +268,19 @@ data source ([PG-11], [MON-5]); and the notices' tables and views and the
 dashboards' views, with their grants ([PG-12], [PG-13]). A stream kept
 by interest takes its subjects only once its consumers exist, so a notice
 published before `NOTICES` has its consumers is refused rather than kept
-for none: even the gap notice the discoverer publishes when it starts on a
-new install whose database was restored while NATS's data wasn't kept
-([durable consumers][deployment-consumers]). Its [§9][deployment-later] lists what later versions add: the pipeline's
-own services, with their replicas, credentials, and placement; the
-fetcher's durable consumer of `JOBS`, a work queue, which keeps a job until
-it's acknowledged; migrations for later versions of the record's tables
-and views; each component's requests, limits, and probes, measured on
-kind; Tempo, Loki, and Alloy; and kube-state-metrics' access to the
-definitions of the pipeline's resources.
+for none. One such notice can still miss the scheduler: the gap notice the
+discoverer publishes when it starts, on a new install whose database was
+restored while NATS's data wasn't kept. It follows no message, so nothing
+delivers it again, and the notices don't yet say that the discoverer
+publishes a refused notice again ([GAP-3],
+[durable consumers][deployment-consumers]). Its [§9][deployment-later]
+lists what later versions add: the pipeline's own services, with their
+replicas, credentials, and placement; the fetcher's durable consumer of
+`JOBS`, a work queue, which keeps a job until it's acknowledged;
+migrations for later versions of the record's tables and views; each
+component's requests, limits, and probes, measured on kind; Tempo, Loki,
+and Alloy; and kube-state-metrics' access to the definitions of the
+pipeline's resources.
 
 ### Controls
 
@@ -578,6 +582,7 @@ revisit: whether to keep each company's `submissions` as the notice source
 [FILE-2]: ../../spec/notices.md#7-a-filings-files
 [FILE-4]: ../../spec/notices.md#7-a-filings-files
 [FILE-6]: ../../spec/notices.md#7-a-filings-files
+[GAP-3]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [LIST-2]: ../../spec/notices.md#8-backfills
 [LAG-1]: ../../spec/notices.md#10-times-and-lags
 [METRIC-4]: ../../spec/telemetry.md#the-fetchers-clock

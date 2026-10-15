@@ -129,10 +129,15 @@ stream, and gives an interest stream its subjects only once its consumers
 exist. It makes the stream with only its name as its subject, then its
 consumers, which may filter subjects their stream doesn't yet take, and
 then gives the stream its subjects, so a message published to them sooner
-is refused ([NATS-5]). That covers a gap notice the discoverer publishes,
-when it starts, from polls the record already holds, which follows no
-message ([GAP-3]): a new install has such polls when its database was
-restored while NATS's data wasn't kept ([durable consumers]).
+is refused ([NATS-5]). A refused message isn't kept for none, but the
+stream keeps it only once it's published again. A gap notice the
+discoverer publishes, when it starts, from polls the record already holds
+follows no message, so no message's delivery brings it again ([GAP-3],
+[DISC-2]): a new install has such polls when its database was restored
+while NATS's data wasn't kept. The notices don't yet say that the
+discoverer publishes a refused notice again, so until the gap changes or
+the discoverer starts again, the scheduler doesn't set the Source's
+`openGapSince` from it ([NOTICE-1], [durable consumers]).
 
 The Job also makes the streams in the order `NOTICES`, `RECORDS`, `ORDERS`,
 `JOBS`. An event follows a job, and a notice follows an event or an order,
@@ -311,7 +316,7 @@ recovery](failures-and-recovery.md). For the streams:
 | The active fetcher | Jobs wait in `JOBS` until the standby takes the Lease over. Poll jobs that expire meanwhile are acknowledged without a request ([JOB-5]). Decision 0005 records every handover as a gap ([0005]); the notices' specification gives a gap only where the handover misses a poll ([notices, §5][gaps]). |
 | JetStream, for the scheduler | A poll that can't be queued before the next one is due is skipped ([SOURCE-2]) and counted ([METRIC-3]); its slot holds no successful poll, so the record shows a gap ([notices, §5][gaps]). |
 | All three servers, restarted | The streams are kept in files on retained claims ([NATS-1], [VOL-3]), so queued work survives the restart ([outages and recovery][outages]). |
-| A consumer that doesn't exist yet | An interest stream would keep nothing for it, which is why the Job makes each stream's durable consumers right after the stream, and gives an interest stream its subjects only once they exist, so a message published sooner is refused, not lost ([NATS-5], [NATS-6]). |
+| A consumer that doesn't exist yet | An interest stream would keep nothing for it, which is why the Job makes each stream's durable consumers right after the stream, and gives an interest stream its subjects only once they exist, so a message published sooner is refused, not kept for none, and kept only once it's published again ([NATS-5], [NATS-6]). |
 | A malformed message | It's acknowledged without being acted on, and counted ([JOB-7], [MSG-2]). |
 
 Decision 0003 expects fetching to go on while PostgreSQL fails over, with

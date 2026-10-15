@@ -402,10 +402,16 @@ consumers exist: it makes the stream with only its name as its subject,
 JetStream's default when none is given, then its consumers, which
 JetStream lets filter subjects their stream doesn't yet take, and then
 gives the stream its subjects. Until then, a message published to them is
-refused, as one is before the stream exists. That covers a gap notice the discoverer
-publishes, when it starts, from polls the record already holds, which
-follows no message ([GAP-3]): a new install has such polls when its
-database was restored while NATS's data wasn't kept.
+refused, as one is before the stream exists. A refused message isn't kept
+for none, but the stream keeps it only once it's published again. A gap
+notice the discoverer publishes, when it starts, from polls the record
+already holds follows no message, so no message's delivery brings it again
+([GAP-3], [DISC-2]): a new install has such polls when its database was
+restored while NATS's data wasn't kept. The notices' version 0.1.0 doesn't
+say that the discoverer publishes a refused notice again, and [GAP-3]
+publishes a Source's gap notice again only when its gap changes or the
+discoverer starts again. Until then, the scheduler doesn't set the Source's
+`openGapSince` from it ([NOTICE-1]).
 
 The Job also makes the streams in an order that keeps a message that
 follows another from being refused: an event follows a job, and a notice
