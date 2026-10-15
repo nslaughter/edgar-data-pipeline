@@ -169,8 +169,8 @@ its cases is one that T26 waits on ([edgar-asof's plan][asof-plan-later]).
 
 The query API keeps no state: it's a stateless Deployment that reads the
 facts from PostgreSQL ([components][design-components]). Its database role
-is its own, and like every service's but the fetcher's, may only select the
-store's records and the discoverer's tables ([PG-7], [LOG-3], [TABLE-3]).
+is its own ([PG-7]), and may only select the store's records ([LOG-3]) and
+the discoverer's tables ([TABLE-3]).
 Decision 0004 puts the scale at millions of rows, even after a backfill, so
 speed doesn't decide the database ([0004]). Task T42 estimates the CPU and
 memory it needs ([plan][plan-documentation]).

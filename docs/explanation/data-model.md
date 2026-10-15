@@ -24,7 +24,7 @@ the same way and give a record the same fields
 | Objects | `data/objects/AA/SHA256.gz` | `objects/AA/SHA256.gz` in Garage's bucket `snapshots` |
 | Records | One JSON line per fetch in `data/feeds/FEED/versions.jsonl` | One row per fetch in PostgreSQL's table `records` |
 | Written by | `scripts/snapshot.py`, and the transfer from the cluster | The fetcher |
-| Kept unchanged by | git's history, which `scripts/verify.py --since` checks ([LOG-1], [LOG-2]) | Grants: only the fetcher may add records and objects, and none may change them ([LOG-3], [LOG-4]) |
+| Kept unchanged by | git's history, which `scripts/verify.py --since` checks ([LOG-1], [LOG-2]) | Records: grants, since only the fetcher's role may insert one, and none may update or delete one ([LOG-3]). Objects: only the fetcher's key may write one, and the fetcher never replaces or deletes one ([LOG-4]); Garage can't refuse a change ([0002]), so a check of the objects finds any ([STORE-3]) |
 | Scope | `data/scope.json`, the URLs it may hold, each with its reason ([§9 of the store][store-scope]) | What the owner's values ask for, through the controls ([the scope and the cluster][store-scope-cluster]) |
 | Import manifests | `data/imports/IMPORT.json`, one for each import | Where the facts specification will say ([§11 of the store][store-imports]) |
 
@@ -450,6 +450,7 @@ seen after an outage keeps its acceptance time, and its first-seen time
 carries the gap's bounds ([times][design-times], [outages and
 recovery][design-outages]).
 
+[0002]: ../decisions/0002-store-bodies-in-garage.md
 [0004]: ../decisions/0004-keep-the-record-in-postgresql-18.md
 [0009]: ../decisions/0009-read-edgar-through-a-public-point-in-time-library.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
@@ -468,8 +469,8 @@ recovery][design-outages]).
 [design-outages]: ../design.md#outages-and-recovery
 [design-times]: ../design.md#times
 [design-waits]: ../design.md#what-waits-on-the-investigation
-[FACT-5]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#4-reading-a-companys-facts
 [DISC-2]: ../../spec/notices.md#processing
+[FACT-5]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#4-reading-a-companys-facts
 [FACT-6]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#5-facts
 [FACT-7]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#5-facts
 [FACT-8]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#5-facts
@@ -522,6 +523,7 @@ recovery][design-outages]).
 [SRC-17]: ../../investigation/edgar.md#findings-so-far
 [STORE-1]: ../../spec/snapshots.md#the-cluster-store
 [STORE-2]: ../../spec/snapshots.md#the-cluster-store
+[STORE-3]: ../../spec/snapshots.md#the-cluster-store
 [store-imports]: ../../spec/snapshots.md#11-imports
 [store-layout]: ../../spec/snapshots.md#4-layout
 [store-scope]: ../../spec/snapshots.md#9-scope

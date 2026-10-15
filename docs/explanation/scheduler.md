@@ -117,7 +117,9 @@ are allowed again ([ORDER-1]). An order gives the Backfill's name, its
 `metadata.uid`, which tells it from an earlier Backfill of the same name,
 its `cik` and its range of filing dates, and when it was published
 ([order.schema.json]). The discoverer starts a Backfill only for a `uid` it
-hasn't seen ([LIST-1]), so an order published again changes nothing.
+hasn't seen ([LIST-1]), so an order published again adds nothing: the
+discoverer only publishes the Backfill's first job again, with its `id`,
+unless its record is held ([DISC-2]).
 
 Decision 0007 had the scheduler queue a Backfill's fetches itself
 ([0007]). The controls left to the notices specification which service
@@ -352,8 +354,10 @@ EDGAR's content ([0006]).
 Task T22 builds the scheduler, with the Go types and the chart's Sources,
 and T24 builds its side of the notices: the orders, and each Source's
 `openGapSince` and each Backfill's status, which it sets from notices
-([plan][plan-observing]). The statements' tests await
-those tasks, and T28 and T29 for its metrics and traces
+([plan][plan-observing]). The schemas' statements, [JOB-1] and [MSG-1],
+have tests already. [SOURCE-4]'s tests await T23, the fetcher; those of its
+metrics, of kube-state-metrics' grants ([RBAC-5]), and of its traces await
+T28 and T29; and the others' await T22 and T24
 ([§3 of the controls][controls-ids], [§3 of the notices][notices-ids],
 [§3 of telemetry][telemetry-ids]).
 
@@ -402,11 +406,11 @@ those tasks, and T28 and T29 for its metrics and traces
 [JOB-5]: ../../spec/snapshots.md#jobs-and-events
 [notices-ids]: ../../spec/notices.md#3-statement-ids
 [notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
+[notices-files]: ../../spec/notices.md#7-a-filings-files
 [notices-backfills]: ../../spec/notices.md#8-backfills
 [notices-messages]: ../../spec/notices.md#9-messages-and-processing
 [notices-open]: ../../spec/notices.md#12-open-questions
 [notices-left]: ../../spec/notices.md#left-to-other-specifications
-[notices-files]: ../../spec/notices.md#7-a-filings-files
 [GAP-1]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [GAP-2]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [ORDER-1]: ../../spec/notices.md#8-backfills
@@ -415,6 +419,7 @@ those tasks, and T28 and T29 for its metrics and traces
 [NOTICE-2]: ../../spec/notices.md#8-backfills
 [MSG-1]: ../../spec/notices.md#streams
 [MSG-2]: ../../spec/notices.md#streams
+[DISC-2]: ../../spec/notices.md#processing
 [LAG-1]: ../../spec/notices.md#10-times-and-lags
 [telemetry-ids]: ../../spec/telemetry.md#3-statement-ids
 [telemetry-alerts]: ../../spec/telemetry.md#7-alerts

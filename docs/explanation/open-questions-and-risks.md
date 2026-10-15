@@ -122,8 +122,9 @@ record, once its fetcher and discoverer run, not from the investigation's
 tasks ([0010], [method][inv-method], step 3). The record keeps every time
 raw, and each lag is a query over it ([LAG-1]). So Q4 is answered only
 after the pipeline's first part runs, and the investigation finishes after
-it ([0010]). The daily refetches, through [T4] and [T8], show when each
-day's index appears and whether a published one changes; [T5] records what
+it ([0010]). The first refetch, [T4], and the daily refetches, which [T8]
+reads, show when each day's index appears and whether a published one
+changes; [T5] records what
 the latest-filings feed holds, so that [T11] can weigh it as a second
 notice source.
 
@@ -157,7 +158,7 @@ holds.
 | Task here | The release it waits on, in this repository's plan | In `edgar-asof`'s plan |
 | --- | --- | --- |
 | [T24], the discoverer, which reads `submissions` and headers through the library | Its first release | Release 0.1.0 is its T9, after its T2 to T8 and T13, when the owner asks ([first release][asof-first-release]) |
-| [T17], the facts specification, which cites a version of the library's for the fact model and "as of T" | A release that specifies the fact model | Its T1, done October 14, 2026, wrote [`facts.md`][asof-facts] version 0.1.0, which defines both; neither plan names the release that publishes it |
+| [T17], the facts specification, which cites a version of the library's for the fact model and "as of T" | A release that specifies the fact model | Its T1, done October 14, 2026, wrote [`facts.md`][asof-facts] version 0.1.0, which defines both. Its plan puts T1, and T8, which builds the facts, in its first release, 0.1.0, which its T9 publishes ([first release][asof-first-release]); it isn't published yet |
 | [T25], the parse workers, which build facts through the library | A release that reads XBRL instances | Its T11, after its first release, this repository's [T12], the XBRL parser, and the owner ([later][asof-later]) |
 | [T26], the query API, tested against the cases the library publishes | None named: its dependencies are [T17] and [T25] | Its T10 publishes the cases, after its first release, in a release it names as one [T26] waits on ([later][asof-later]) |
 | [T27], the exporter, through a pinned `edgar-asof` | None named: its dependencies are [T18] and [T25] | No release named |
@@ -182,7 +183,6 @@ flowchart LR
         A9["T9: release 0.1.0"]
         A10["T10: published cases"]
         A11["T11: XBRL instances"]
-        R["A release that specifies the fact model"]
     end
     F --> A8
     A8 --> A9
@@ -192,10 +192,14 @@ flowchart LR
     A9 --> A11
     P12 --> A11
     A11 --> P25
-    R --> P17
+    A9 --> P17
 ```
 
-The dashed arrow is the dependency only `edgar-asof`'s plan names.
+The dashed arrow is the dependency only `edgar-asof`'s plan names. The
+arrow from release 0.1.0 to T17 joins the two plans: this repository's
+names a release that specifies the fact model ([T17]), and the library's
+puts its facts specification in release 0.1.0
+([first release][asof-first-release]).
 
 ### A finding no task here names yet
 

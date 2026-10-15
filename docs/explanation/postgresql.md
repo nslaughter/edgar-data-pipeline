@@ -144,12 +144,13 @@ returns, is on [The data model and its times](data-model.md).
 erDiagram
   records ||--o| polls : "a poll's record"
   records ||--o{ filings : "listed_by"
-  records ||--o{ jobs : "cause"
+  records |o--o{ jobs : "cause"
   records }o--o| readings : "by sha256, not a key"
-  polls ||--o{ sightings : "first_shown, last_not_shown"
+  polls ||--o{ sightings : "first_shown"
+  polls |o--o{ sightings : "last_not_shown"
   filings ||--o{ sightings : "accession_number"
-  filings ||--o{ jobs : "accession_number"
-  backfills ||--o{ jobs : "backfill"
+  filings |o--o{ jobs : "accession_number"
+  backfills |o--o{ jobs : "backfill"
   backfills ||--o{ backfill_filings : "backfill"
   filings ||--o{ backfill_filings : "accession_number"
   backfills ||--o| backfill_listings : "backfill"
@@ -348,8 +349,8 @@ the other services read them, and Grafana reads the views made for it.
 | [ALERT-3], [SCRAPE-1] | The alert on a stale backup, and the scraping of the instances' metrics. | tests |
 
 The database and its backups are built by task T20; the notices' tables and
-Grafana's views are deployed by T38; neither is done
-([plan][plan-observing]).
+Grafana's views are specified by T38, a version of the deployment's
+specification; neither task is done ([plan][plan-observing]).
 
 ## The alternatives decision 0004 weighed
 
@@ -395,8 +396,8 @@ DuckDB, pandas, or Polars without the cluster ([0004]).
 [PLACE-1]: ../../spec/deployment.md#placement
 [PLACE-2]: ../../spec/deployment.md#placement
 [SECRET-1]: ../../spec/deployment.md#credentials
-[VOL-2]: ../../spec/deployment.md#volumes
 [T17]: ../plan.md#facts
+[VOL-2]: ../../spec/deployment.md#volumes
 [volumes]: ../../spec/deployment.md#volumes
 [DISC-1]: ../../spec/notices.md#processing
 [DISC-2]: ../../spec/notices.md#processing

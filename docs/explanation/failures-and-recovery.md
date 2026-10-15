@@ -27,8 +27,8 @@ does to coverage, and the record keeps coverage by one definition
   a gap of about a cadence; a pause, a stop after a `403`, or a fetcher's
   handover that misses a poll leaves a gap until polling resumes; and a poll
   sent late in its slot, after retries, leaves none.
-- **An open gap** begins once the latest successful poll's job has been
-  expired for as long as its window, with no later successful poll, and runs
+- **A gap is open** once the latest successful poll's job has been expired
+  for as long as its window, with no later successful poll, and it runs
   from when that job expired. The Source's status gives when it began
   ([SOURCE-5]), and the view `gaps` gives every gap, ended or open
   ([GAP-2]).
@@ -149,8 +149,10 @@ leader election, which also uses a Lease ([0007],
 [the design's components]).
 
 - **What stops:** queuing polls and orders, and setting the resources'
-  status. A poll that can't be queued before the next is due is skipped
-  ([SOURCE-2]), and counted ([the scheduler's metrics]).
+  status. Polls due while no replica is active are neither queued nor
+  counted: a replica counts only the polls it skipped itself
+  ([the scheduler's metrics]), and the new active replica begins with each
+  Source's first poll ([SOURCE-2]). Only the record's gaps show them.
 - **What's kept:** the controls themselves, which the API server keeps
   through restarts ([the controls' guarantees]), and the jobs already
   queued.
@@ -159,8 +161,8 @@ leader election, which also uses a Lease ([0007],
   Backfill that hasn't started ([ORDER-1]). It sets each Source's open gap
   from the latest gap notice ([NOTICE-1]), which the discoverer publishes
   whatever the scheduler is doing ([GAP-3]).
-- **What the record shows:** each poll skipped leaves its slot without a
-  successful poll, so a gap ([coverage and gaps]).
+- **What the record shows:** a gap for each slot that passed without a
+  successful poll ([coverage and gaps]).
 
 ## Losing a worker node
 

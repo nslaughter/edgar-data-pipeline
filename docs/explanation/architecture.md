@@ -119,8 +119,9 @@ rows; no role may update, delete, or truncate either ([LOG-3], [TABLE-3]).
 Only the fetcher's Garage key may write the bucket `snapshots`; every other
 service's may only read it ([GARAGE-4]). The deployment's version 1.0.0
 installs the streams `JOBS` and `RECORDS` ([NATS-3]). The streams `ORDERS`
-and `NOTICES`, the discoverer's role and key, and the durable consumers are
-to be specified in task T38 ([plan][plan-observing]).
+and `NOTICES`, the discoverer's role and key, and the durable consumers of
+the discoverer, the scheduler, and the parse workers are to be specified in
+task T38 ([plan][plan-observing]).
 
 ## One filing, end to end
 
@@ -414,8 +415,8 @@ library publishes, so both answer "as of T" the same way ([0009]).
 [JOB-6]: ../../spec/snapshots.md#jobs-and-events
 [job-schema]: ../../spec/schemas/job.schema.json
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease
-[LOG-3]: ../../spec/snapshots.md#8-history
 [LIST-1]: ../../spec/notices.md#8-backfills
+[LOG-3]: ../../spec/snapshots.md#8-history
 [METRIC-1]: ../../spec/telemetry.md#4-metrics
 [NATS-1]: ../../spec/deployment.md#nats
 [NATS-3]: ../../spec/deployment.md#nats

@@ -385,11 +385,10 @@ traces, which are all sampled now
 ([telemetry's open question 3][telemetry-questions]).
 
 > **Analysis.** No task, decision record, or specification covers this.
-> Memory is measured on kind before each limit is set. If
-> kube-prometheus-stack's share proved too large for kind's one machine,
-> VictoriaMetrics, which the record credits with less memory and disk, and
-> whose operator reads the same resources, is the alternative to weigh
-> again.
+> If kube-prometheus-stack's memory, once measured, proved too large for
+> kind's one machine, VictoriaMetrics, which the record credits with less
+> memory and disk, and whose operator reads the same resources, is the
+> alternative to weigh again.
 
 ## 0009: Read EDGAR through a public point-in-time library
 
@@ -589,13 +588,13 @@ pipeline has releases ([§9 of the site][site-questions]).
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
 [0011]: ../decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md
 [0012]: ../decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md
-[notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [design-decisions]: ../design.md#decisions
+[notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [T5]: ../plan.md#investigation
 [T10]: ../plan.md#facts
 [T11]: ../plan.md#observing-filings
-[T17]: ../plan.md#facts
 [T12]: ../plan.md#facts
+[T17]: ../plan.md#facts
 [T28]: ../plan.md#observing-filings
 [T31]: ../plan.md#traces-logs-and-drills
 [telemetry]: ../../spec/telemetry.md
@@ -618,13 +617,13 @@ pipeline has releases ([§9 of the site][site-questions]).
 [FETCH-9]: ../../spec/snapshots.md#10-fetching
 [FETCH-18]: ../../spec/snapshots.md#the-fetcher
 [JOB-6]: ../../spec/snapshots.md#jobs-and-events
-[SEEN-2]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [DISC-2]: ../../spec/notices.md#processing
+[SEEN-2]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [API-1]: ../../spec/controls.md#4-the-resources
 [API-2]: ../../spec/controls.md#4-the-resources
 [VAL-3]: ../../spec/controls.md#5-the-charts-values
-[VAL-1]: ../../spec/controls.md#5-the-charts-values
 [ACCESS-3]: ../../spec/controls.md#8-secaccess
+[VAL-1]: ../../spec/controls.md#5-the-charts-values
 [RBAC-6]: ../../spec/controls.md#9-who-may-change-what
 [CHART-4]: ../../spec/deployment.md#5-dependencies
 [CRD-2]: ../../spec/deployment.md#definitions

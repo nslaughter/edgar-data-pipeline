@@ -6,7 +6,8 @@
 
 Each credential the pipeline uses and where it's kept, how the user agent
 that the SEC asks for is handled, who may change what, and what each service
-may read and write.
+may read and write. Facts about `edgar-asof` here cite its documents at
+commit `515bb0d`, and were checked against its `main` on October 14, 2026.
 
 ## The credentials
 
@@ -106,13 +107,17 @@ hands each one to it in an order ([the notices' Backfills]).
 
 The chart checks the owner's values before anything reaches the cluster. It
 refuses values from which it would render a resource that the API server
-would refuse, and Sources not paused that together would poll faster than
-half the fetcher's limit ([VAL-2], [VAL-3]). Its default values pause the
-`SecAccess`, so an install sends nothing to the SEC until the owner's values
-allow it ([VAL-4]). Nothing reaches the cluster another way, so no admission
-webhook checks the resources; should anything, the definitions still refuse
-a cadence under a second, and the scheduler reports a total over the budget
-([the chart's values][controls-values], [0010]).
+would refuse, apart from a change to a Backfill's `spec`, which the chart
+can't see without the cluster, and Sources not paused that together would
+poll faster than half the fetcher's limit ([VAL-2], [VAL-3]). The API server
+refuses a changed Backfill `spec`, so `helm upgrade` fails then, though
+`helm template` passes ([API-3], [the chart's values][controls-values]). Its
+default values pause the `SecAccess`, so an install sends nothing to the SEC
+until the owner's values allow it ([VAL-4]). Nothing reaches the cluster
+another way, so no admission webhook checks the resources; should anything,
+the definitions still refuse a cadence under a second, and the scheduler
+reports a total over the budget ([the chart's values][controls-values],
+[0010]).
 
 Two acts are the owner's alone, by design. Acknowledging a stop after a
 `403`: the owner copies the stop's `at` into the values as
@@ -203,6 +208,7 @@ and loaded into kind's nodes, never pushed to or pulled from a registry
 [0006]: ../decisions/0006-write-the-services-in-go-and-python.md
 [0007]: ../decisions/0007-control-the-pipeline-through-custom-resources.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
+[API-3]: ../../spec/controls.md#4-the-resources
 [T38]: ../plan.md#observing-filings
 [CLIENT-2]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/fetching.md#4-requests
 [CLIENT-3]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/fetching.md#4-requests

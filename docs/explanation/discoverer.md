@@ -184,8 +184,9 @@ them ([§5 of the notices][notices-gaps]):
   expired;
 - a **gap** is the time from when the earlier one's job expired to the
   later one's request, when the later doesn't follow it;
-- an **open gap** begins once the latest successful poll's job has been
-  expired for as long as its window, with no later successful poll.
+- a gap is **open**, from when the latest successful poll's job expired,
+  once that job has been expired for as long as its window with no later
+  successful poll.
 
 So a poll sent late in its slot, after retries, leaves no gap; a missed
 poll leaves one of about a cadence; and a pause, a stop after a `403`, or a
@@ -328,7 +329,8 @@ store's table `records`, in the tables and views that
 ```mermaid
 erDiagram
   records ||--o| polls : "a poll's record"
-  polls ||--o{ sightings : "first_shown or last_not_shown"
+  polls ||--o{ sightings : "first_shown"
+  polls |o--o{ sightings : "last_not_shown"
   filings ||--o{ sightings : "shown by a Source"
   filings |o--o{ jobs : "fetches of its files"
   jobs |o--o| records : "its fetch"
@@ -503,7 +505,7 @@ in both languages ([0006]).
 | [FILE-1] to [FILE-6] | A filing's files: their URLs, their fetches and readings, no retry, the filing notice, and `held_files`. |
 | [LIST-1] to [LIST-6] | A Backfill's lists, filings, fetches, outcomes, notices, and progress. |
 | [MSG-1], [MSG-2] | Orders and notices validate against their schemas; consumers refuse malformed ones. |
-| [DISC-1], [DISC-2] | Every event and order is read, poll events in order, and each message is handled once. |
+| [DISC-1], [DISC-2] | Every event and order is read, poll events in order, and a message delivered again adds nothing twice. |
 | [LAG-1] | `lags` gives each sighting's times and the bounds of each lag. |
 | [JOB-3], [FETCH-18] | It queues fetches as jobs, and reads bodies from the store, never fetching. |
 | [BACKFILL-1] | A Backfill fetches its range's filings, except those already held. |

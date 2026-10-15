@@ -59,17 +59,21 @@ Nothing stored is changed or removed, and a correction is a new record
   must find its object ([STORE-3]). The guarantee rests on detection, not
   prevention ([0002]).
 
-NATS, Garage, and the database keep running when one of kind's three
-worker nodes is lost: each keeps three replicas, one on each worker node,
-and Garage keeps a copy of every object, and NATS of every stream, on
-each ([deployment's guarantees][deployment-guarantees], [PLACE-1],
-[NATS-3], [GARAGE-1], [PG-3]). Stored data outlives the cluster: every
-worker node keeps its volumes in one directory of the host, which a cluster
-recreated with it finds ([KIND-2], [VOL-1], [VOL-3]). The database archives
-its write-ahead log to Garage and takes a base backup at least once a day
-([PG-4]). Its backup plugin has been tested against MinIO, not Garage, so a
-restore is shown on kind, by the drills, before the backups are relied on
-([instances and backups][deployment-backups], task T31).
+NATS, Garage, and the database keep running when one of kind's three worker
+nodes is lost: each keeps three replicas, one on each worker node, and
+Garage keeps a copy of every object, and NATS of every stream, on each
+([deployment's guarantees][deployment-guarantees], [PLACE-1], [NATS-3],
+[GARAGE-1], [PG-3]). Stored data outlives the cluster. Every worker node
+keeps its volumes in one directory of the host ([KIND-2]), and the claims of
+NATS, Garage, Prometheus, and Alertmanager are of the class
+`edgar-retained`, whose data a cluster recreated with that directory finds
+([VOL-1] to [VOL-3]). The database's claims are of kind's `standard` class,
+whose data a recreated cluster can't find, so what outlives the cluster for
+the database is its backups in Garage ([VOL-2], [PG-4]). The database
+archives its write-ahead log to Garage and takes a base backup at least once
+a day ([PG-4]). Its backup plugin has been tested against MinIO, not Garage,
+so a restore is shown on kind, by the drills, before the backups are relied
+on ([instances and backups][deployment-backups], task T31).
 
 Work in flight survives a restart: queued work is kept in NATS JetStream's
 streams, on persistent volumes, and work not acknowledged is delivered again
@@ -363,6 +367,7 @@ network; a fake EDGAR in the cluster serves stored versions instead
 [VAL-4]: ../../spec/controls.md#5-the-charts-values
 [VIEW-6]: ../../spec/telemetry.md#8-the-views-grafana-reads
 [VOL-1]: ../../spec/deployment.md#volumes
+[VOL-2]: ../../spec/deployment.md#volumes
 [VOL-3]: ../../spec/deployment.md#volumes
 [XFER-1]: ../../spec/snapshots.md#records-the-cluster-made
 [XFER-2]: ../../spec/snapshots.md#records-the-cluster-made

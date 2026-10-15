@@ -186,8 +186,9 @@ never names an object that isn't in the bucket.
 - **A fetch's record is one row** of the table `records`, which the database
   checks as it's added. It refuses a row whose fields aren't of the record's
   types and forms, whose SHA-256, size, and object disagree, or that breaks
-  several of the record's other invariants, such as a `200` that names no
-  body ([STORE-2]), and a second record of the same job ([STORE-1]).
+  several of the record's other invariants, such as a `200` without an
+  error that names no body ([STORE-2]), and a second record of the same job
+  ([STORE-1]).
 - **Storing a body and adding its record are not one transaction.** Garage
   and PostgreSQL are separate stores, and the order of the writes, above,
   stands in for one.
@@ -273,8 +274,8 @@ the same `tool` commit reads the same bytes ([IMP-1], [IMP-2], [IMP-3]).
 [0006]: ../decisions/0006-write-the-services-in-go-and-python.md
 [0007]: ../decisions/0007-control-the-pipeline-through-custom-resources.md
 [one filing, end to end]: ../design.md#one-filing-end-to-end
-[the design's outages and recovery]: ../design.md#outages-and-recovery
 [SEEN-2]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
+[the design's outages and recovery]: ../design.md#outages-and-recovery
 [T17]: ../plan.md#facts
 [T38]: ../plan.md#observing-filings
 [store-guarantees]: ../../spec/snapshots.md#1-guarantees

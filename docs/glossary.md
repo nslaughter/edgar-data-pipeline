@@ -30,9 +30,9 @@ queries ([times][design-times], [0010]).
 
 ### Accession number
 
-The identifier of one filing, written `##########-##-######`
-([§2 of the notices][notices-terms]). Its first ten digits can be another
-filer's CIK, such as a filing agent's ([SRC-2]). A filing's files are at
+The identifier of one filing, written `##########-##-######` ([§2 of the
+notices][notices-terms]). Its first ten digits can be another filer's CIK:
+Apple's 8-K/A's begins with 0001140361 ([SRC-2]). A filing's files are at
 URLs made from its company's CIK and its accession number ([SRC-21]).
 
 ### Amendment
@@ -273,9 +273,9 @@ SHA-256 of its bytes, so the same body is stored once
 ### Open gap
 
 A gap not yet ended: the latest successful poll's job has been expired for
-as long as its window, with no later successful poll
-([§5 of the notices][notices-gaps]). A Source's status gives when it began
-([SOURCE-5]).
+as long as its window, with no later successful poll, and the gap runs from
+when that job expired ([§5 of the notices][notices-gaps]). A Source's
+status gives when it began ([SOURCE-5]).
 
 ### Order
 

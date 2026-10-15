@@ -168,7 +168,8 @@ subject ends in its kind
 
 The deployment's version 1.0.0 installs `JOBS` and `RECORDS`, each kept in
 files and replicated on all three NATS servers ([NATS-3]). `ORDERS` and
-`NOTICES`, and the durable consumers, are to be specified in task T38
+`NOTICES`, and the durable consumers of the discoverer, the scheduler, and
+the parse workers, are to be specified in task T38
 ([plan][plan-observing]). An event is kept only for the consumers the
 stream has when it's published, so each consumer is made before what it
 reads is published ([§9 of deployment][deployment-later]).
@@ -202,8 +203,12 @@ An **order** hands a Backfill to the discoverer: its name, its
 its `cik` and range, and `ordered_at`. The scheduler publishes one for each
 Backfill whose status has no `startTime`, while requests are allowed, and
 again each time it becomes the active replica or requests are allowed again,
-until the Backfill has one ([ORDER-1]). The discoverer acts on the first
-order of each `uid`, and ignores the rest ([LIST-1]).
+until the Backfill has one ([ORDER-1]). The discoverer adds the Backfill
+and its first job for the first order of each `uid` ([LIST-1]). A later
+order of the same `uid` adds no row, but the discoverer publishes the
+Backfill's first job again, unless its record is held, so an order whose
+first delivery stopped before the job was published still starts the
+Backfill ([DISC-2]).
 
 A **notice** is one of three kinds, each with its own required fields, and
 none of another kind's ([MSG-1]):

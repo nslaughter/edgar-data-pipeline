@@ -61,10 +61,10 @@ flowchart LR
 
 `companyfacts` and the XBRL instances of 10-Ks and 10-Qs are the large
 bodies, 0.9 MB to 10.9 MB each, and every other body the baseline holds is
-1.7 KB to 0.6 MB ([SRC-18]). The three companies' 9,689 filings that
-`submissions` lists total 4.89 GB. Most are Form 4s, and the median filing
-is 6.3 KB to 12.7 KB, by company; their 208 XBRL 10-Ks, 10-Qs, and
-amendments total 2.51 GB ([SRC-19]).
+1.7 KB to 0.6 MB ([SRC-18]). The three companies' 9,689 filings that the
+stored `submissions` and further files list total 4.89 GB. Most are Form
+4s, and the median filing is 6.3 KB to 12.7 KB, by company; their 208 XBRL
+10-Ks, 10-Qs, and amendments total 2.51 GB ([SRC-19]).
 
 ## What the feeds don't keep
 
@@ -74,8 +74,9 @@ keeps][design-keeps]). The findings show that each is a summary, and what
 each leaves out. How often each one's content changes, and whether a URL
 ever returns to an earlier body, is still the investigation's question Q1
 ([questions]): the baseline holds one version of each company's
-`companyfacts` ([SRC-17]), and the refetches that would show change over
-time are tasks T4 and T8 of the [plan][plan-investigation].
+`companyfacts` ([SRC-17]). The first refetch is task T4 of the
+[plan][plan-investigation]; the daily refetches after it are runs the owner
+asks for, not tasks, and task T8 reads what they show.
 
 ### No validators on the summaries
 
@@ -109,8 +110,10 @@ what each filing reports, and it doesn't say what changed:
   from its later ones ([SRC-7]).
 - **A `frame` follows the latest filing.** Of a key's values, only the
   latest filed has a `frame`, whether it repeats the earlier values or
-  changes them ([SRC-17]). So which value carries the frame depends on when
-  `companyfacts` is read.
+  changes them ([SRC-17]). The baseline holds one version of each
+  company's `companyfacts`, so it doesn't yet show a frame moving to a later
+  filing's value when that filing appears; the daily refetches can
+  ([SRC-17]).
 - **It gives a filing date, not an acceptance time.** A value joins to its
   filing's `acceptanceDateTime` only through its `accn` and `submissions`
   ([SRC-9], [SRC-12]), and a filing date doesn't order two filings of one

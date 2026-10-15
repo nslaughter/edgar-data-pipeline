@@ -253,8 +253,9 @@ How fast Prometheus's series and storage grow is the estimates' to say
 
 The umbrella chart, with kube-prometheus-stack, is task T20's; the
 monitoring of observing filings, with its dashboards and rules, T28's;
-Grafana's access to the database, T38's; Tempo, T29's; and Loki, T30's
-([plan][plan-observing], [plan][plan-traces]).
+Tempo, T29's; and Loki, T30's. Grafana's role, its data source, and the
+views it reads are specified by T38, a version of the deployment's
+specification ([plan][plan-observing], [plan][plan-traces]).
 
 ## The alternatives decision 0008 weighed
 

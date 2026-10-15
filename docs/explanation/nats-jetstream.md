@@ -89,9 +89,9 @@ to other specifications][notices-left]). How the parse workers find the
 complete filings whose notices they didn't read is left to the facts
 specification there too.
 
-### What's deployed so far
+### What the deployment specifies so far
 
-The deployment's version 1.0.0 creates `JOBS` and `RECORDS`, each kept in
+The deployment's version 1.0.0 specifies `JOBS` and `RECORDS`, each kept in
 files and replicated on all three servers ([NATS-3]):
 
 | Stream | Retention | Storage | Replicas |
@@ -100,10 +100,12 @@ files and replicated on all three servers ([NATS-3]):
 | `RECORDS` | Interest | File | 3 |
 
 `ORDERS` and `NOTICES`, with their replicas, and the durable consumers of
-all four streams, are left to a later version of the deployment ([notices,
-left to other specifications][notices-left]), which task T38 specifies
-([plan][plan-observing]). T38 isn't done, so the umbrella chart's values
-list only the first two streams until it is.
+`RECORDS`, `ORDERS`, and `NOTICES`, are left to a later version of the
+deployment ([notices, left to other specifications][notices-left]), which
+task T38 specifies ([plan][plan-observing]). The fetcher's consumer of
+`JOBS` comes with the fetcher, in a later version too
+([deployment, §9][later]). Until T38 is done, the deployment's values list
+only `JOBS` and `RECORDS`.
 
 ### Jobs that expire, and jobs that wait
 
@@ -226,13 +228,17 @@ roles, by contrast, each let a service do only what its specification needs
 
 ## How it scales
 
-Events are bounded by the fetcher. The pipeline sends at most 5 requests a
-second ([FETCH-6]), and each job leads to at most one record and one event
-([JOB-6]). At the cadence each company's Source starts at, 10 seconds, the
-three companies' polls are 0.3 requests a second and 25,920 records a day
-([0010]): as many poll jobs in `JOBS`, and as many events in `RECORDS`. An
-event carries the record, not the body ([jobs and events][JOB-1]), which
-stays in Garage, so a message's size doesn't grow with what was fetched.
+Records are bounded by the fetcher. The pipeline sends at most 5 requests a
+second ([FETCH-6]), and each job leads to at most one record ([JOB-6]).
+Events can outnumber records: a job delivered again whose record is held has
+its event published again, with the same `id`, without a request ([JOB-6]),
+so `RECORDS` can hold more events than there are records, by the
+redeliveries. At the cadence each company's Source starts at, 10 seconds,
+the three companies' polls are 0.3 requests a second and 25,920 records a
+day ([0010]): as many poll jobs in `JOBS`, and as many events in `RECORDS`,
+besides those published again. An event carries the record, not the body
+([jobs and events][JOB-1]), which stays in Garage, so a message's size
+doesn't grow with what was fetched.
 
 Jobs can be queued faster than the fetcher sends them. The discoverer
 queues the fetches of a Backfill's filings as it reads each list
@@ -308,7 +314,8 @@ take a record.
 | [TRACE-1] | Each message carries its trace context in its headers. | tests |
 
 The charts and their tests are task T20's, which isn't done; `ORDERS`,
-`NOTICES`, and the durable consumers are T38's ([plan][plan-observing]).
+`NOTICES`, and the durable consumers of `RECORDS`, `ORDERS`, and `NOTICES`
+are T38's ([plan][plan-observing]).
 
 ## The alternatives decision 0003 weighed
 

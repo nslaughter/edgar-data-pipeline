@@ -352,7 +352,7 @@ Time when no poll succeeded shows as a gap in each Source's coverage
 | --- | --- | --- | --- |
 | The active replica is lost | Every request, for up to the Lease's duration, 15 seconds by default | A gap for each Source whose slot passed without a successful poll; no record of the polls whose jobs expired meanwhile ([JOB-5]) | The standby takes the Lease; unacknowledged jobs are delivered again, and those recorded are announced, not fetched ([JOB-6]) |
 | A `403` | Every request | The `403`'s record, the stop in the SecAccess, and gaps; `SecRequestsStopped` fires ([ALERT-1]) | The owner acknowledges the stop ([ACCESS-3]) |
-| No response, a `429` or a `5xx`, or a body cut short | That fetch, for up to 4 attempts ([FETCH-8]) | One record, of the final attempt: its status, or none and an error | The next job |
+| No response, a `429`, `500`, `502`, `503`, or `504`, or a body cut short | That fetch, for up to 4 attempts ([FETCH-8]) | One record, of the final attempt: its status, or none and an error | The next job |
 | Any other status, such as a `404` | Nothing ([FETCH-10]) | A record that names no version ([REC-6]) | The next job; the discoverer doesn't queue a failed file again ([FILE-4]) |
 | A poll's job expires before the fetcher takes it | That poll | No record, but `edgar_fetcher_jobs_expired_total` counts it, and its slot has no successful poll ([JOB-5]) | The next poll |
 
@@ -465,10 +465,17 @@ forgotten when the standby took over ([0007]).
 | [TRACE-1], [TRACE-3], [TRACE-5], [TRACE-6], [TRACE-7] | Its spans, and no trace context sent to the SEC. |
 
 Task T23 builds the fetcher, with the checks on its requests against the
-fake EDGAR on kind ([plan][plan-observing]). The statements' tests await
-it, and T28 and T29 for its metrics and traces
-([§3 of the store][snapshots-ids], [§3 of the controls][controls-ids],
-[§3 of deployment][deployment-ids], [§3 of telemetry][telemetry-ids]).
+fake EDGAR on kind ([plan][plan-observing]). Some of the table's statements
+have tests already: the rules it shares with `snapshot.py`, [FETCH-1] to
+[FETCH-14] but [FETCH-7], which the owner keeps, and [ID-1], [OBJ-1],
+[REC-9], and [REC-10], through `snapshot.py` and `verify.py`; and the
+schemas' statements, [STORE-1] and [JOB-1]. The others' tests await the
+tasks that build what they describe: T20 its bucket, database role, and
+credentials ([GARAGE-4], [PG-6] to [PG-9], [SECRET-1]); T21 its image
+([IMG-1]); T23 the rest of the fetcher, its Lease, jobs, and writes among
+them; T24 [FETCH-18]; and T28 and T29 its metrics, its alert, and its traces
+([§3 of the store][snapshots-ids], [§3 of the controls][controls-ids], [§3
+of deployment][deployment-ids], [§3 of telemetry][telemetry-ids]).
 
 [0002]: ../decisions/0002-store-bodies-in-garage.md
 [0003]: ../decisions/0003-queue-work-in-nats-jetstream.md
