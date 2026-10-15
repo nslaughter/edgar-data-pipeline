@@ -52,9 +52,10 @@ class AdminAPI:
             with urllib.request.urlopen(request, timeout=30) as response:
                 text = response.read()
         except urllib.error.HTTPError as error:
-            if error.code == 404:
-                return None
-            raise RuntimeError(f"{endpoint}: {error.code} {error.read().decode()}") from error
+            with error:
+                if error.code == 404:
+                    return None
+                raise RuntimeError(f"{endpoint}: {error.code} {error.read().decode()}") from error
         return json.loads(text) if text else {}
 
 
