@@ -75,6 +75,8 @@ files takes and stores, not that feed's own polls.
 | When filings arrive | About 90% of Microsoft's and Walmart's between 4 and 7 PM US Eastern time | [0010] |
 | How often a list changes | Low: once for each new filing it lists. High: at every poll | Assumption: a new filing changes the list that names it ([SRC-9]), and nothing stored shows whether anything else changes it; how often each feed's content changes is the investigation's Q1 ([questions]). Replaced by the investigation's daily refetches, tasks T4 and T8. |
 | Filings a day across EDGAR | 3,100 to 6,200 | Assumption: a day's master index is 310,875 to 621,000 bytes ([SRC-18]), and it has a line of about 100 bytes for each filing. Replaced by counting the lines of the stored master indexes, a finding the investigation could add. |
+| The full budget's 25 companies | Each files 0.46 times a day, and reports as the three companies do on average: 4 reports a year, 48.93 MB ÷ 3 = 16.3 MB of instances, stored with their headers and index pages as 1.52 MB ÷ 3 = 0.51 MB | Assumption: no finding covers a company but the three. Replaced by the record's filings and objects of the companies polled, once the fetcher and the discoverer run, tasks T23 and T24. |
+| Every filer's filings | As the three companies': 5.0% with an XBRL instance, 43% of those reports; and as Microsoft's and Walmart's, about 90% between 4 and 7 PM US Eastern time | Assumption: no finding covers another filer's forms or times, and decision 0010 gives the evening's share of two companies' filings ([0010]). Replaced by counting the forms and acceptance times of a day's filings across EDGAR, a finding the investigation could add. |
 
 ### From the pipeline
 
