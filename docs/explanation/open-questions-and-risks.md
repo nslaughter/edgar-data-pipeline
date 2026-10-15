@@ -273,14 +273,15 @@ discoverer publishes when it starts, on a new install whose database was
 restored while NATS's data wasn't kept. It follows no message, so nothing
 delivers it again, and the notices don't yet say that the discoverer
 publishes a refused notice again ([GAP-3],
-[durable consumers][deployment-consumers]). Its [§9][deployment-later]
-lists what later versions add: the pipeline's own services, with their
-replicas, credentials, and placement; the fetcher's durable consumer of
-`JOBS`, a work queue, which keeps a job until it's acknowledged;
-migrations for later versions of the record's tables and views; each
-component's requests, limits, and probes, measured on kind; Tempo, Loki,
-and Alloy; and kube-state-metrics' access to the definitions of the
-pipeline's resources.
+[durable consumers][deployment-consumers]). The owner decided on October
+15, 2026 that a version of the notices of its own says so ([T38]). Its
+[§9][deployment-later] lists what later versions add: the pipeline's own
+services, with their replicas, credentials, and placement; the fetcher's
+durable consumer of `JOBS`, a work queue, which keeps a job until it's
+acknowledged; migrations for later versions of the record's tables and
+views; each component's requests, limits, and probes, measured on kind;
+Tempo, Loki, and Alloy; and kube-state-metrics' access to the definitions
+of the pipeline's resources.
 
 ### Controls
 
@@ -507,6 +508,7 @@ revisit: whether to keep each company's `submissions` as the notice source
 [T28]: ../plan.md#observing-filings
 [T31]: ../plan.md#traces-logs-and-drills
 [T32]: ../plan.md#facts
+[T38]: ../plan.md#observing-filings
 [agents-rules]: ../../AGENTS.md#rules
 [agents-where]: ../../AGENTS.md#where-documents-go
 [inv-questions]: ../../investigation/edgar.md#questions
