@@ -260,13 +260,22 @@ backfills is answered (Q5).
 ### Deployment
 
 [`deployment.md`][deployment] has no section of open questions. Its
-[§9][deployment-later] lists what later versions add: the pipeline's own
-services, with their replicas, credentials, and placement; the streams'
-durable consumers, each made before what it reads is published, since
-`RECORDS` keeps an event only for the consumers it has then; migrations
-for a later version of the store's table; each component's requests,
-limits, and probes, measured on kind; and Tempo, Loki, and Alloy. [T38]
-specifies the discoverer's deployment, and Grafana's database role.
+version 1.1.0 deploys what the notices and the telemetry left to it: the
+streams `ORDERS` and `NOTICES`, and the durable consumers of the
+discoverer, the scheduler, and the parse workers ([NATS-3], [NATS-5]); the
+discoverer's role and key ([PG-7], [GARAGE-4]); Grafana's role and its
+data source ([PG-11], [MON-5]); and the notices' tables and views and the
+dashboards' views, with their grants ([PG-12], [PG-13]). One gap notice
+can still be kept for no consumer: on a new install whose database was
+restored while NATS's data wasn't kept, one published between `NOTICES`'s
+creation and its consumers' ([durable consumers][deployment-consumers]).
+Its [§9][deployment-later] lists what later versions add: the pipeline's
+own services, with their replicas, credentials, and placement; the
+fetcher's durable consumer of `JOBS`, a work queue, which keeps a job until
+it's acknowledged; migrations for later versions of the record's tables
+and views; each component's requests, limits, and probes, measured on
+kind; Tempo, Loki, and Alloy; and kube-state-metrics' access to the
+definitions of the pipeline's resources.
 
 ### Controls
 
@@ -493,7 +502,6 @@ revisit: whether to keep each company's `submissions` as the notice source
 [T28]: ../plan.md#observing-filings
 [T31]: ../plan.md#traces-logs-and-drills
 [T32]: ../plan.md#facts
-[T38]: ../plan.md#observing-filings
 [agents-rules]: ../../AGENTS.md#rules
 [agents-where]: ../../AGENTS.md#where-documents-go
 [inv-questions]: ../../investigation/edgar.md#questions
@@ -507,6 +515,7 @@ revisit: whether to keep each company's `submissions` as the notice source
 [deployment-volumes]: ../../spec/deployment.md#volumes
 [deployment-dependencies]: ../../spec/deployment.md#5-dependencies
 [deployment-later]: ../../spec/deployment.md#9-later-versions
+[deployment-consumers]: ../../spec/deployment.md#durable-consumers
 [controls]: ../../spec/controls.md
 [controls-other]: ../../spec/controls.md#11-other-specifications
 [notices-questions]: ../../spec/notices.md#12-open-questions
@@ -550,12 +559,20 @@ revisit: whether to keep each company's `submissions` as the notice source
 [ACCESS-3]: ../../spec/controls.md#8-secaccess
 [KIND-2]: ../../spec/deployment.md#the-kind-cluster
 [VOL-2]: ../../spec/deployment.md#volumes
+[GARAGE-4]: ../../spec/deployment.md#garage
 [PG-4]: ../../spec/deployment.md#instances-and-backups
+[PG-7]: ../../spec/deployment.md#the-stores-database
 [PIN-3]: ../../spec/deployment.md#6-pins
 [CRD-4]: ../../spec/deployment.md#definitions
 [CRD-5]: ../../spec/deployment.md#definitions
 [MON-3]: ../../spec/deployment.md#monitoring
 [MON-4]: ../../spec/deployment.md#monitoring
+[MON-5]: ../../spec/deployment.md#monitoring
+[NATS-3]: ../../spec/deployment.md#nats
+[NATS-5]: ../../spec/deployment.md#durable-consumers
+[PG-11]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-12]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-13]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease
 [FILE-2]: ../../spec/notices.md#7-a-filings-files
 [FILE-4]: ../../spec/notices.md#7-a-filings-files

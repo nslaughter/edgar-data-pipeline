@@ -86,8 +86,9 @@ kube-state-metrics exports the controls' state as metrics: each Source's
 cadence, pause, latest polls, open gap, and conditions, each Backfill's
 progress, and the SecAccess's stop and its acknowledgement ([STATE-1]). For
 that it may `get`, `list`, and `watch` the three resources, and change none
-of them ([RBAC-3]). Its access to their definitions is left to the
-deployment ([telemetry, left to other specifications][telemetry-left]).
+of them ([RBAC-3]). Its access to their definitions is left to a later
+version of the deployment ([deployment, §9][later], [telemetry, left to
+other specifications][telemetry-left]).
 
 ## Grafana, read-only
 
@@ -106,11 +107,17 @@ the umbrella chart ([SECRET-1]).
 It has two data sources ([0008]):
 
 - **Prometheus,** for the pipeline's metrics and the controls' state.
-- **PostgreSQL,** for the record itself, through a role that may read only
-  the views made for the dashboards, in the schema `dashboards` ([VIEW-3];
-  [PostgreSQL 18](postgresql.md#the-views-grafana-reads)). Grafana's role,
-  its password, and this data source are task T38's ([telemetry, left to
-  other specifications][telemetry-left]).
+- **PostgreSQL,** for the record itself, through Grafana's own role,
+  `grafana`, which may read only the views made for the dashboards, in the
+  schema `dashboards` ([PG-11], [PG-13], [VIEW-3];
+  [PostgreSQL 18](postgresql.md#the-views-grafana-reads)). The data source
+  isn't editable, and reads the database `edgar` from the database's
+  replicas, so the dashboards' queries, which read every poll, don't load
+  the primary, where the fetcher and the discoverer write. Its password
+  comes from the role's Secret, so the `datasources` value holds no
+  credential, and it verifies the server's certificate ([MON-5]). In the
+  installed charts, it connects and reads each view in `dashboards`
+  ([MON-6]).
 
 The dashboards of coverage, gaps, and each source's lag are task T28's, and
 that of each filing's times from acceptance to facts available, T33's
@@ -233,7 +240,8 @@ storage at 0.6 to 3.5 GB once it holds 10 days.
 - **What it watches:** each service's port named `metrics` ([METRIC-1]),
   the database instances' metrics port ([SCRAPE-1]), and the three
   resources, which kube-state-metrics reads ([RBAC-3]).
-- **PostgreSQL,** for the views Grafana reads ([VIEW-3]).
+- **PostgreSQL,** for the views Grafana reads, as its own role, through its
+  data source ([VIEW-3], [PG-11], [MON-5]).
 
 ## Where it's specified
 
@@ -243,6 +251,9 @@ storage at 0.6 to 3.5 GB once it holds 10 days.
 | [MON-2] | Grafana is read-only, its data sources from its own value, its dashboards from the charts. | tests |
 | [MON-3] | Alertmanager sends nothing outside the cluster. | tests |
 | [MON-4] | Prometheus, Alertmanager, and Grafana run one replica each; the first two keep their data on claims. | tests |
+| [MON-5] | Grafana's PostgreSQL data source reads `edgar`'s replicas as `grafana`, its password from the role's Secret, verifying the server against the `Cluster`'s authority. | tests |
+| [MON-6] | Grafana's PostgreSQL data source connects, verifying the server, and reads each view in `dashboards`. | kind |
+| [PG-11], [PG-13] | Grafana has a database role of its own, granted only the schema `dashboards` and its views. | tests |
 | [VOL-2], [VOL-3] | Prometheus's and Alertmanager's claims are of `edgar-retained`, whose data a new claim of the same name finds. | tests, kind |
 | [CHART-2], [CRD-2], [CRD-5] | kube-prometheus-stack and the operator's definitions, each from its chart, in versions that agree. | tests, review |
 | [SCRAPE-1], [SCRAPE-2] | A `PodMonitor` for each service and the database's instances, and every target scraped. | tests, kind |
@@ -250,13 +261,12 @@ storage at 0.6 to 3.5 GB once it holds 10 days.
 | [ALERT-4] | The chart renders the three alerts, and no other of its own. | tests |
 | [VIEW-3] | Grafana's role may read only the views in `dashboards`. | kind |
 | [TRACE-7] | Spans are exported by OTLP to the endpoint given, and none without one. | tests |
-| [SECRET-1] | Grafana's admin password is a required value, in a Secret. | tests |
+| [SECRET-1] | Grafana's admin password, and its database role's, are required values, in Secrets. | tests |
 
-The umbrella chart, with kube-prometheus-stack, is task T20's; the
-monitoring of observing filings, with its dashboards and rules, T28's;
-Tempo, T29's; and Loki, T30's. Grafana's role, its data source, and the
-views it reads are specified by T38, a version of the deployment's
-specification ([plan][plan-observing], [plan][plan-traces]).
+The umbrella chart, with kube-prometheus-stack, Grafana's role, and its
+PostgreSQL data source, is task T20's; the monitoring of observing filings,
+with its dashboards and rules, T28's; Tempo, T29's; and Loki, T30's
+([plan][plan-observing], [plan][plan-traces]).
 
 ## The alternatives decision 0008 weighed
 
@@ -287,6 +297,10 @@ specification ([plan][plan-observing], [plan][plan-traces]).
 [MON-2]: ../../spec/deployment.md#monitoring
 [MON-3]: ../../spec/deployment.md#monitoring
 [MON-4]: ../../spec/deployment.md#monitoring
+[MON-5]: ../../spec/deployment.md#monitoring
+[MON-6]: ../../spec/deployment.md#monitoring
+[PG-11]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-13]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [SECRET-1]: ../../spec/deployment.md#credentials
 [VOL-1]: ../../spec/deployment.md#volumes
 [VOL-2]: ../../spec/deployment.md#volumes

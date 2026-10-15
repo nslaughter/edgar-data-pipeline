@@ -231,8 +231,9 @@ of the telemetry][alerts]).
 
 ## The views Grafana reads
 
-Grafana reads the record from PostgreSQL, through a role that may read only
-the views made for the dashboards ([VIEW-3]). They're in the schema
+Grafana reads the record from PostgreSQL, through its own role, `grafana`,
+which may read only the views made for the dashboards ([VIEW-3], [PG-11]),
+from the database's replicas ([MON-5]). They're in the schema
 `dashboards`, and they read the notices' tables and views, so a dashboard
 shows what the record holds by the same definitions the notices use
 ([VIEW-1], [VIEW-2]). Each time is as the record holds it, and each length
@@ -380,8 +381,11 @@ telemetry][telemetry-left]): the platform's own metrics, NATS's streams and
 consumers, Garage's, and the database's replication and failovers, with
 their alerts; an alert on a Source and URL with no poll at all; logs, in
 Loki; the facts' metrics, traces, and view; and, for the deployment,
-Grafana's database role and data source, the views' grants,
-kube-state-metrics' access to the definitions, and Tempo.
+kube-state-metrics' access to the definitions, and Tempo, which later
+versions of the deployment add ([§9 of the deployment][deployment-later]).
+The deployment's version 1.1.0 gives the rest it left to the deployment:
+Grafana's database role and data source, and the views' grants ([PG-11],
+[PG-13], [MON-5]).
 
 ## Where it's specified
 
@@ -415,7 +419,11 @@ monitoring of observing filings ([§3 of the telemetry][ids];
 [SOURCE-1]: ../../spec/controls.md#6-source
 [SOURCE-2]: ../../spec/controls.md#6-source
 [SOURCE-3]: ../../spec/controls.md#6-source
+[deployment-later]: ../../spec/deployment.md#9-later-versions
+[MON-5]: ../../spec/deployment.md#monitoring
 [PG-4]: ../../spec/deployment.md#instances-and-backups
+[PG-11]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-13]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [DISC-1]: ../../spec/notices.md#processing
 [FILE-3]: ../../spec/notices.md#7-a-filings-files
 [FILE-4]: ../../spec/notices.md#7-a-filings-files

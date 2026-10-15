@@ -73,25 +73,26 @@ in the API server ([deployment, §5][dependencies]).
 The `Cluster` creates one database, `edgar`, owned by the role `edgar`,
 whose password CloudNativePG generates in the cluster. It turns superuser
 access off, and no service connects as the owner, who could change a
-record: only the Job that creates the store's table does ([PG-6]). Each
-service that uses the database connects as a role of its own, which the
-`Cluster` declares, able to log in and without superuser, `createdb`,
-`createrole`, `replication`, or `bypassrls`, with its password from a value
-of the umbrella chart ([PG-7], [SECRET-1]).
+record: only the Job that creates the record's tables and views does
+([PG-6]). Each service that uses the database connects as a role of its
+own, which the `Cluster` declares, able to log in and without superuser,
+`createdb`, `createrole`, `replication`, or `bypassrls`, with its password
+from a value of the umbrella chart ([PG-7], [SECRET-1]). Grafana reads the
+database as a role of its own too, `grafana`, declared the same way, whose
+password is also a value of the umbrella chart ([PG-11]).
 
-| Role | Used by | `records` | The notices' tables | The views in `dashboards` |
-| --- | --- | --- | --- | --- |
-| `edgar` | The Job that creates the store's table ([PG-8]) | Owner | Not specified | Not specified |
-| `fetcher` | The fetcher | `INSERT`, `SELECT` ([LOG-3]) | `SELECT` only ([TABLE-3]) | Not specified |
-| The discoverer's | The discoverer | `SELECT` only ([LOG-3]) | `INSERT`, `SELECT` ([TABLE-3]) | Not specified |
-| Each other service's | That service | `SELECT` only ([LOG-3]) | `SELECT` only ([TABLE-3]) | Not specified |
-| Grafana's | Grafana | None ([VIEW-3]) | None ([VIEW-3]) | Use the schema, and select its views ([VIEW-3]) |
+| Role | Used by | `records` | The notices' tables | The notices' views | The views in `dashboards` |
+| --- | --- | --- | --- | --- | --- |
+| `edgar` | The Job that creates the record's tables and views ([PG-8], [PG-12], [PG-13]) | Owner | Owner | Owner | Owner |
+| `fetcher` | The fetcher | `INSERT`, `SELECT` ([LOG-3]) | `SELECT` only ([TABLE-3]) | `SELECT` ([PG-12]) | None ([PG-13]) |
+| `discoverer` | The discoverer | `SELECT` only ([LOG-3]) | `INSERT`, `SELECT` ([TABLE-3]) | `SELECT` ([PG-12]) | None ([PG-13]) |
+| Each other service's | That service | `SELECT` only ([LOG-3]) | `SELECT` only ([TABLE-3]) | `SELECT` ([PG-12]) | None ([PG-13]) |
+| `grafana` | Grafana | None ([PG-11]) | None ([VIEW-3]) | None ([VIEW-3]) | Use the schema, and select its views ([PG-13], [VIEW-3]) |
 
-In the deployment's version 1.0.0, the values list one role, `fetcher`;
-each other service's comes with that service ([PG-7]). The discoverer's
-role and Grafana's, with their grants, are task T38's ([notices, left to
-other specifications][notices-left], [telemetry, left to other
-specifications][telemetry-left]).
+In the deployment's version 1.1.0, the values list two services' roles,
+`fetcher` and `discoverer`; each other service's comes with that service
+([PG-7]). Grafana's role isn't a service's, so the Job grants it nothing on
+`records` ([PG-11]).
 
 ## The store's table, records
 
@@ -190,9 +191,21 @@ A finding that settles the header's zone changes one function in
 `notices.sql`, in a new version of the notices' specification, and nothing
 stored ([notices, open question 2][notices-questions]).
 
-The tables and views of `notices.sql` are made after the store's table,
-with their grants, by a later version of the deployment: task T38 specifies
-it ([notices, left to other specifications][notices-left]).
+The same Job that creates `records`, once the table exists, creates the
+notices' tables and views, and the functions they call, from a copy of
+`notices.sql` in one transaction, unless its tables exist, so none exists
+without the others. It grants the discoverer's role `INSERT` and `SELECT`
+on each table, each other service's role `SELECT` only, each service's
+role `SELECT` on each view, and no other role anything on them ([PG-12]).
+The views read the tables as their owner does, so a role granted a view
+needs nothing on the tables beneath it, and a function a view calls, such
+as `header_instant`, keeps PostgreSQL's default, which lets every role
+execute it ([the notices and the dashboards][pg-notices]). On kind, the
+discoverer's role can insert a row in each table and select it, every
+other service's can select it, and none can update, delete, or truncate one
+([PG-14]). Since the Job creates them only where there are none, a later
+version of `notices.sql` needs a migration, as `records.sql` does
+([deployment, §9][later]).
 
 ## The views Grafana reads
 
@@ -207,9 +220,15 @@ reader's rights, so each reads the record as the views' owner does
 question it answers, is on
 [Observability](observability.md#the-views-grafana-reads).
 
-Grafana's role, its password, and its PostgreSQL data source, and
-`dashboards.sql`, applied after `notices.sql` with [VIEW-3]'s grants, are
-task T38's too ([telemetry, left to other specifications][telemetry-left]).
+Once the notices' tables and views exist, the same Job creates the schema
+`dashboards` and its views from a copy of `dashboards.sql` in one
+transaction, unless the schema exists. It grants Grafana's role, `grafana`,
+`USAGE` on the schema and `SELECT` on each of its views, and no other role
+anything on them ([PG-13]). On kind, Grafana's role can select each view in
+`dashboards`, and nothing `records.sql` or `notices.sql` defines
+([PG-14]). Grafana reads them through its PostgreSQL data source, from the
+database's replicas, as that role ([MON-5];
+[Monitoring](monitoring.md#grafana-read-only)).
 
 ## Facts, still to be specified
 
@@ -344,6 +363,9 @@ the other services read them, and Grafana reads the views made for it.
 | [PG-4], [PG-5], [PG-10] | The WAL and daily base backups go to Garage through the plugin, under a server name new for each cluster. | tests, kind, review, operator |
 | [PG-6], [PG-7] | One database, `edgar`, whose owner no service uses; each service a role of its own. | tests |
 | [PG-8], [PG-9] | A hook Job creates `records` and its grants; only the fetcher's role inserts, and none changes a row. | tests, kind |
+| [PG-11] | Grafana reads `edgar` as a role of its own, `grafana`, without special attributes, its password from a value. | tests |
+| [PG-12], [PG-13] | The Job then creates the notices' tables and views from `notices.sql`, granting only the discoverer's role inserts, and then the schema `dashboards` from `dashboards.sql`, granting only Grafana's role its views. | tests |
+| [PG-14] | The notices' tables and the dashboards' views are as their files define them; only the discoverer's role inserts, no service's role changes a row, and Grafana's role reads only the views. | kind |
 | [PLACE-1], [PLACE-2] | Each instance needs a worker node of its own, and runs on one. | tests, kind |
 | [STORE-1], [STORE-2] | `records.sql` defines the table, and the database holds it and refuses a malformed record. | tests, kind |
 | [LOG-3] | Only the fetcher adds records, and no one changes them. | kind |
@@ -352,9 +374,8 @@ the other services read them, and Grafana reads the views made for it.
 | [VIEW-1] to [VIEW-3] | `dashboards.sql` defines Grafana's views; the database holds them; Grafana's role reads only them. | tests, kind |
 | [ALERT-3], [SCRAPE-1] | The alert on a stale backup, and the scraping of the instances' metrics. | tests |
 
-The database and its backups are built by task T20; the notices' tables and
-Grafana's views are specified by T38, a version of the deployment's
-specification; neither task is done ([plan][plan-observing]).
+The database, its roles, its tables and views, and its backups are built by
+task T20, which isn't done ([plan][plan-observing]).
 
 ## The alternatives decision 0004 weighed
 
@@ -386,6 +407,7 @@ DuckDB, pandas, or Polars without the cluster ([0004]).
 [GARAGE-2]: ../../spec/deployment.md#garage
 [KIND-1]: ../../spec/deployment.md#the-kind-cluster
 [later]: ../../spec/deployment.md#9-later-versions
+[MON-5]: ../../spec/deployment.md#monitoring
 [pg-section]: ../../spec/deployment.md#7-postgresql
 [PG-1]: ../../spec/deployment.md#7-postgresql
 [PG-2]: ../../spec/deployment.md#7-postgresql
@@ -397,6 +419,11 @@ DuckDB, pandas, or Polars without the cluster ([0004]).
 [PG-8]: ../../spec/deployment.md#the-stores-database
 [PG-9]: ../../spec/deployment.md#the-stores-database
 [PG-10]: ../../spec/deployment.md#instances-and-backups
+[PG-11]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-12]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-13]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-14]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[pg-notices]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [PLACE-1]: ../../spec/deployment.md#placement
 [PLACE-2]: ../../spec/deployment.md#placement
 [SECRET-1]: ../../spec/deployment.md#credentials
@@ -416,7 +443,6 @@ DuckDB, pandas, or Polars without the cluster ([0004]).
 [LIST-4]: ../../spec/notices.md#8-backfills
 [LIST-6]: ../../spec/notices.md#8-backfills
 [notices-guarantees]: ../../spec/notices.md#1-guarantees
-[notices-left]: ../../spec/notices.md#left-to-other-specifications
 [notices-questions]: ../../spec/notices.md#12-open-questions
 [SEEN-1]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [SEEN-2]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing

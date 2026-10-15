@@ -119,8 +119,9 @@ and every service already apply to them.
 - **The notices they read.** A consumer of notices ignores fields it
   doesn't know, and acknowledges a notice that doesn't validate against its
   schema, or whose `kind` isn't its subject's, without acting on it
-  ([MSG-2]). Their durable consumer of filing notices is made before the
-  first filing notice is published ([§12 of the notices][notices-left]).
+  ([MSG-2]). Their durable consumer of filing notices,
+  `parse-workers-notices`, is made as soon as `NOTICES` is, before the
+  first filing notice is published and before they're built ([NATS-5]).
 - **Their image** is tagged with the commit it's built from, and loaded
   into kind, never pulled from a registry ([IMG-1], [IMG-2]).
 
@@ -135,7 +136,6 @@ and every service already apply to them.
 | Where an import in the cluster keeps its manifest | T17 ([§13 of the store][snapshots-left]) | As above |
 | What an import's output is, and how a rerun is compared with the original | T18, the export ([open question 3 of the store][snapshots-open]) | T17 |
 | Their metrics and traces, and the view of each filing's times from acceptance to facts available | T32, a minor version of the telemetry specification ([§11 of telemetry][telemetry-left]) | T17, T18, T19 |
-| Their durable consumer of filing notices | T38, the discoverer's deployment ([§12 of the notices][notices-left]) | T16, T19, T34 |
 | Building them | T25 | T10, T17, T24, and an `edgar-asof` release that reads XBRL instances |
 
 The tasks are in the plan's facts section ([plan][plan-facts]). The design
@@ -208,7 +208,8 @@ the facts specification's, task T17
 
 ## What they depend on
 
-- **NATS JetStream,** for the filing notices on `NOTICES` ([0003]).
+- **NATS JetStream,** for the filing notices on `NOTICES` ([0003]), read
+  through their durable consumer ([NATS-5]).
 - **Garage,** for the stored instances, read over its S3 API ([IMP-3]).
 - **PostgreSQL 18,** for the facts ([0004]).
 - **`edgar-asof`,** at a pinned release that reads XBRL instances, and the
@@ -250,6 +251,7 @@ the facts specification's, task T17
 | [FETCH-18] | `edgar-asof` reads bodies from the store, never fetching. |
 | [LOG-3], [LOG-4], [TABLE-3], [GARAGE-4], [PG-7] | What their role and key may read, and that each is their own. |
 | [MSG-2] | How they treat a notice. |
+| [NATS-5], [NATS-6] | Their durable consumer of filing notices, made before the first is published. |
 
 The status page names their decision records, 0006 and 0009; tasks T17 and
 T32, which specify them; T25, which builds them; and T10 and T12, which
@@ -296,6 +298,8 @@ decide them ([status page][status]).
 [telemetry-left]: ../../spec/telemetry.md#left-to-other-specifications
 [deployment-later]: ../../spec/deployment.md#9-later-versions
 [GARAGE-4]: ../../spec/deployment.md#garage
+[NATS-5]: ../../spec/deployment.md#durable-consumers
+[NATS-6]: ../../spec/deployment.md#durable-consumers
 [PG-7]: ../../spec/deployment.md#the-stores-database
 [IMG-1]: ../../spec/deployment.md#the-pipelines-own-images
 [IMG-2]: ../../spec/deployment.md#the-pipelines-own-images

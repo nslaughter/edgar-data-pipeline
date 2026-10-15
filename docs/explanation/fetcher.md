@@ -379,9 +379,11 @@ SEC, then check that the record shows each gap and lost nothing
 - **The Kubernetes API server,** for the Lease and the SecAccess.
 - **NATS JetStream,** for `JOBS` and `RECORDS`, each kept in files on all
   three NATS servers ([NATS-3]). `RECORDS` keeps an event only for the
-  consumers it has when the event is published, so each consumer is made
-  before the fetcher publishes what it should see
-  ([§9 of deployment][deployment-later]).
+  consumers it has when the event is published, so the Job makes the
+  stream's consumers as soon as it has made the stream, and makes `JOBS`
+  last: the fetcher publishes an event only for a job, so none comes before
+  them ([NATS-5]). Its own durable consumer of `JOBS` comes with it, in a
+  later version ([§9 of deployment][deployment-later]).
 - **Garage and PostgreSQL,** for the bucket `snapshots` and the table
   `records`, which a Job of the umbrella chart creates, granting the
   fetcher's role its privileges ([GARAGE-2], [PG-8]).
@@ -583,6 +585,7 @@ of deployment][deployment-ids], [§3 of telemetry][telemetry-ids]).
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease
 [LEASE-2]: ../../spec/deployment.md#the-fetchers-lease
 [NATS-3]: ../../spec/deployment.md#nats
+[NATS-5]: ../../spec/deployment.md#durable-consumers
 [GARAGE-2]: ../../spec/deployment.md#garage
 [GARAGE-4]: ../../spec/deployment.md#garage
 [PG-6]: ../../spec/deployment.md#the-stores-database

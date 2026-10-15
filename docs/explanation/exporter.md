@@ -64,7 +64,7 @@ apply to it:
   a key of its own, which may only read it; only the fetcher's may write
   it; and no key has Garage's `owner` permission on any bucket
   ([GARAGE-4], [LOG-4]). The buckets the deployment specification's
-  version 1.0.0 lists are `database-backups` and `snapshots`
+  version 1.1.0 lists are `database-backups` and `snapshots`
   ([GARAGE-2]); the bucket the export is written to isn't specified yet.
 - **PostgreSQL.** Each service connects as a role of its own, whose
   password is a value of the umbrella chart, and every service's role but

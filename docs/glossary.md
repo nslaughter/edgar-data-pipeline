@@ -502,6 +502,18 @@ API server. A resource can be created only once its kind's definition is
 on the cluster ([§2 of the deployment][deployment-terms],
 [definitions][deployment-definitions]).
 
+### Durable consumer
+
+A JetStream consumer with a name, which keeps its place in its stream, the
+messages it has delivered and those acknowledged, for whichever of its
+service's replicas reads from it, and across their restarts and NATS's. A
+stream kept by interest keeps a message only for the consumers it has when
+the message is published, so the deployment makes each durable consumer
+right after its stream, before the streams whose messages lead to what it
+reads. Each of the pipeline's is a pull
+consumer, from which its service's replicas ask for messages
+([§2 of the deployment][deployment-terms], [NATS-5]).
+
 ### envtest
 
 A test harness of controller-runtime that runs a real Kubernetes API server
@@ -768,6 +780,7 @@ open. A statement checked by `operator` is the owner's to keep
 [PLACE-1]: ../spec/deployment.md#placement
 [NATS-1]: ../spec/deployment.md#nats
 [NATS-3]: ../spec/deployment.md#nats
+[NATS-5]: ../spec/deployment.md#durable-consumers
 [GARAGE-1]: ../spec/deployment.md#garage
 [PG-3]: ../spec/deployment.md#instances-and-backups
 [PG-4]: ../spec/deployment.md#instances-and-backups

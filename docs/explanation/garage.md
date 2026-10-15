@@ -139,11 +139,10 @@ flowchart LR
 | `snapshots` | The cluster store's objects | The fetcher's, which may read and write it; each other service's, which may only read it, and no other bucket | [GARAGE-4], [LOG-4] |
 | `database-backups` | The database's write-ahead log and base backups, under each cluster's server name | One, which may read and write only that bucket | [GARAGE-2], [PG-4] |
 
-In the deployment's version 1.0.0, the values list one key for `snapshots`,
-the fetcher's; each other service's comes with that service ([GARAGE-4],
-[deployment, §9][later]). The discoverer's key, which may only read the
-bucket, is task T38's ([notices, left to other
-specifications][notices-left]).
+In the deployment's version 1.1.0, the values list two keys for
+`snapshots`: the fetcher's, and the discoverer's, which may only read it.
+Each other service's comes with that service ([GARAGE-4],
+[deployment, §9][later]).
 
 The discoverer reads each list, header, and index page from the bucket
 ([SEEN-1], [FILE-3]). The parse workers will read each XBRL instance from
@@ -333,7 +332,6 @@ would use SeaweedFS, which also offers object lock ([0002]).
 [FILE-1]: ../../spec/notices.md#7-a-filings-files
 [FILE-3]: ../../spec/notices.md#7-a-filings-files
 [LIST-2]: ../../spec/notices.md#8-backfills
-[notices-left]: ../../spec/notices.md#left-to-other-specifications
 [SEEN-1]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [FETCH-6]: ../../spec/snapshots.md#10-fetching
 [FETCH-18]: ../../spec/snapshots.md#the-fetcher

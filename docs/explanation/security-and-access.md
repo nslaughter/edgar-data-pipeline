@@ -20,9 +20,10 @@ Secrets ([credentials]).
 | Credential | Used by | Where it comes from |
 | --- | --- | --- |
 | Garage's RPC secret, and its admin token | Garage's nodes; the setup Job, which reaches Garage's admin API with the token ([GARAGE-2]) | Required values of the umbrella chart ([SECRET-1]) |
-| The ID and secret of each Garage key | The fetcher's key, which may read and write the store's bucket `snapshots`, and no other ([GARAGE-4]); the key of `database-backups`, which may read and write only that bucket, for the database's backups ([GARAGE-2], [PG-4]); each other service's key, which comes with that service ([GARAGE-4]) | Required values ([SECRET-1]) |
-| The password of each service's database role | In this version, the fetcher's role; each other service's comes with that service ([PG-7]) | Required values ([SECRET-1]) |
-| The database owner's password, of the role `edgar` | Only the Job that creates the store's table and grants each role its privileges ([PG-6], [PG-8]) | Generated in the cluster by CloudNativePG, which keeps it there ([PG-6], [credentials]) |
+| The ID and secret of each Garage key | The fetcher's key, which may read and write the store's bucket `snapshots`, and no other ([GARAGE-4]); the discoverer's key, which may only read `snapshots` ([GARAGE-4]); the key of `database-backups`, which may read and write only that bucket, for the database's backups ([GARAGE-2], [PG-4]); each other service's key, which comes with that service ([GARAGE-4]) | Required values ([SECRET-1]) |
+| The password of each service's database role | In the deployment's version 1.1.0, the fetcher's role and the discoverer's; each other service's comes with that service ([PG-7]) | Required values ([SECRET-1]) |
+| The password of Grafana's database role, `grafana` | Grafana's PostgreSQL data source, which reads it from the role's Secret ([PG-11], [MON-5]) | A required value ([SECRET-1]) |
+| The database owner's password, of the role `edgar` | Only the Job that creates the record's tables and views and grants each role its privileges ([PG-6], [PG-8], [PG-12], [PG-13]) | Generated in the cluster by CloudNativePG, which keeps it there ([PG-6], [credentials]) |
 | Grafana's admin password | Grafana | A required value ([SECRET-1]) |
 
 Four rules hold them together:
@@ -40,11 +41,10 @@ Four rules hold them together:
   commit, a pull request, or a log ([SECRET-4]).
 
 So no credential is committed, generated as the charts render, or shown
-outside a Secret ([deployment guarantees][the deployment's guarantees]). The
-discoverer's database role and Garage key, and Grafana's database role,
-password, and data source, are for a version of the deployment specification
-still to be written, in T38 ([the notices, left to other specifications],
-[telemetry, left to other specifications], [T38]).
+outside a Secret ([deployment guarantees][the deployment's guarantees]).
+Grafana's PostgreSQL data source names its password as an environment
+variable of Grafana's container, set from its role's Secret, so Grafana's
+`datasources` value holds none ([MON-5]).
 
 ## The user agent
 
@@ -140,8 +140,9 @@ Beyond the three resources:
   role only, with its login form, basic authentication, and sign-up turned
   off, so no one signs in to change anything. Its data sources come only
   from its own value, and its dashboards only from the charts, and a
-  provisioned dashboard can't be saved from its interface ([MON-2]). The
-  dashboard is never a control ([0007]).
+  provisioned dashboard can't be saved from its interface ([MON-2]). Its
+  PostgreSQL data source isn't editable, and verifies the database server's
+  certificate ([MON-5]). The dashboard is never a control ([0007]).
 - **Alertmanager sends nothing outside the cluster:** its only receiver is
   `null` ([MON-3]).
 
@@ -150,15 +151,17 @@ Beyond the three resources:
 | Who | The cluster store's bucket, `snapshots` | The pipeline's database, `edgar` | The SEC |
 | --- | --- | --- | --- |
 | The fetcher | Reads and writes, with its own key. It stores an object only if none has its name, and never deletes or replaces one ([GARAGE-4], [OBJ-4], [LOG-4]) | Inserts and selects records, as its own role, and changes none ([LOG-3], [PG-8]) | Sends every request from the cluster, while it holds the Lease and requests are allowed ([FETCH-16], [FETCH-18], [ACCESS-1]) |
-| The discoverer | Reads only, with its own key ([GARAGE-4], [the notices, left to other specifications]) | Inserts and selects its own tables, and selects records, as its own role ([TABLE-3], [LOG-3]) | Nothing ([FETCH-18]) |
-| Each other service of the pipeline | If it uses the bucket, reads only, with a key of its own ([GARAGE-4], [LOG-4]) | If it uses the database, selects records and the discoverer's tables, as a role of its own, and changes none ([PG-7], [LOG-3], [TABLE-3], [PG-9]) | Nothing ([FETCH-18]) |
-| Grafana | — | Uses the schema `dashboards` and selects its views, as a role of its own, and can neither read nor change a table or view of the record ([VIEW-3]) | Nothing ([FETCH-18]) |
+| The discoverer | Reads only, with its own key ([GARAGE-4]) | Inserts and selects the notices' tables, and selects records and the notices' views, as its own role, `discoverer`, and changes none ([PG-7], [PG-12], [TABLE-3], [LOG-3]) | Nothing ([FETCH-18]) |
+| Each other service of the pipeline | If it uses the bucket, reads only, with a key of its own ([GARAGE-4], [LOG-4]) | If it uses the database, selects records and the discoverer's tables and views, as a role of its own, and changes none ([PG-7], [LOG-3], [TABLE-3], [PG-9], [PG-12], [PG-14]) | Nothing ([FETCH-18]) |
+| Grafana | — | Uses the schema `dashboards` and selects its views, as its own role, `grafana`, and can neither read nor change a table or view of the record ([PG-11], [PG-13], [VIEW-3]) | Nothing ([FETCH-18]) |
 
 What each service publishes and reads in NATS is on
 [delivery and consistency](delivery-and-consistency.md#the-streams).
 
 Each service has credentials of its own, and only the fetcher's may add
-records and objects ([deployment guarantees][the deployment's guarantees]).
+records and objects. Only the discoverer's may add to the notices' tables,
+and Grafana's role reads only the views made for it
+([deployment guarantees][the deployment's guarantees]).
 No service connects as the database's owner, who could change a record, and
 the database allows no superuser access ([PG-6],
 [the store's database][stores-database]). Each service's role logs in
@@ -171,7 +174,7 @@ so the pipeline makes none, and a check of the objects finds any other
 
 The scheduler doesn't read EDGAR's content ([0006]): it never fetches and
 never writes the record, and no controller is in the data path ([0007]). The
-database role and Garage key of each service after the fetcher come with
+database role and Garage key of each service after the discoverer come with
 that service, in later versions of the deployment specification
 ([later versions][deployment-later]).
 
@@ -209,7 +212,6 @@ and loaded into kind's nodes, never pushed to or pulled from a registry
 [0007]: ../decisions/0007-control-the-pipeline-through-custom-resources.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
 [API-3]: ../../spec/controls.md#4-the-resources
-[T38]: ../plan.md#observing-filings
 [CLIENT-2]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/fetching.md#4-requests
 [CLIENT-3]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/fetching.md#4-requests
 [store-guarantees]: ../../spec/snapshots.md#1-guarantees
@@ -233,6 +235,7 @@ and loaded into kind's nodes, never pushed to or pulled from a registry
 [GARAGE-4]: ../../spec/deployment.md#garage
 [MON-2]: ../../spec/deployment.md#monitoring
 [MON-3]: ../../spec/deployment.md#monitoring
+[MON-5]: ../../spec/deployment.md#monitoring
 [credentials]: ../../spec/deployment.md#credentials
 [SECRET-1]: ../../spec/deployment.md#credentials
 [SECRET-2]: ../../spec/deployment.md#credentials
@@ -251,6 +254,10 @@ and loaded into kind's nodes, never pushed to or pulled from a registry
 [PG-7]: ../../spec/deployment.md#the-stores-database
 [PG-8]: ../../spec/deployment.md#the-stores-database
 [PG-9]: ../../spec/deployment.md#the-stores-database
+[PG-11]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-12]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-13]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-14]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [deployment-later]: ../../spec/deployment.md#9-later-versions
 [the controls' guarantees]: ../../spec/controls.md#1-guarantees
 [controls-values]: ../../spec/controls.md#5-the-charts-values
@@ -269,9 +276,7 @@ and loaded into kind's nodes, never pushed to or pulled from a registry
 [RBAC-6]: ../../spec/controls.md#9-who-may-change-what
 [TABLE-3]: ../../spec/notices.md#4-the-record-of-notices
 [the notices' Backfills]: ../../spec/notices.md#8-backfills
-[the notices, left to other specifications]: ../../spec/notices.md#left-to-other-specifications
 [METRIC-2]: ../../spec/telemetry.md#4-metrics
 [VIEW-3]: ../../spec/telemetry.md#8-the-views-grafana-reads
 [TRACE-5]: ../../spec/telemetry.md#9-traces
 [TRACE-6]: ../../spec/telemetry.md#9-traces
-[telemetry, left to other specifications]: ../../spec/telemetry.md#left-to-other-specifications

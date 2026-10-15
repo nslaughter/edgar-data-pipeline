@@ -297,11 +297,11 @@ thousands of filings isn't one trace ([TRACE-3], [TRACE-4],
 
 | | What | Where | Statements |
 | --- | --- | --- | --- |
-| Reads | Events of every kind ([event.schema.json]) | `RECORDS`, `edgar.records.*` | [DISC-1], [GAP-1], [SEEN-1], [FILE-3], [LIST-2], [LIST-4] |
-| Reads | Orders ([order.schema.json]) | `ORDERS`, `edgar.orders.backfill` | [LIST-1] |
+| Reads | Events of every kind ([event.schema.json]) | `RECORDS`, `edgar.records.*`, through `discoverer-polls` and `discoverer-jobs` | [DISC-1], [GAP-1], [SEEN-1], [FILE-3], [LIST-2], [LIST-4], [NATS-5] |
+| Reads | Orders ([order.schema.json]) | `ORDERS`, `edgar.orders.backfill`, through `discoverer-orders` | [LIST-1], [NATS-5] |
 | Reads | Versions: lists, headers, and index pages | Garage, the bucket `snapshots`, with a key that may only read it | [SEEN-1], [FILE-3], [GARAGE-4] |
-| Reads | Records: `SELECT` only | PostgreSQL, the table `records` | [LOG-3] |
-| Writes | Rows of its tables: `INSERT` and `SELECT` only | PostgreSQL, the tables of `notices.sql` | [TABLE-1], [TABLE-2], [TABLE-3] |
+| Reads | Records: `SELECT` only, as the role `discoverer` | PostgreSQL, the table `records` | [LOG-3], [PG-7] |
+| Writes | Rows of its tables: `INSERT` and `SELECT` only | PostgreSQL, the tables of `notices.sql` | [TABLE-1], [TABLE-2], [TABLE-3], [PG-12] |
 | Publishes | Jobs of kinds `filing` and `backfill` ([job.schema.json]) | `JOBS`, `edgar.jobs.filing` and `edgar.jobs.backfill` | [JOB-3], [FILE-1], [LIST-1], [LIST-2] |
 | Publishes | Filing, gap, and backfill notices ([notice.schema.json]) | `NOTICES`, `edgar.notices.*` | [FILE-5], [GAP-3], [LIST-5] |
 | Serves | Its metrics | `/metrics`, on its port `metrics` | [METRIC-1], [METRIC-5] |
@@ -340,18 +340,23 @@ erDiagram
   backfills ||--o{ backfill_outcomes : "fetched or failed"
 ```
 
-Rows are only added. The discoverer's database role may insert and select
-them, every other service's may only select them, and none may update,
-delete, or truncate them ([TABLE-3]). So each row says what the discoverer
-found when it found it. A time it copies from a job or a record is as given
-there; one it adds itself is by its own clock
-([§4 of the notices][notices-record]). Each version's reading is kept once,
-by the discoverer that first read it, whose `tool` names its image's
+Rows are only added. The discoverer's database role, `discoverer`, may
+insert and select them, every other service's may only select them, and
+none may update, delete, or truncate them ([TABLE-3], [PG-7], [PG-12]). So
+each row says what the discoverer found when it found it. A time it copies
+from a job or a record is as given there; one it adds itself is by its own
+clock ([§4 of the notices][notices-record]). Each version's reading is kept
+once, by the discoverer that first read it, whose `tool` names its image's
 commit ([§6 of the notices][notices-seen]). Grafana reads none of these
 tables, only views of its own made from them ([VIEW-3]).
 
-Its place in `RECORDS` and `ORDERS` is kept by its durable consumers in
-NATS, which task T38 specifies ([§12 of the notices][notices-left]).
+Its place in `RECORDS` and `ORDERS` is kept by three durable consumers in
+NATS: `discoverer-polls`, of poll events, with one unacknowledged at a
+time; `discoverer-jobs`, of the events of the jobs it queued; and
+`discoverer-orders`, of the scheduler's orders. Each is a pull consumer that
+every replica reads from, with no limit on redeliveries, and each is made
+right after its stream, so it reads every event and order from the first
+([NATS-5]).
 
 ## Replicas
 
@@ -359,9 +364,9 @@ The design gives the discoverer a Deployment, without a count
 ([components][design-components]). Each of its replicas is active
 ([§2 of telemetry][telemetry-terms]), and the `SourceGap` alert takes its
 gauges at their greatest across them ([ALERT-2]). Its consumer of poll
-events has one event unacknowledged at a time
-([§12 of the notices][notices-left], [DISC-1]), so poll events are handled
-one at a time however many replicas run. Its replica count isn't
+events, `discoverer-polls`, has one event unacknowledged at a time
+([NATS-5], [DISC-1]), so poll events are handled one at a time however many
+replicas run. Its replica count isn't
 specified: the deployment specification adds each service's replicas in a
 later version ([§9 of deployment][deployment-later]).
 
@@ -408,12 +413,13 @@ there instead of implying that nothing changed
 
 - **NATS JetStream:** `RECORDS` and `ORDERS`, which it reads, and `JOBS`
   and `NOTICES`, which it publishes to ([0003]). Each of its durable
-  consumers must exist before what it reads is published: the consumer of
-  every subject of `RECORDS`, with one poll event unacknowledged at a time,
-  and the consumer of `ORDERS` ([§12 of the notices][notices-left]).
-- **PostgreSQL:** its tables and views, made after the store's table, its
-  own role, and `SELECT` on `records` ([§12 of the notices][notices-left],
-  [LOG-3]).
+  consumers is made right after its stream, so it reads every event and
+  order from the first: `discoverer-polls` and `discoverer-jobs` of
+  `RECORDS`, with one poll event unacknowledged at a time, and
+  `discoverer-orders` of `ORDERS` ([NATS-5]).
+- **PostgreSQL:** its tables and views, made after the store's table
+  ([PG-12]), its own role, `discoverer` ([PG-7]), and `SELECT` on `records`
+  ([LOG-3]).
 - **Garage:** a key of its own that may only read the bucket `snapshots`
   ([GARAGE-4]).
 - **`edgar-asof`,** pinned, through which it reads `submissions` and
@@ -421,10 +427,12 @@ there instead of implying that nothing changed
 - **Prometheus and an OTLP endpoint** for its telemetry ([SCRAPE-1],
   [TRACE-7]).
 
-Its libraries are nats-py, psycopg, and boto3 ([0006]). Its deployment, the
-streams `ORDERS` and `NOTICES` with their replicas, its tables and their
-grants, its role, its key, and the durable consumers, is task T38
-([plan][plan-observing]).
+Its libraries are nats-py, psycopg, and boto3 ([0006]). The deployment's
+version 1.1.0 gives what it needs before it's built: the streams `ORDERS`
+and `NOTICES`, its durable consumers, its tables and their grants, its
+role, and its key ([§10 of deployment][deployment-from-1.0.0]). Its own
+Deployment, with its replicas, comes in a later version, as it's built
+([§9 of deployment][deployment-later]).
 
 ### Through `edgar-asof`
 
@@ -496,8 +504,10 @@ in both languages ([0006]).
 - **What the parse workers do with a filing notice,** and how they find the
   complete filings whose notices they didn't read, which the facts
   specification says ([§12 of the notices][notices-left]).
-- **Its deployment** (task T38), and `edgar-asof`'s first release, before
-  task T24 builds it ([plan][plan-observing]).
+- **Its own Deployment,** with its replicas, which a later version of the
+  deployment adds as it's built ([§9 of deployment][deployment-later]), and
+  `edgar-asof`'s first release, before task T24 builds it
+  ([plan][plan-observing]).
 
 ## Where it's specified
 
@@ -515,9 +525,13 @@ in both languages ([0006]).
 | [BACKFILL-1] | A Backfill fetches its range's filings, except those already held. |
 | [METRIC-1], [METRIC-2], [METRIC-5] | Its metrics, each open gap and each Source with no successful poll among them. |
 | [TRACE-1], [TRACE-3], [TRACE-4], [TRACE-5], [TRACE-7], [TRACE-8] | Each filing's trace continues through it; a Backfill's filing gets its own. |
+| [NATS-5], [NATS-6] | Its three durable consumers, of `RECORDS` and `ORDERS`, each made right after its stream, with one poll event unacknowledged at a time. |
+| [PG-7], [PG-12], [PG-14] | Its own role, `discoverer`, which alone may add to its tables, made after the store's table. |
+| [GARAGE-4] | Its own key, which may only read `snapshots`. |
 
-Task T24 builds the discoverer, once T16, T23, and T38 are done and
-`edgar-asof`'s first release is published ([plan][plan-observing]). Most of
+Task T24 builds the discoverer, once T23 is done and `edgar-asof`'s first
+release is published; T16 and T38, which it also waits on, are done
+([plan][plan-observing]). Most of
 these statements' tests await it, and T28 and T29 its metrics' and traces'
 ([§3 of the notices][notices-ids], [§3 of telemetry][telemetry-ids]).
 
@@ -613,7 +627,13 @@ these statements' tests await it, and T28 and T29 its metrics' and traces'
 [TRACE-7]: ../../spec/telemetry.md#9-traces
 [TRACE-8]: ../../spec/telemetry.md#9-traces
 [deployment-later]: ../../spec/deployment.md#9-later-versions
+[deployment-from-1.0.0]: ../../spec/deployment.md#from-version-100
 [GARAGE-4]: ../../spec/deployment.md#garage
+[NATS-5]: ../../spec/deployment.md#durable-consumers
+[NATS-6]: ../../spec/deployment.md#durable-consumers
+[PG-7]: ../../spec/deployment.md#the-stores-database
+[PG-12]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-14]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [asof-readme]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/README.md
 [asof-plan]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/docs/plan.md#the-first-release
 [asof-feeds]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/fetching.md#5-feeds

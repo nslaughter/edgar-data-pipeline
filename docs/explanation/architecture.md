@@ -117,11 +117,12 @@ Who may write each store is narrow by design. Only the fetcher's database
 role may insert records, and only the discoverer's may add the notices'
 rows; no role may update, delete, or truncate either ([LOG-3], [TABLE-3]).
 Only the fetcher's Garage key may write the bucket `snapshots`; every other
-service's may only read it ([GARAGE-4]). The deployment's version 1.0.0
-installs the streams `JOBS` and `RECORDS` ([NATS-3]). The streams `ORDERS`
-and `NOTICES`, the discoverer's role and key, and the durable consumers of
-the discoverer, the scheduler, and the parse workers are to be specified in
-task T38 ([plan][plan-observing]).
+service's may only read it ([GARAGE-4]). The deployment's version 1.1.0
+installs the four streams ([NATS-3]), the discoverer's role and key
+([PG-7], [GARAGE-4]), and the durable consumers of the discoverer, the
+scheduler, and the parse workers, each made right after its stream
+([NATS-5]). Grafana reads only the views in `dashboards`, as a role of its
+own, through its PostgreSQL data source ([PG-11], [PG-13], [MON-5]).
 
 ## One filing, end to end
 
@@ -418,8 +419,10 @@ library publishes, so both answer "as of T" the same way ([0009]).
 [LIST-1]: ../../spec/notices.md#8-backfills
 [LOG-3]: ../../spec/snapshots.md#8-history
 [METRIC-1]: ../../spec/telemetry.md#4-metrics
+[MON-5]: ../../spec/deployment.md#monitoring
 [NATS-1]: ../../spec/deployment.md#nats
 [NATS-3]: ../../spec/deployment.md#nats
+[NATS-5]: ../../spec/deployment.md#durable-consumers
 [NOTICE-1]: ../../spec/notices.md#8-backfills
 [NOTICE-2]: ../../spec/notices.md#8-backfills
 [notice-schema]: ../../spec/schemas/notice.schema.json
@@ -433,6 +436,9 @@ library publishes, so both answer "as of T" the same way ([0009]).
 [OBJ-4]: ../../spec/snapshots.md#5-objects
 [ORDER-1]: ../../spec/notices.md#8-backfills
 [order-schema]: ../../spec/schemas/order.schema.json
+[PG-7]: ../../spec/deployment.md#the-stores-database
+[PG-11]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-13]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [plan-facts]: ../plan.md#facts
 [plan-observing]: ../plan.md#observing-filings
 [RBAC-1]: ../../spec/controls.md#9-who-may-change-what
