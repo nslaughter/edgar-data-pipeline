@@ -137,7 +137,8 @@ investigation/
 | Format check | `uv run ruff format --check .` |
 | Lint | `uv run ruff check .` |
 | Type check | `uv run mypy` |
-| Tests | `uv run pytest` |
+| Tests | `uv run pytest`, with Helm 4 and jq installed |
+| Test the installed charts | `EDGAR_KUBE_CONTEXT=kind-edgar uv run pytest tests/test_kind.py` |
 | Snapshot a feed | `uv run scripts/snapshot.py FEED URL ...`, with `SEC_USER_AGENT` in the environment or `.env.dev` |
 | Verify the store | `uv run scripts/verify.py -v` |
 | Verify history since a commit | `uv run scripts/verify.py --since origin/main` |
