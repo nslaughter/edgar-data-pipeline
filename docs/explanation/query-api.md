@@ -125,12 +125,15 @@ digits, which give no time zone, and `submissions`' `acceptanceDateTime`
 one that reads `submissions`' time as the instant it states ([TIME-7]), and
 one that reads the header's digits in a time zone the caller names
 ([TIME-8]). Which to trust, and the header's time zone, wait on the
-investigation ([what waits on the investigation][design-waits]). Microsoft's
-and Walmart's `submissions` times are 4 or 5 hours later than their headers'
-digits, as converting US Eastern time to UTC would make them, and Apple's
-are 8 hours later ([SRC-2]). The library may make the header's digits, read
-as Eastern time, its default once a finding compares more headers with
-`submissions` ([TIME-8], its task T12 in
+investigation ([what waits on the investigation][design-waits]). Since the
+first refetch, on October 16, 2026, each of the three companies'
+`submissions` times is later than its header's digits read as US Eastern
+time, by the Eastern offset from UTC on its date, where on October 7 only
+Apple's were ([SRC-2], [SRC-25]): between the two dates, `submissions`
+moved Microsoft's and Walmart's later by that offset ([SRC-24]). The stored
+versions don't show which time is right ([SRC-25]). The library may make
+the header's digits, read as Eastern time, its default once a finding
+compares more headers with `submissions` ([TIME-8], its task T12 in
 [edgar-asof's plan][asof-plan-later]).
 
 ## Tested against `edgar-asof`'s cases
@@ -251,6 +254,8 @@ T32, which specify it; and T26, which builds it ([status page][status]).
 [SRC-14]: ../../investigation/edgar.md#findings-so-far
 [SRC-15]: ../../investigation/edgar.md#findings-so-far
 [SRC-16]: ../../investigation/edgar.md#findings-so-far
+[SRC-24]: ../../investigation/edgar.md#findings-so-far
+[SRC-25]: ../../investigation/edgar.md#findings-so-far
 [LOG-3]: ../../spec/snapshots.md#8-history
 [TABLE-3]: ../../spec/notices.md#4-the-record-of-notices
 [telemetry-left]: ../../spec/telemetry.md#left-to-other-specifications

@@ -72,11 +72,11 @@ files takes and stores, not that feed's own polls.
 | A year of the three companies' reports, in bytes | 48.93 MB of instances: a 10-K and three 10-Qs are 4.30 MB of Apple's, 39.97 MB of Microsoft's, and 4.65 MB of Walmart's. Stored with their headers and index pages, 1.52 MB | [SRC-19]'s eight filings. Assumption: each next report is the size of the one stored. Replaced by the next reports, tasks T6, T7, and T9. |
 | New filings | 126 by the three companies in the 13 weeks to October 7, 2026: 126 ÷ 91 ÷ 3 = 0.46 a company a day | [0010] |
 | Filings with an XBRL instance | 5.0%: `submissions` marks 484 of the three companies' 9,689 filings `isXBRL`. 208 of the 484, 43%, are 10-Ks, 10-Qs, and amendments, and the other 276, 57%, are of other forms | [SRC-19], [SRC-20] |
-| When filings arrive | About 90% of Microsoft's and Walmart's between 4 and 7 PM US Eastern time | [0010] |
-| How often a list changes | Low: once for each new filing it lists. High: at every poll | Assumption: a new filing changes the list that names it ([SRC-9]), and nothing stored shows whether anything else changes it; how often each feed's content changes is the investigation's Q1 ([questions]). Replaced by the investigation's daily refetches, tasks T4 and T8. |
+| When filings arrive | About 90% of Microsoft's and Walmart's between 4 and 7 PM US Eastern time | [0010], from the baseline's `submissions`. Their `acceptanceDateTime` values have since moved later by the US Eastern offset on each date ([SRC-24]). |
+| How often a list changes | Low: once for each new filing it lists. High: at every poll | Assumption: a new filing changes the list that names it ([SRC-9]), and so can a change to filings it already lists: between October 7 and 16, Microsoft's and Walmart's `submissions` moved every listed filing's `acceptanceDateTime` later ([SRC-24]). How often each feed's content changes is the investigation's Q1 ([questions]). Replaced by the investigation's daily refetches, tasks T4 and T8. |
 | Filings a day across EDGAR | 3,100 to 6,200 | Assumption: a day's master index is 310,875 to 621,000 bytes ([SRC-18]), and it has a line of about 100 bytes for each filing. Replaced by counting the lines of the stored master indexes, a finding the investigation could add. |
 | The full budget's 25 companies | Each files 0.46 times a day, and reports as the three companies do on average: 4 reports a year, 48.93 MB ÷ 3 = 16.3 MB of instances, stored with their headers and index pages as 1.52 MB ÷ 3 = 0.51 MB | Assumption: no finding covers a company but the three. Replaced by the record's filings and objects of the companies polled, once the fetcher and the discoverer run, tasks T23 and T24. |
-| Every filer's filings | As the three companies': 5.0% with an XBRL instance, 43% of those reports; and as Microsoft's and Walmart's, about 90% between 4 and 7 PM US Eastern time | Assumption: no finding covers another filer's forms or times, and decision 0010 gives the evening's share of two companies' filings ([0010]). Replaced by counting the forms and acceptance times of a day's filings across EDGAR, a finding the investigation could add. |
+| Every filer's filings | As the three companies': 5.0% with an XBRL instance, 43% of those reports; and as Microsoft's and Walmart's, about 90% between 4 and 7 PM US Eastern time | Assumption: no finding covers another filer's forms or times, and decision 0010 gives the evening's share of two companies' filings, from times in their `submissions` that have since moved ([0010], [SRC-24]). Replaced by counting the forms and acceptance times of a day's filings across EDGAR, a finding the investigation could add. |
 
 ### From the pipeline
 
@@ -459,6 +459,7 @@ so its cost grows with the polls' rate and with time
 [SRC-18]: ../../investigation/edgar.md#findings-so-far
 [SRC-19]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far
+[SRC-24]: ../../investigation/edgar.md#findings-so-far
 [store-guarantees]: ../../spec/snapshots.md#1-guarantees
 [store-jobs]: ../../spec/snapshots.md#jobs-and-events
 [store-scope]: ../../spec/snapshots.md#9-scope
