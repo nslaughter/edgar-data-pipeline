@@ -770,8 +770,9 @@ the version it confirms, the one stored on October 7
   Walmart's 8-K/A of January 30: its header gives `20260130161002`, and
   `submissions` 2026-01-31T02:10:02.000Z. Every value is still RFC 3339
   with a `Z` and milliseconds of `.000`. Read as the UTC instants they
-  state, 726 of Microsoft's 1,000 filings in `filings.recent` and 1,360 of
-  the 2,006 in its first further file, and 333 of Walmart's 1,005 in
+  state, with the time of day compared to the second, as SRC-13 compares
+  it, 735 of Microsoft's 1,000 filings in `filings.recent` and 1,372 of
+  the 2,006 in its first further file, and 341 of Walmart's 1,005 in
   `filings.recent`, fall outside EDGAR's hours of 6:00 a.m. to 10:00 p.m.
   Eastern Time (SRC-13), where 2, 1, and 0 did. Moved earlier by the
   Eastern offset on their dates, 2 of Microsoft's 1,000 and none of
