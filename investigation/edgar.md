@@ -719,14 +719,14 @@ the version it confirms, the one stored on October 7
   ([REC-5](../spec/snapshots.md#6-records)). The records don't show
   whether a `304` sent the validators again: `snapshot.py` gives a `304`'s
   record the stored version's `ETag` and `Last-Modified` when the response
-  leaves them out. The quarter's listing, asked the same way, returned a `200` with a new body
-  and new validators, since it lists more days. `submissions` and
-  `companyfacts` still sent neither validator (SRC-4), so each refetch of
-  them received the whole body again: 158,090 to 185,024 bytes for each
-  company's `submissions`, and 3,770,257 to 4,881,196 for each
-  `companyfacts`. Each `companyfacts` body was the same as on October 7,
-  though each company's `submissions` listed new filings, none of them a
-  10-K, a 10-Q, or an 8-K: Forms 4 and 144.
+  leaves them out. The quarter's listing, asked the same way, returned a
+  `200` with a new body and new validators, since it lists more days.
+  `submissions` and `companyfacts` still sent neither validator (SRC-4),
+  so each refetch of them received the whole body again: 158,090 to
+  185,024 bytes for each company's `submissions`, and 3,770,257 to
+  4,881,196 for each `companyfacts`. Each `companyfacts` body was the same
+  as on October 7, though each company's `submissions` listed new filings,
+  none of them a 10-K, a 10-Q, or an 8-K: Forms 4 and 144.
   Shown by the October 16 records in the records cited, with the October 7
   records of the four master indexes, the listing, and the three
   companies' `submissions` and `companyfacts`.
