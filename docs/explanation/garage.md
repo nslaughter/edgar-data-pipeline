@@ -1,7 +1,7 @@
 # Garage
 
 <!-- status: Garage; The snapshot store in the cluster -->
-**Status** ([status page](../status.md)): Garage: Specified. The snapshot store in the cluster: Specified.
+**Status** ([status page](../status.md)): Garage: Built. The snapshot store in the cluster: Specified; built in part.
 <!-- end status -->
 
 Garage is the pipeline's object store, which holds every body the fetcher
@@ -276,8 +276,8 @@ pipeline.
 | [IMP-3], [FETCH-18] | Imports and `edgar-asof` read only stored objects. | first import, kind |
 | [PG-4] | The database's backups go to `database-backups`. | tests |
 
-Garage and its setup Job are built by task T20, and the fetcher, which
-writes the store, by T23; neither is done ([plan][plan-observing]).
+Task T20 built Garage and its setup Job; the fetcher, which writes the
+store, is T23's, which isn't done ([plan][plan-observing]).
 
 ## The alternatives decision 0002 weighed
 

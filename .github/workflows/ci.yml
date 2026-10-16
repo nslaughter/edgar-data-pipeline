@@ -29,6 +29,11 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
           enable-cache: true
+      # The deployment's tests render the charts (spec/deployment.md, section
+      # 3), with Helm at an exact version of major version 4 (PIN-7).
+      - uses: azure/setup-helm@v5.0.1
+        with:
+          version: v4.3.1
       - name: Install the development environment
         run: uv sync --locked
       - name: Check formatting
@@ -45,3 +50,99 @@ jobs:
       - name: Verify the store, and its history since the previous commit
         if: github.event_name == 'push'
         run: uv run scripts/verify.py --since "${{ github.event.before }}"
+
+  # Installs the four charts on kind, then upgrades them, and runs the tests
+  # of how the installed charts behave (spec/deployment.md, section 3).
+  kind:
+    name: kind
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # The tests of the installed charts run against this context, and are
+      # skipped where it isn't set.
+      EDGAR_KUBE_CONTEXT: kind-edgar
+      # The job upgrades each release after installing it, so the tests
+      # require each release's history to show both (CHART-4).
+      EDGAR_CHARTS_UPGRADED: "true"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.14"
+          enable-cache: true
+      # Helm and kind at exact versions, Helm at major version 4 (PIN-7), and
+      # kubectl at the cluster's version. kind is the release whose node
+      # image deploy/kind.yaml pins.
+      - uses: azure/setup-helm@v5.0.1
+        with:
+          version: v4.3.1
+      - uses: helm/kind-action@v1.15.1
+        with:
+          version: v0.32.0
+          kubectl_version: v1.36.1
+          install_only: true
+      - name: Install the development environment
+        run: uv sync --locked
+      - name: Create the kind cluster
+        run: kind create cluster --config deploy/kind.yaml --wait 120s
+      # New credentials for each cluster, and a new name for its database's
+      # archive, each masked in the log and kept outside the repository
+      # (SECRET-4, PG-10).
+      - name: Generate the cluster's credentials
+        run: |
+          umask 077
+          masks="$RUNNER_TEMP/masks"
+          hex() {
+            value=$(openssl rand -hex "$1")
+            echo "$value" >>"$masks"
+            printf '%s' "$value"
+          }
+          values="$RUNNER_TEMP/edgar-values.yaml"
+          cat >"$values" <<EOF
+          credentials:
+            garage:
+              rpcSecret: "$(hex 32)"
+              adminToken: "$(hex 32)"
+            garageKeys:
+              database-backups: {id: "GK$(hex 12)", secret: "$(hex 32)"}
+              fetcher: {id: "GK$(hex 12)", secret: "$(hex 32)"}
+              discoverer: {id: "GK$(hex 12)", secret: "$(hex 32)"}
+            database:
+              fetcher: "$(hex 24)"
+              discoverer: "$(hex 24)"
+              grafana: "$(hex 24)"
+            grafana:
+              adminPassword: "$(hex 24)"
+          database:
+            backups:
+              serverName: "ci-${{ github.run_id }}-${{ github.run_attempt }}"
+          EOF
+          while read -r value; do echo "::add-mask::$value"; done <"$masks"
+          rm "$masks"
+          echo "EDGAR_VALUES=$values" >>"$GITHUB_ENV"
+      # The four releases, each in its namespace, in order, each once the one
+      # before it is ready (CHART-4); then each upgraded in the same order,
+      # which runs the umbrella chart's hook Jobs again.
+      - name: Install and upgrade the charts
+        run: |
+          for action in install upgrade; do
+            create=$([ "$action" = install ] && echo --create-namespace || true)
+            helm "$action" prometheus-crds deploy/prometheus-crds --namespace edgar $create --wait --timeout 10m
+            helm "$action" cert-manager deploy/cert-manager --namespace cert-manager $create --wait --timeout 10m
+            helm "$action" operators deploy/operators --namespace cnpg-system $create --wait --timeout 10m
+            helm "$action" edgar deploy/chart --namespace edgar --values "$EDGAR_VALUES" --wait --timeout 20m
+          done
+      - name: Test the installed charts
+        run: uv run pytest tests/test_kind.py -v
+      # What went wrong, without the credentials: no Secret is shown.
+      - name: Show the cluster's state
+        if: failure()
+        run: |
+          kubectl get nodes -o wide
+          kubectl get pods --all-namespaces -o wide
+          kubectl get events --all-namespaces --sort-by=.lastTimestamp | tail -100
+          kubectl get jobs,clusters.postgresql.cnpg.io,backups.postgresql.cnpg.io --namespace edgar
+          for job in garage-setup jetstream-setup database-setup; do
+            echo "--- $job"
+            kubectl logs --namespace edgar "job/$job" --tail=100 || true
+          done

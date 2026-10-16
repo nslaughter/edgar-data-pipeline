@@ -70,7 +70,7 @@ without the behavior it covers ([doing the next item][agents-next], step
 | Specification | Statements with tests now | Statements awaiting a task |
 | --- | --- | --- |
 | [`snapshots.md`][snapshots] 1.0.0 | Those `verify.py` checks, and `snapshot.py`'s rules, brought to this version by [T35], done October 13, 2026; and the schemas': [STORE-1], [REC-13], [JOB-1] | [T22], the scheduler's jobs; [T23], the fetcher and the cluster store; [T24], the discoverer's jobs and its use of `edgar-asof` ([FETCH-18]); [T36], the transfer ([XFER-1] to [XFER-3]) |
-| [`deployment.md`][deployment] 1.1.0 | None | [T20], the charts, with the durable consumers, the notices' and the dashboards' tables and views, and Grafana's data source; [T21], the pipeline's images ([IMG-1] to [IMG-3]); [T23], the fetcher's Lease ([LEASE-1], [LEASE-2]) ([§3][deployment-ids]) |
+| [`deployment.md`][deployment] 1.1.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind | [T21], the pipeline's images ([IMG-1] to [IMG-3]); [T23], the fetcher's Lease ([LEASE-1], [LEASE-2]) ([§3][deployment-ids]) |
 | [`controls.md`][controls] 1.0.0 | [API-1] | [T22], [T23], [T24], and [T28] ([§3][controls-ids]) |
 | [`notices.md`][notices] 0.1.0 | [TABLE-1], [MSG-1] | [T24], the discoverer, with the scheduler's side of the Backfills ([§3][notices-ids]) |
 | [`telemetry.md`][telemetry] 0.1.0 | [VIEW-1] | [T28], the monitoring of observing filings; [T29], the traces ([§3][telemetry-ids]) |
@@ -79,7 +79,7 @@ without the behavior it covers ([doing the next item][agents-next], step
 ## What the tests check today
 
 The status block above says which of the parts this page describes are
-built. The tests that run today check four things.
+built. The tests that run today check five things.
 
 **The git store's invariants, with `verify.py`.** `verify.py` checks every
 invariant of the git store, each of which holds whenever `data/` is at
@@ -122,12 +122,20 @@ part's status matches the plan, the specifications, and the decision
 records ([STATUS-3]). So each of CI's jobs fails on a site that doesn't
 build, and the site needs no job of its own ([0012]).
 
+**The charts, rendered and installed.** The deployment's invariants are
+checked by rendering each of the four charts with `helm template`, and the
+hook Jobs' scripts against fakes of `nats`, of `psql`, and of Garage's
+admin API; the deployment's rules, on a kind cluster the charts are installed on
+([T20], [chart tests and tests on kind](#chart-tests-and-tests-on-kind)).
+
 CI runs these checks in three jobs, one for each of Python 3.12, 3.13, and
 3.14: the format check, the lint, the type check, the tests, and
 `uv run scripts/verify.py --since origin/main` ([commands][agents-commands],
-[doing the next item][agents-next], step 9). A pull request merges only
-once the three jobs pass, as a ruleset on `main` requires; only the owner
-changes the ruleset ([commits and pull requests][agents-commits]).
+[doing the next item][agents-next], step 9). A fourth job, `kind`, creates
+a kind cluster, installs the four charts and upgrades them, and runs the
+tests of the installed charts. A pull request merges only once the jobs
+pass that a ruleset on `main` requires; only the owner changes the ruleset
+([commits and pull requests][agents-commits]).
 
 ## What later tasks add
 
@@ -138,8 +146,7 @@ rebuild of the facts. Each comes with the task that builds what it tests.
 
 | Layer | What it checks | Task |
 | --- | --- | --- |
-| Chart tests | The charts' invariants, by rendering each chart with `helm template` and the values CI installs it with, without a cluster or the network | [T20] |
-| Tests on kind | The `kind` statements, against the installed charts | [T20], and each task that builds a service |
+| Tests on kind | The `kind` statements of each service, against the installed charts, as [T20]'s are of the charts | Each task that builds a service |
 | The fake EDGAR | The fetching rules, from every request the fetcher sends | [T21], [T23] |
 | envtest | The scheduler's controller, and the API server's rules for the resources, against a real API server | [T22] |
 | `promtool test rules` | The alert rules | [T28], [T33] |

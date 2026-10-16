@@ -1,0 +1,105 @@
+{{- /*
+The pipeline's database: PostgreSQL 18 through one image catalog (PG-1), in
+one Cluster of three instances, each on a worker node of its own (PG-3,
+PLACE-1), archiving to Garage through the Barman Cloud plugin (PG-4).
+*/}}
+apiVersion: postgresql.cnpg.io/v1
+kind: ImageCatalog
+metadata:
+  name: postgresql
+spec:
+  images:
+    - major: 18
+      image: {{ .Values.database.image }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres
+spec:
+  instances: {{ .Values.database.instances }}
+  imageCatalogRef:
+    apiGroup: postgresql.cnpg.io
+    kind: ImageCatalog
+    name: postgresql
+    major: 18
+  # The database's volumes are on kind's own class, since a data directory
+  # an earlier cluster left would stop a new one from initializing (VOL-2).
+  storage:
+    storageClass: standard
+    size: {{ .Values.database.storage.size }}
+  affinity:
+    podAntiAffinityType: required
+    topologyKey: kubernetes.io/hostname
+  # One database, edgar, owned by edgar, whose password CloudNativePG
+  # generates; no service connects as its owner (PG-6).
+  enableSuperuserAccess: false
+  bootstrap:
+    initdb:
+      database: edgar
+      owner: edgar
+  # Each service's role, and Grafana's, able to log in and nothing more,
+  # each with its password from a Secret of this chart (PG-7, PG-11).
+  managed:
+    roles:
+      {{- range (append .Values.database.services "grafana") }}
+      - name: {{ . }}
+        ensure: present
+        login: true
+        superuser: false
+        createdb: false
+        createrole: false
+        replication: false
+        bypassrls: false
+        passwordSecret:
+          name: postgres-{{ . }}
+      {{- end }}
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: database-backups
+        # Each cluster archives under a name of its own (PG-10).
+        serverName: {{ required "database.backups.serverName is required" .Values.database.backups.serverName | quote }}
+---
+{{- /*
+Garage's bucket for the database's backups, reached with that bucket's own
+key (GARAGE-2).
+*/}}
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: database-backups
+spec:
+  configuration:
+    destinationPath: s3://database-backups/
+    endpointURL: http://garage:3900
+    s3Credentials:
+      accessKeyId:
+        name: garage-key-database-backups
+        key: AWS_ACCESS_KEY_ID
+      secretAccessKey:
+        name: garage-key-database-backups
+        key: AWS_SECRET_ACCESS_KEY
+      region:
+        name: garage-key-database-backups
+        key: AWS_REGION
+    wal:
+      compression: gzip
+---
+{{- /*
+A base backup each day (PG-4). Not one when the schedule is created, which
+would come before the Garage Job makes the bucket, and fail.
+*/}}
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: postgres-daily
+spec:
+  schedule: {{ .Values.database.backups.schedule | quote }}
+  backupOwnerReference: self
+  cluster:
+    name: postgres
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

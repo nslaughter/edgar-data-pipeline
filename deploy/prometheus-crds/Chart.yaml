@@ -1,0 +1,11 @@
+# Release 1 of 4: the Prometheus operator's definitions, installed before the
+# umbrella chart renders any monitor or rule (spec/deployment.md, section 5).
+apiVersion: v2
+name: prometheus-crds
+description: The Prometheus operator's custom resource definitions, for the EDGAR data pipeline.
+type: application
+version: 0.1.0
+dependencies:
+  - name: prometheus-operator-crds
+    version: 32.0.1
+    repository: oci://ghcr.io/prometheus-community/charts

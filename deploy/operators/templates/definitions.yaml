@@ -1,0 +1,14 @@
+{{- /*
+Garage's definition and the pipeline's own, each from a file of this chart:
+Garage's committed unchanged from its source tree, and the pipeline's copies
+of those in spec/schemas/, since Helm reads only files inside the chart
+(CRD-2, CRD-5). Each is rendered as its file has it, with only the
+annotation that keeps it when the release is uninstalled (CRD-4).
+*/}}
+{{- range $path, $_ := .Files.Glob "files/*.yaml" }}
+{{- $definition := $.Files.Get $path | fromYaml }}
+{{- $annotations := merge (dict "helm.sh/resource-policy" "keep") ($definition.metadata.annotations | default dict) }}
+{{- $_ := set $definition.metadata "annotations" $annotations }}
+---
+{{ toYaml $definition }}
+{{- end }}

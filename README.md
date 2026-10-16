@@ -14,7 +14,9 @@ filings, where when a number was published matters as much as what it says.
 feeds and verify the stored versions. The investigation of the source has
 begun ([`investigation/edgar.md`](investigation/edgar.md)), and the design is
 drafted ([`docs/design.md`](docs/design.md)); the pipeline's specification
-follows them, and nothing else is implemented yet. The
+follows them. The platform the pipeline runs on installs on kind, from the
+Helm charts under [`deploy/`](deploy/); the pipeline's own services are still
+to be built. The
 data comes from the SEC's EDGAR system. This is an independent demonstration,
 not client work, and it is not affiliated with or endorsed by the SEC.
 
@@ -81,6 +83,38 @@ pipeline's store in the cluster, whose records of the scope's URLs the owner
 copies into `data/`.
 
 Both scripts use only Python's standard library.
+
+## Installing the platform on kind
+
+The platform is four Helm charts, installed as four releases in this order,
+each once the one before it is ready
+([`spec/deployment.md`](spec/deployment.md)): the Prometheus operator's
+definitions; cert-manager; the operators, CloudNativePG and its Barman Cloud
+plugin, with the remaining definitions; and the umbrella chart, with NATS
+JetStream, Garage, PostgreSQL 18, and kube-prometheus-stack. It needs Docker,
+kind, kubectl, and Helm 4.
+
+```sh
+kind create cluster --config deploy/kind.yaml
+helm install prometheus-crds deploy/prometheus-crds --namespace edgar --create-namespace --wait
+helm install cert-manager deploy/cert-manager --namespace cert-manager --create-namespace --wait
+helm install operators deploy/operators --namespace cnpg-system --create-namespace --wait
+helm install edgar deploy/chart --namespace edgar --values deploy/edgar-values.yaml --wait --timeout 20m
+EDGAR_KUBE_CONTEXT=kind-edgar uv run pytest tests/test_kind.py
+```
+
+`deploy/edgar-values.yaml`, which git ignores, holds what the umbrella chart
+requires and no committed file sets: each credential, and a name for the
+database's archive in Garage, new for each cluster.
+[`deploy/chart/values.schema.json`](deploy/chart/values.schema.json) gives
+their places and forms, and CI's [workflow](.github/workflows/ci.yml)
+generates a set for each cluster it creates. An upgrade runs `helm upgrade`
+in the same order; with `EDGAR_CHARTS_UPGRADED=true`, as CI sets, the tests
+also require each release to have been upgraded. `deploy/kind.yaml` keeps
+every volume's data in `/var/tmp/edgar-kind/volumes` on the machine that
+runs kind's nodes, so a cluster created again finds it; on macOS, that's Docker's Linux VM, not the
+Mac's own disk. The tests of the installed charts run against the cluster the context
+names; the other tests render the charts, and need Helm and jq.
 
 ## Using EDGAR data
 

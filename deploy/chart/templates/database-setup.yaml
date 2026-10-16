@@ -1,0 +1,155 @@
+{{- /*
+The Job that makes the record's tables and views after each install and
+upgrade, as the database's owner, each file once and in one transaction, and
+grants each role what it may do with them (PG-8, PG-12, PG-13). The files are
+copies of those in spec/schemas/, since Helm reads only files inside the
+chart. The tables and views it grants on are those each file creates.
+*/}}
+{{- $services := .Values.database.services }}
+{{- $readers := without $services "fetcher" }}
+{{- $records := .Files.Get "files/records.sql" }}
+{{- $notices := .Files.Get "files/notices.sql" }}
+{{- $dashboards := .Files.Get "files/dashboards.sql" }}
+{{- $noticeTables := list }}
+{{- range regexFindAll "(?m)^CREATE TABLE [a-z_]+" $notices -1 }}
+{{- $noticeTables = append $noticeTables (trimPrefix "CREATE TABLE " .) }}
+{{- end }}
+{{- $noticeViews := list }}
+{{- range regexFindAll "(?m)^CREATE VIEW [a-z_]+" $notices -1 }}
+{{- $noticeViews = append $noticeViews (trimPrefix "CREATE VIEW " .) }}
+{{- end }}
+{{- $dashboardViews := list }}
+{{- range regexFindAll "(?m)^CREATE VIEW dashboards\\.[a-z_]+" $dashboards -1 }}
+{{- $dashboardViews = append $dashboardViews (trimPrefix "CREATE VIEW " .) }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: database-setup
+data:
+  setup.sh: |
+    {{- .Files.Get "files/database-setup.sh" | nindent 4 }}
+  records.sql: |
+    {{- $records | nindent 4 }}
+  notices.sql: |
+    {{- $notices | nindent 4 }}
+  dashboards.sql: |
+    {{- $dashboards | nindent 4 }}
+  setup.sql: |
+    -- The store's table, unless it exists, then its grants: the fetcher's
+    -- role may add records, each other service's may only read them, and no
+    -- other role may do either (PG-8, LOG-3).
+    SELECT to_regclass('public.records') IS NULL AS absent \gset
+    \if :absent
+    BEGIN;
+    \ir records.sql
+    COMMIT;
+    \endif
+    GRANT INSERT, SELECT ON TABLE records TO fetcher;
+    {{- if $readers }}
+    GRANT SELECT ON TABLE records TO {{ join ", " $readers }};
+    {{- end }}
+
+    -- The notices' tables and views, and the functions they call, unless
+    -- its tables exist, then their grants: the discoverer's role may add
+    -- rows, each other service's may only read them, and each service's may
+    -- read the views (PG-12, TABLE-3).
+    SELECT NOT EXISTS (
+        SELECT FROM pg_class
+        WHERE relnamespace = 'public'::regnamespace
+          AND relname IN ({{ range $i, $table := $noticeTables }}{{ if $i }}, {{ end }}'{{ $table }}'{{ end }})
+    ) AS absent \gset
+    \if :absent
+    BEGIN;
+    \ir notices.sql
+    COMMIT;
+    \endif
+    GRANT INSERT, SELECT ON TABLE {{ join ", " $noticeTables }} TO discoverer;
+    {{- with without $services "discoverer" }}
+    GRANT SELECT ON TABLE {{ join ", " $noticeTables }} TO {{ join ", " . }};
+    {{- end }}
+    GRANT SELECT ON TABLE {{ join ", " $noticeViews }} TO {{ join ", " $services }};
+
+    -- The views Grafana reads, unless their schema exists, then its grants:
+    -- Grafana's role may use the schema and read its views, and nothing else
+    -- the record holds (PG-13, VIEW-3).
+    SELECT to_regnamespace('dashboards') IS NULL AS absent \gset
+    \if :absent
+    BEGIN;
+    \ir dashboards.sql
+    COMMIT;
+    \endif
+    GRANT USAGE ON SCHEMA dashboards TO grafana;
+    GRANT SELECT ON TABLE {{ join ", " $dashboardViews }} TO grafana;
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: database-setup
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 26
+        runAsGroup: 26
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: setup
+          image: {{ .Values.database.image }}
+          command: [/bin/sh, /sql/setup.sh]
+          env:
+            - name: SQL
+              value: /sql
+            - name: ROLES
+              value: {{ append $services "grafana" | join " " | quote }}
+            # As the database's owner, from the Secret CloudNativePG keeps its
+            # password in, verifying the server against the Cluster's
+            # certificate authority.
+            - name: PGHOST
+              value: postgres-rw
+            - name: PGDATABASE
+              value: edgar
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: password
+            - name: PGSSLMODE
+              value: verify-full
+            - name: PGSSLROOTCERT
+              value: /ca/ca.crt
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: sql
+              mountPath: /sql
+              readOnly: true
+            - name: ca
+              mountPath: /ca
+              readOnly: true
+      volumes:
+        - name: sql
+          configMap:
+            name: database-setup
+        # The authority's certificate alone, without its key.
+        - name: ca
+          secret:
+            secretName: postgres-ca
+            items:
+              - key: ca.crt
+                path: ca.crt

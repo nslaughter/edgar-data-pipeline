@@ -1,7 +1,7 @@
 # NATS JetStream
 
 <!-- status: NATS JetStream -->
-**Status** ([status page](../status.md)): NATS JetStream: Specified.
+**Status** ([status page](../status.md)): NATS JetStream: Built.
 <!-- end status -->
 
 NATS JetStream carries the work the pipeline's services hand each other:
@@ -360,8 +360,8 @@ take a record.
 | [DISC-1], [DISC-2] | The discoverer reads every event and order, poll events in order, and acknowledges each once its rows, jobs, and notices are done. | tests |
 | [TRACE-1] | Each message carries its trace context in its headers. | tests |
 
-The charts and their tests are task T20's, which isn't done
-([plan][plan-observing]).
+Task T20 built the charts, with the streams' and consumers' Job, and
+wrote their tests ([plan][plan-observing]).
 
 ## The alternatives decision 0003 weighed
 

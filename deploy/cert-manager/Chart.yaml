@@ -1,0 +1,13 @@
+# Release 2 of 4: cert-manager, with its definitions, which the Barman Cloud
+# plugin needs for its certificates. It pins and commits cert-manager's
+# chart, with the values it's installed with, and holds nothing else
+# (spec/deployment.md, section 5; decision record 0011).
+apiVersion: v2
+name: cert-manager
+description: cert-manager, for the EDGAR data pipeline.
+type: application
+version: 0.1.0
+dependencies:
+  - name: cert-manager
+    version: v1.21.2
+    repository: oci://quay.io/jetstack/charts

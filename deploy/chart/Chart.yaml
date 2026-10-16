@@ -1,0 +1,21 @@
+# Release 4 of 4: the umbrella chart, installed once the definitions and the
+# operators are ready (spec/deployment.md, section 5; decision record 0011).
+# It installs NATS, Garage, kube-prometheus-stack, and the database, and later
+# the pipeline's services and controls.
+apiVersion: v2
+name: edgar
+description: The EDGAR data pipeline's platform on Kubernetes.
+type: application
+version: 0.1.0
+dependencies:
+  - name: nats
+    version: 2.15.1
+    repository: https://nats-io.github.io/k8s/helm/charts/
+  - name: kube-prometheus-stack
+    version: 92.9.0
+    repository: oci://ghcr.io/prometheus-community/charts
+  # No chart repository publishes Garage's chart, so it's committed unchanged
+  # at charts/garage/, from script/helm/garage in Garage's source tree,
+  # https://git.deuxfleurs.fr/Deuxfleurs/garage, at the tag v2.4.1 (PIN-3).
+  - name: garage
+    version: 0.10.2

@@ -1,7 +1,7 @@
 # Observability
 
 <!-- status: Monitoring: metrics, alerts, and dashboards; Monitoring: traces -->
-**Status** ([status page](../status.md)): Monitoring: metrics, alerts, and dashboards: Decided; specified in part. Monitoring: traces: Specified.
+**Status** ([status page](../status.md)): Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. Monitoring: traces: Specified.
 <!-- end status -->
 
 This page explains what the pipeline reports about itself while it observes

@@ -698,7 +698,9 @@ def test_the_home_page_begins_with_the_parts_statuses() -> None:
     text = (ROOT / "index.md").read_text("utf-8")
 
     assert text.startswith("# EDGAR data pipeline\n\n<!-- status: all -->\n")
-    assert "- **Built:** The snapshot store in git" in text
+    [built] = [line for line in text.splitlines() if line.startswith("- **Built:** ")]
+    parts = built.removeprefix("- **Built:** ").rstrip(".").split("; ")
+    assert "The snapshot store in git" in parts
     assert [p for p in site_status.check(ROOT) if p.startswith("STATUS-4")] == []
 
 

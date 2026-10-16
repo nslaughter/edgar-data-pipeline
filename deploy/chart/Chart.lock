@@ -1,0 +1,12 @@
+dependencies:
+- name: nats
+  repository: https://nats-io.github.io/k8s/helm/charts/
+  version: 2.15.1
+- name: kube-prometheus-stack
+  repository: oci://ghcr.io/prometheus-community/charts
+  version: 92.9.0
+- name: garage
+  repository: ""
+  version: 0.10.2
+digest: sha256:93d51f3df4d36d9cb3cada497a691d908b73bb2404a5b4e3060d48129ed231fc
+generated: "2026-10-15T14:52:41.014298-05:00"

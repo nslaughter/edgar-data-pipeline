@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "The umbrella chart's values",
+  "description": "What the umbrella chart's values must hold (spec/deployment.md). Every credential, and the database archive's server name, is required, and no committed values file sets it, so the chart renders only once they're given (SECRET-1, PG-4).",
+  "type": "object",
+  "required": ["credentials", "database", "jetstream", "garageSetup"],
+  "properties": {
+    "credentials": {
+      "type": "object",
+      "required": ["garage", "garageKeys", "database", "grafana"],
+      "additionalProperties": false,
+      "properties": {
+        "garage": {
+          "type": "object",
+          "required": ["rpcSecret", "adminToken"],
+          "additionalProperties": false,
+          "properties": {
+            "rpcSecret": {
+              "description": "The secret Garage's nodes share: 32 bytes, as 64 hexadecimal digits.",
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "adminToken": {
+              "description": "The token of Garage's admin API.",
+              "type": "string",
+              "minLength": 32
+            }
+          }
+        },
+        "garageKeys": {
+          "description": "Each Garage key the buckets grant, by name.",
+          "type": "object",
+          "required": ["database-backups", "fetcher", "discoverer"],
+          "additionalProperties": {"$ref": "#/definitions/garageKey"},
+          "properties": {
+            "database-backups": {"$ref": "#/definitions/garageKey"},
+            "fetcher": {"$ref": "#/definitions/garageKey"},
+            "discoverer": {"$ref": "#/definitions/garageKey"}
+          }
+        },
+        "database": {
+          "description": "The password of each database role, the services' and Grafana's.",
+          "type": "object",
+          "required": ["fetcher", "discoverer", "grafana"],
+          "additionalProperties": {"$ref": "#/definitions/password"},
+          "properties": {
+            "fetcher": {"$ref": "#/definitions/password"},
+            "discoverer": {"$ref": "#/definitions/password"},
+            "grafana": {"$ref": "#/definitions/password"}
+          }
+        },
+        "grafana": {
+          "type": "object",
+          "required": ["adminPassword"],
+          "additionalProperties": false,
+          "properties": {
+            "adminPassword": {"$ref": "#/definitions/password"}
+          }
+        }
+      }
+    },
+    "database": {
+      "type": "object",
+      "required": ["image", "instances", "storage", "backups", "services"],
+      "properties": {
+        "image": {"type": "string"},
+        "instances": {"type": "integer", "minimum": 1},
+        "storage": {
+          "type": "object",
+          "required": ["size"],
+          "properties": {"size": {"type": "string"}}
+        },
+        "backups": {
+          "type": "object",
+          "required": ["serverName", "schedule"],
+          "properties": {
+            "serverName": {
+              "description": "The name the database's archive is kept under in Garage, new for each cluster (PG-4, PG-10).",
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            },
+            "schedule": {"type": "string"}
+          }
+        },
+        "services": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+          "uniqueItems": true
+        }
+      }
+    },
+    "jetstream": {
+      "type": "object",
+      "required": ["setupImage", "streams"],
+      "properties": {
+        "setupImage": {"type": "string"},
+        "streams": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "subjects", "retention", "storage", "replicas", "consumers"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+              "subjects": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+              "retention": {"enum": ["limits", "interest", "workqueue"]},
+              "storage": {"enum": ["file", "memory"]},
+              "replicas": {"type": "integer", "minimum": 1},
+              "consumers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["name", "filterSubjects"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {"type": "string", "pattern": "^[a-z][a-z0-9-]*$"},
+                    "filterSubjects": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+                    "maxAckPending": {"type": "integer", "minimum": 1}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "garageSetup": {
+      "type": "object",
+      "required": ["image", "capacity", "buckets"],
+      "properties": {
+        "image": {"type": "string"},
+        "capacity": {"type": "integer", "minimum": 1},
+        "buckets": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": ["read", "write"],
+              "additionalProperties": false,
+              "properties": {
+                "read": {"type": "boolean"},
+                "write": {"type": "boolean"}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "garageKey": {
+      "description": "A Garage key's ID and secret, in the forms Garage gives them.",
+      "type": "object",
+      "required": ["id", "secret"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "pattern": "^GK[0-9a-f]{24}$"},
+        "secret": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "password": {
+      "type": "string",
+      "minLength": 16
+    }
+  }
+}

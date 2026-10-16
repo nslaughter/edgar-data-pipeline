@@ -1,7 +1,7 @@
 # Deployment
 
 <!-- status: The charts -->
-**Status** ([status page](../status.md)): The charts: Specified.
+**Status** ([status page](../status.md)): The charts: Built.
 <!-- end status -->
 
 The pipeline is installed on Kubernetes with Helm, by four charts in a
@@ -275,9 +275,9 @@ Which version each pin names is for the charts, the kind configuration, and
 CI to say, not the specification: an upgrade changes one of them and is
 reviewed there. The exceptions are PostgreSQL's major version and Helm's,
 which change only with a major version of the specification ([deployment,
-§6][pins]). The statements come before the charts they describe, which task
-T20 builds, with the CI job that installs them on kind; T20 isn't done, so
-none of these pins exists yet ([deployment, §3][ids];
+§6][pins]). Task T20 built the charts the statements describe, with the CI
+job that installs them on kind, so each pin is in a chart's `Chart.yaml` or
+values, in `deploy/kind.yaml`, or in CI's workflow ([deployment, §3][ids];
 [plan][plan-observing]).
 
 ### `edgar-asof`'s pin
@@ -398,8 +398,8 @@ Each statement of the deployment's specification is one of two kinds
   Tests check it in the CI job that installs the charts on kind, and skip
   it where no cluster is installed.
 
-The statements come before the charts they describe. Task T20 builds the
-charts and writes their tests, apart from those of [IMG-1] to [IMG-3],
+The statements came before the charts they describe. Task T20 built the
+charts and wrote their tests, apart from those of [IMG-1] to [IMG-3],
 which T21 writes with the first of the pipeline's images, and those of
 [LEASE-1] and [LEASE-2], which T23 writes with the fetcher ([deployment,
 §3][ids]). The tests on kind, the fake EDGAR they run against, and the
