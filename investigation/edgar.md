@@ -747,11 +747,15 @@ the version it confirms, the one stored on October 7
   daylight time, and by 5 hours for the 391 and 348 in standard time.
   Between October 10 and October 16, Microsoft's first further file
   changed the same way, all 2,002 of its filings, 1,297 by 4 hours and 705
-  by 5. No other column of those filings changed. Apple's
-  `filings.recent` and further file, and Walmart's two further files,
-  didn't change: the further files' bodies are those of October 10.
-  Microsoft's `filings.recent` now lists 1,000 filings, not 1,002, since
-  its four oldest moved to its first further file, now of 2,006. And
+  by 5. No other column of those filings changed. So each of Microsoft's
+  24 10-Ks and 10-Qs in `filings.recent`, and each of Walmart's 14, now
+  has an `acceptanceDateTime` on the day after its `filingDate`, between
+  00:01:56 and 03:21:40 UTC, where SRC-9 found none. Apple's
+  `filings.recent` gives the 1,000 filings it listed on October 7
+  unchanged, beside two new Forms 4, and its further file and Walmart's
+  two didn't change: their bodies are those of October 10. Microsoft's
+  `filings.recent` now lists 1,000 filings, not 1,002, since its four
+  oldest moved to its first further file, now of 2,006. And
   `filings.files` gives other `filingTo` dates: 2020-08-24, not
   2020-08-06, for Microsoft's first file, and 2008-08-11, not 2008-08-12,
   for its second; 2023-05-31, not 2023-06-01, for Walmart's first, and
