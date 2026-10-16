@@ -3,11 +3,13 @@
 CI's kind job installs the four charts on kind, upgrades them, and runs these
 tests (spec/deployment.md, section 3). They run only where
 EDGAR_KUBE_CONTEXT names the kube context of a cluster the charts are
-installed on, as the owner's can be, and are skipped elsewhere. They reach
-the cluster through kubectl and Helm, and nothing else: each check inside it
-runs in a pod there. A credential they read from a Secret goes to its pod on
-standard input, never in a command's arguments, so a failure never shows it.
-Each test carries the IDs of the statements it checks, as
+installed on, as the owner's can be, and are skipped elsewhere. Where
+EDGAR_CHARTS_UPGRADED is true, as in CI, each release must also have been
+upgraded since it was installed, which a cluster only installed hasn't. They
+reach the cluster through kubectl and Helm, and nothing else: each check
+inside it runs in a pod there. A credential they read from a Secret goes to
+its pod on standard input, never in a command's arguments, so a failure
+never shows it. Each test carries the IDs of the statements it checks, as
 @pytest.mark.spec(...).
 """
 
@@ -30,6 +32,8 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMAS = ROOT / "spec" / "schemas"
 CONTEXT = os.environ.get("EDGAR_KUBE_CONTEXT", "")
+# Whether the releases were upgraded after they were installed, as CI's are.
+UPGRADED = os.environ.get("EDGAR_CHARTS_UPGRADED", "") == "true"
 NAMESPACE = "edgar"
 NATS_URL = "nats://nats:4222"
 
@@ -228,6 +232,16 @@ def test_the_four_releases_are_installed_and_upgraded_in_order() -> None:
 
     for (release, _), history in zip(RELEASES, histories, strict=True):
         assert history[-1]["status"] == "deployed", release
+        if UPGRADED:
+            # Installed, then upgraded at least once, and nothing else.
+            [installed, *upgraded] = [revision["description"] for revision in history]
+            assert installed == "Install complete", release
+            assert upgraded, release
+            assert set(upgraded) == {"Upgrade complete"}, release
+    if UPGRADED:
+        # Each round installs or upgrades every release, so each revision of
+        # one release is compared with the same revision of the others.
+        assert len({len(history) for history in histories}) == 1
     revisions = min(len(history) for history in histories)
     for revision in range(revisions):
         started = [helm_time(history[revision]["updated"]) for history in histories]

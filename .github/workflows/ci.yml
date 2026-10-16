@@ -61,6 +61,9 @@ jobs:
       # The tests of the installed charts run against this context, and are
       # skipped where it isn't set.
       EDGAR_KUBE_CONTEXT: kind-edgar
+      # The job upgrades each release after installing it, so the tests
+      # require each release's history to show both (CHART-4).
+      EDGAR_CHARTS_UPGRADED: "true"
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0

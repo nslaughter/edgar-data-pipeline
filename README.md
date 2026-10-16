@@ -109,9 +109,10 @@ database's archive in Garage, new for each cluster.
 [`deploy/chart/values.schema.json`](deploy/chart/values.schema.json) gives
 their places and forms, and CI's [workflow](.github/workflows/ci.yml)
 generates a set for each cluster it creates. An upgrade runs `helm upgrade`
-in the same order. `deploy/kind.yaml` keeps every volume's data in
-`/var/tmp/edgar-kind/volumes` on the machine that runs kind's nodes, so a
-cluster created again finds it; on macOS, that's Docker's Linux VM, not the
+in the same order; with `EDGAR_CHARTS_UPGRADED=true`, as CI sets, the tests
+also require each release to have been upgraded. `deploy/kind.yaml` keeps
+every volume's data in `/var/tmp/edgar-kind/volumes` on the machine that
+runs kind's nodes, so a cluster created again finds it; on macOS, that's Docker's Linux VM, not the
 Mac's own disk. The tests of the installed charts run against the cluster the context
 names; the other tests render the charts, and need Helm and jq.
 
