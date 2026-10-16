@@ -392,6 +392,11 @@ the version it confirms, the one stored on October 7
   `FILED AS OF DATE` as `filed`, and the two 8-K/As have none.
   Shown by the three `companyfacts` and `submissions` records and the
   eight headers in the records cited.
+  **Superseded in part by SRC-24:** since the first refetch, on October 16,
+  2026, every 10-K and 10-Q of Microsoft's and Walmart's in `recent` has
+  its `acceptanceDateTime` on the day after `filed`, and Microsoft's
+  `recent` holds 1,000 filings. The 86 accession numbers are still all in
+  `recent`, so the joins it found hold, as the owner confirmed that day.
 - **SRC-10** (Q2) The stored `submissions` join the rest of the values,
   51,184 or 62%, to no filing and no acceptance time. Their 130 accession
   numbers were all filed before `recent`'s first filing: from 2009-07-22 to
@@ -443,6 +448,12 @@ the version it confirms, the one stored on October 7
   2008-08-12, before any of its values, isn't needed for them.
   Shown by the three `companyfacts` and `submissions` records and the four
   further files in the records cited.
+  **Superseded in part by SRC-24:** since October 16, 2026, Microsoft's
+  first further file lists 2,006 filings, its last on 2020-08-18, with
+  each `acceptanceDateTime` moved later by the Eastern offset, and
+  `filings.files` gives other `filingTo` dates. What it found of the
+  files' columns and lengths, and of the joins, still holds, as the owner
+  confirmed that day.
 - **SRC-13** (Q2) Read as the UTC instants they state, `submissions`'
   `acceptanceDateTime` values put most of Apple's filings, and most of
   Walmart's before June 2023, outside the hours the SEC gives for EDGAR:
