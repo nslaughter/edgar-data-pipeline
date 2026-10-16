@@ -714,9 +714,12 @@ the version it confirms, the one stored on October 7
   `scripts/snapshot.py` asked for each of the four master indexes stored
   on October 7 with the stored version's `ETag` as `If-None-Match` and its
   `Last-Modified` as `If-Modified-Since`
-  ([FETCH-4](../spec/snapshots.md#10-fetching)), and each returned a `304`
-  with the same `ETag` and `Last-Modified` as the stored version. The
-  quarter's listing, asked the same way, returned a `200` with a new body
+  ([FETCH-4](../spec/snapshots.md#10-fetching)), and each returned a `304`,
+  whose record names the stored version
+  ([REC-5](../spec/snapshots.md#6-records)). The records don't show
+  whether a `304` sent the validators again: `snapshot.py` gives a `304`'s
+  record the stored version's `ETag` and `Last-Modified` when the response
+  leaves them out. The quarter's listing, asked the same way, returned a `200` with a new body
   and new validators, since it lists more days. `submissions` and
   `companyfacts` still sent neither validator (SRC-4), so each refetch of
   them received the whole body again: 158,090 to 185,024 bytes for each
