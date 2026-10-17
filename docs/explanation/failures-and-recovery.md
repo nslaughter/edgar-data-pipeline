@@ -1,7 +1,7 @@
 # Failures and recovery
 
 <!-- status: Scheduler; Fetcher; Discoverer; NATS JetStream; Garage; PostgreSQL 18; The controls; Monitoring: metrics, alerts, and dashboards; The drills -->
-**Status** ([status page](../status.md)): Scheduler: Specified. Fetcher: Specified. Discoverer: Specified. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The drills: Planned.
+**Status** ([status page](../status.md)): Scheduler: Specified. Fetcher: Specified. Discoverer: Decided; specified in part. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The drills: Planned.
 <!-- end status -->
 
 For each failure that the design and the specifications consider: what

@@ -4,8 +4,8 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The charts.
-- **Specified:** Scheduler; Fetcher; Discoverer; Monitoring: traces; The snapshot store in the cluster (built in part); The transfer from the cluster to git; The controls; The documentation site (built in part).
-- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Specified:** Scheduler; Fetcher; Monitoring: traces; The snapshot store in the cluster (built in part); The transfer from the cluster to git; The controls; The documentation site (built in part).
+- **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The fake EDGAR; The drills.
 <!-- end status -->
 
@@ -23,20 +23,22 @@ investigation's findings, and the investigation is done when every question
 has findings the specifications can cite
 ([questions][inv-questions], [where documents go][agents-where]). [T1],
 [T2], and [T3] answered Q2, Q3, and Q5 in part, from the baseline fetched
-on October 7, 2026, and some of its findings bear on Q1 and Q4 too. What's
-still open needs newer versions of EDGAR's feeds, or the pipeline's own
-record, so each remaining task is a run against the SEC, and a run happens
-only when the owner asks for it ([rules][agents-rules],
+on October 7, 2026, and some of its findings bear on Q1 and Q4 too. [T4],
+the first refetch, on October 16, answered Q1 and Q4 in part, and changed
+what Q2's findings show of `submissions`' times ([SRC-22] to [SRC-25]).
+What's still open needs newer versions of EDGAR's feeds, or the pipeline's
+own record, so each remaining task is a run against the SEC, and a run
+happens only when the owner asks for it ([rules][agents-rules],
 [how the plan works][plan-how]). The
 investigation's daily refetches aren't tasks either: each is a run the
 owner asks for ([method][inv-method], step 2).
 
 | Question | Settled by findings | Still open | Answered by | Decides |
 | --- | --- | --- | --- | --- |
-| **Q1.** What each feed returns and how it changes | Which validators each kind of URL sends ([SRC-4]); the URLs of a company's lists and of a filing's files ([SRC-21]) | Whether a conditional request gets a `304`; how often each feed changes, and whether a URL returns to an earlier body; whether a filing's archived files ever change | [T4], [T8] | Which feeds the pipeline reads, and how often |
-| **Q2.** Where each time comes from | The two acceptance times and how they differ ([SRC-1], [SRC-2], [SRC-13]); fiscal years and periods, and how each value joins to its filing ([SRC-3], [SRC-6] to [SRC-12]) | Which acceptance time is right for Apple, and the header's time zone | [T6], [T7], [T9] | The time model |
+| **Q1.** What each feed returns and how it changes | Which validators each kind of URL sends ([SRC-4]); the URLs of a company's lists and of a filing's files ([SRC-21]); a `304` for a conditional request whose body hasn't changed ([SRC-22]); `submissions` changing a filing it already lists ([SRC-24]) | How often each feed changes, and whether a URL returns to an earlier body; whether a filing's archived files ever change | [T8] | Which feeds the pipeline reads, and how often |
+| **Q2.** Where each time comes from | The two acceptance times and how they differ ([SRC-1], [SRC-24], [SRC-25]); fiscal years and periods, and how each value joins to its filing ([SRC-3], [SRC-6] to [SRC-12]) | Which acceptance time is right for each company's filings, and the header's time zone | [T6], [T7], [T9] | The time model |
 | **Q3.** How restatements and amendments appear | Every filing's value kept beside the others, restatements, amendments, and frames ([SRC-14] to [SRC-17]) | Whether a frame moves to a later filing's value when that filing appears; how the next reports' values appear | [T6], [T7], [T9] | What a query as of a past date returns |
-| **Q4.** How new filings are announced | When the daily index files are written ([SRC-5]) | How soon each feed shows a new filing; when each day's index appears, and whether a published one changes; what the latest-filings feed holds | [T4], [T5], [T8], and the pipeline's record | Whether to keep the notice source, and how often to poll ([0010], [T11]) |
+| **Q4.** How new filings are announced | When the daily index files are written ([SRC-5]); that a published day's master index didn't change ([SRC-23]) | How soon each feed shows a new filing; when each day's index appears; what the latest-filings feed holds | [T5], [T8], and the pipeline's record | Whether to keep the notice source, and how often to poll ([0010], [T11]) |
 | **Q5.** Sizes and pace | Bytes per URL and per filing, and the pace of a backfill ([SRC-18] to [SRC-20]) | Growth per refetch | [T8] | The store's budget, and whether the pace suits backfills |
 
 The questions and what each decides are the investigation's
@@ -73,24 +75,35 @@ for the monitoring that shows the lags, [T28], and for the owner.
 
 The baseline shows which validators each kind of URL sends: `submissions`,
 `companyfacts`, and directory listings send none, so each refetch of them
-downloads the whole body ([SRC-4]). Whether a conditional request gets a
-`304` is for the first refetch, [T4], to show. How often each feed's
-content changes, and whether a URL returns to an earlier body, come from
-the daily refetches, in [T8]. [T8] also refetches the baseline's eight
-filings, to see whether any archived file changed, which the pipeline's
-record assumes none does ([below](#assumptions-not-yet-shown)).
+downloads the whole body ([SRC-4]). The first refetch, [T4], showed that a
+conditional request gets a `304` when the body hasn't changed, and that
+`submissions` and `companyfacts` still send no validators, so it received
+their whole bodies again ([SRC-22]). It also showed that `submissions` can
+change a filing it already lists: between October 7 and 16, Microsoft's
+and Walmart's moved the `acceptanceDateTime` of every filing their
+`filings.recent` listed on both dates later by the US Eastern offset on its
+date ([SRC-24]). How often each feed's content changes, and whether a URL
+returns to an earlier body, come from the daily refetches, in [T8]. [T8]
+also refetches the baseline's eight filings, to see whether any archived
+file changed, which the pipeline's record assumes none does
+([below](#assumptions-not-yet-shown)).
 
 ### Q2: where each time comes from
 
 A filing's header gives its acceptance time as 14 digits with no time zone
-([SRC-1]). `submissions` gives it in UTC, 4 or 5 hours later than the
-header's digits for Microsoft's and Walmart's filings, as converting US
-Eastern time to UTC would make it, and 8 hours later for all three of
-Apple's stored filings ([SRC-2]). Read as UTC, `submissions`' times put
+([SRC-1]). `submissions` gives it in UTC. Since the first refetch, on
+October 16, each of the three companies' `submissions` gives it later than
+the header's digits read as US Eastern time, by the Eastern offset from UTC
+on its date ([SRC-25]). On October 7, only Apple's did; Microsoft's and
+Walmart's were later than the header's digits only as converting US
+Eastern time to UTC would make them ([SRC-2]), until `submissions` moved
+them later by that offset ([SRC-24]). Read as UTC, `submissions`' times put
 most of Apple's filings outside the hours the SEC gives for EDGAR
-([SRC-13]). The baseline doesn't show which time is right for Apple. [T6],
-[T7], and [T9] each record whether a new report's header and `submissions`
-agree, and [T7] whether Apple's still differ by 8 hours
+([SRC-13]), and since the change, 735 of Microsoft's 1,000 filings in
+`filings.recent` and 341 of Walmart's 1,005 too ([SRC-25]). The stored
+versions don't show which time is right for any of the three ([SRC-25]).
+[T6], [T7], and [T9] each record whether a new report's header and
+`submissions` agree, and [T7] whether Apple's still differ by 8 hours
 ([investigation][plan-investigation]).
 
 Two things wait on the answer. The view of lags reads the header's digits
@@ -122,9 +135,10 @@ record, once its fetcher and discoverer run, not from the investigation's
 tasks ([0010], [method][inv-method], step 3). The record keeps every time
 raw, and each lag is a query over it ([LAG-1]). So Q4 is answered only
 after the pipeline's first part runs, and the investigation finishes after
-it ([0010]). The first refetch, [T4], and the daily refetches, which [T8]
-reads, show when each day's index appears and whether a published one
-changes; [T5] records what
+it ([0010]). The first refetch, [T4], showed that a published day's
+master index didn't change: the four stored on October 7 were unchanged 9
+to 14 days after their `Last-Modified` ([SRC-23]). The daily refetches,
+which [T8] reads, show when each day's index appears; [T5] records what
 the latest-filings feed holds, so that [T11] can weigh it as a second
 notice source.
 
@@ -378,9 +392,13 @@ revisit: whether to keep each company's `submissions` as the notice source
 
 ### To the times
 
-- **The header's time zone is unsettled,** and until a finding settles it,
-  Apple's 8-hour difference shows in the lags as an outlier ([0010],
-  [SRC-2]).
+- **The header's time zone is unsettled** ([0010]), and since the first
+  refetch, on October 16, 2026, `submissions`' times for all three
+  companies' filings, not only Apple's, are later than their headers'
+  digits read as Eastern time, by the Eastern offset on each date
+  ([SRC-2], [SRC-25]). `submissions` can also change a filing's time after
+  it lists it ([SRC-24]). How the lags read `submissions`' times is for
+  [T44], a version of the notices.
 - **A lag is only as good as its clocks.** The fetcher checks its clock
   against each response's `Date` ([0010], [METRIC-4]), which rests on an
   assumption ([above](#assumptions-not-yet-shown)).
@@ -509,6 +527,7 @@ revisit: whether to keep each company's `submissions` as the notice source
 [T31]: ../plan.md#traces-logs-and-drills
 [T32]: ../plan.md#facts
 [T38]: ../plan.md#observing-filings
+[T44]: ../plan.md#observing-filings
 [agents-rules]: ../../AGENTS.md#rules
 [agents-where]: ../../AGENTS.md#where-documents-go
 [inv-questions]: ../../investigation/edgar.md#questions
@@ -557,6 +576,10 @@ revisit: whether to keep each company's `submissions` as the notice source
 [SRC-19]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far
 [SRC-21]: ../../investigation/edgar.md#findings-so-far
+[SRC-22]: ../../investigation/edgar.md#findings-so-far
+[SRC-23]: ../../investigation/edgar.md#findings-so-far
+[SRC-24]: ../../investigation/edgar.md#findings-so-far
+[SRC-25]: ../../investigation/edgar.md#findings-so-far
 [STORE-3]: ../../spec/snapshots.md#the-cluster-store
 [SCOPE-4]: ../../spec/snapshots.md#9-scope
 [SCOPE-5]: ../../spec/snapshots.md#9-scope

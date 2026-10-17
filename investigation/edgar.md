@@ -1,7 +1,7 @@
 # Source investigation: EDGAR
 
 **Status:** Started October 7, 2026. The baseline was fetched October 7;
-twenty-one findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
+twenty-five findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
 and SRC-14 to SRC-17, on restated and repeated values, were read from it
 on October 10. SRC-12 and SRC-13, on `submissions`' further files and its
 acceptance times, were read from them and the baseline once they were
@@ -11,10 +11,12 @@ Microsoft's further file as well, and SRC-15 and SRC-17 were checked
 against the further files. SRC-18 to SRC-20, on sizes and the pace of a
 backfill, were read from the baseline and the further files on October 11.
 SRC-21, on the URLs of a company's lists and of a filing's files, was read
-from them on October 14, for the notices specification. Since October 10,
-how soon each feed shows a new filing (Q4) is measured from the pipeline's
-record. Data here comes from the U.S. Securities and Exchange Commission's
-EDGAR system.
+from them on October 14, for the notices specification. SRC-22 to SRC-25
+were read from the first refetch, on October 16, with the further files
+refetched beside it; SRC-24 and SRC-25 superseded SRC-2 and SRC-13, as the
+owner decided that day. Since October 10, how soon each feed shows a new
+filing (Q4) is measured from the pipeline's record. Data here comes from
+the U.S. Securities and Exchange Commission's EDGAR system.
 
 This document records how EDGAR's feeds and filings behave, each finding
 shown by versions in the snapshot store
@@ -224,6 +226,37 @@ Microsoft's, closer together than the requests could start. The records
 stay as they are ([§1](../spec/snapshots.md#1-guarantees)), and no
 finding relies on a record's time to within a second.
 
+The first refetch, the method's step 2 for the first time, on October
+16, 2026 by `scripts/snapshot.py` at commit `4b46402`, with the four
+further files refetched beside it. Each entry is a record's status, its
+`sha256` prefix, and its `requested_at` on that day, in UTC. A `304` names
+the version it confirms, the one stored on October 7
+([REC-5](../spec/snapshots.md#6-records)):
+
+| URL | Status | Record |
+| --- | --- | --- |
+| Apple's `submissions` | 200 | `b107d1a9bff8` 13:29:54.624Z |
+| Microsoft's `submissions` | 200 | `a5848ba348a3` 13:29:54.826Z |
+| Walmart's `submissions` | 200 | `72e456d60b0a` 13:29:55.031Z |
+| Apple's `companyfacts` | 200 | `73a86c6aedc3` 13:30:02.294Z |
+| Microsoft's `companyfacts` | 200 | `f8aae2965b20` 13:30:02.511Z |
+| Walmart's `companyfacts` | 200 | `54ec3fbf36dc` 13:30:02.726Z |
+| The daily index listing | 200 | `c93a1fa81031` 13:30:02.982Z |
+| `master.20261001.idx` | 304 | `529aabd81114` 13:30:15.822Z |
+| `master.20261002.idx` | 304 | `17f223abb09f` 13:30:16.110Z |
+| `master.20261005.idx` | 304 | `53e7bb398705` 13:30:16.314Z |
+| `master.20261006.idx` | 304 | `62a495d44ad9` 13:30:16.634Z |
+| `master.20261007.idx` | 200 | `8efc2f3b9eea` 13:30:16.839Z |
+| `master.20261008.idx` | 200 | `36f2025d63e2` 13:30:17.070Z |
+| `master.20261009.idx` | 200 | `2e558fd5812c` 13:30:17.273Z |
+| `master.20261013.idx` | 200 | `a17ef25c4d1e` 13:30:17.478Z |
+| `master.20261014.idx` | 200 | `74a2830b81ee` 13:30:17.740Z |
+| `master.20261015.idx` | 200 | `83bfddd88a0d` 13:30:17.975Z |
+| Apple's further file `CIK0000320193-submissions-001.json` | 200 | `4995251b37e0` 13:34:26.242Z |
+| Microsoft's first further file `CIK0000789019-submissions-001.json` | 200 | `451415b0dfe6` 13:34:26.529Z |
+| Walmart's first further file `CIK0000104169-submissions-001.json` | 200 | `7a164befa763` 13:34:26.730Z |
+| Walmart's second further file `CIK0000104169-submissions-002.json` | 200 | `e162c62bfcae` 13:34:26.932Z |
+
 ### Findings so far
 
 - **SRC-1** (Q2) A filing's header gives its acceptance time as
@@ -256,6 +289,9 @@ finding relies on a record's time to within a second.
 
   Shown by the three `submissions` records and the eight headers in the
   records cited.
+  Superseded by SRC-24 and SRC-25: since the first refetch, on October 16,
+  2026, Microsoft's and Walmart's `acceptanceDateTime` are later than
+  their headers' times as Apple's are.
 - **SRC-3** (Q2) A company's fiscal year end can differ between its filings'
   headers. Apple's header for the 10-K of the year ending 2025-09-27 gives
   `FISCAL YEAR END` `0927`, while those of its 10-Q for the quarter ending
@@ -356,6 +392,11 @@ finding relies on a record's time to within a second.
   `FILED AS OF DATE` as `filed`, and the two 8-K/As have none.
   Shown by the three `companyfacts` and `submissions` records and the
   eight headers in the records cited.
+  **Superseded in part by SRC-24:** since the first refetch, on October 16,
+  2026, every 10-K and 10-Q of Microsoft's and Walmart's in `recent` has
+  its `acceptanceDateTime` on the day after `filed`, and Microsoft's
+  `recent` holds 1,000 filings. The 86 accession numbers are still all in
+  `recent`, so the joins it found hold, as the owner confirmed that day.
 - **SRC-10** (Q2) The stored `submissions` join the rest of the values,
   51,184 or 62%, to no filing and no acceptance time. Their 130 accession
   numbers were all filed before `recent`'s first filing: from 2009-07-22 to
@@ -407,6 +448,12 @@ finding relies on a record's time to within a second.
   2008-08-12, before any of its values, isn't needed for them.
   Shown by the three `companyfacts` and `submissions` records and the four
   further files in the records cited.
+  **Superseded in part by SRC-24:** since October 16, 2026, Microsoft's
+  first further file lists 2,006 filings, its last on 2020-08-18, with
+  each `acceptanceDateTime` moved later by the Eastern offset, and
+  `filings.files` gives other `filingTo` dates. What it found of the
+  files' columns and lengths, and of the joins, still holds, as the owner
+  confirmed that day.
 - **SRC-13** (Q2) Read as the UTC instants they state, `submissions`'
   `acceptanceDateTime` values put most of Apple's filings, and most of
   Walmart's before June 2023, outside the hours the SEC gives for EDGAR:
@@ -434,6 +481,9 @@ finding relies on a record's time to within a second.
   show whether the SEC's own `EFFECT` notices keep EDGAR's hours.
   Shown by the three `submissions` records, the four further files, and
   the eight headers in the records cited.
+  Superseded by SRC-25: its counts of Microsoft's filings, and of
+  Walmart's in `filings.recent`, are of versions that have since changed
+  (SRC-24).
 - **SRC-14** (Q3) `companyfacts` keeps each filing's value for a concept,
   unit, and period beside every other filing's, each with its own `accn`,
   `filed`, `form`, `fy`, and `fp`; a later filing's value replaces none. Of
@@ -670,3 +720,85 @@ finding relies on a record's time to within a second.
   Shown by the three `submissions` records, the four further files, and the
   eight filings' headers, index pages, and XBRL instances in the records
   cited.
+- **SRC-22** (Q1) A conditional request for a URL that sends validators
+  gets a `304` when its body hasn't changed. On October 16,
+  `scripts/snapshot.py` asked for each of the four master indexes stored
+  on October 7 with the stored version's `ETag` as `If-None-Match` and its
+  `Last-Modified` as `If-Modified-Since`
+  ([FETCH-4](../spec/snapshots.md#10-fetching)), and each returned a `304`,
+  whose record names the stored version
+  ([REC-5](../spec/snapshots.md#6-records)). The records don't show
+  whether a `304` sent the validators again: `snapshot.py` gives a `304`'s
+  record the stored version's `ETag` and `Last-Modified` when the response
+  leaves them out. The quarter's listing, asked the same way, returned a
+  `200` with a new body and new validators, since it lists more days.
+  `submissions` and `companyfacts` still sent neither validator (SRC-4),
+  so each refetch of them received the whole body again: 158,090 to
+  185,024 bytes for each company's `submissions`, and 3,770,257 to
+  4,881,196 for each `companyfacts`. Each `companyfacts` body was the same
+  as on October 7, though each company's `submissions` listed new filings,
+  none of them a 10-K, a 10-Q, or an 8-K: Forms 4 and 144.
+  Shown by the October 16 records in the records cited, with the October 7
+  records of the four master indexes, the listing, and the three
+  companies' `submissions` and `companyfacts`.
+- **SRC-23** (Q4) A day's master index didn't change once published. The
+  four of October 1, 2, 5, and 6 were unchanged on October 16, 9 to 14
+  days after their `Last-Modified` (SRC-22). The listing on October 16
+  held ten days, October 1 to 9 and 13 to 15: not October 12, Columbus
+  Day, a federal holiday, nor yet October 16. Each of the six new days'
+  master indexes has a `Last-Modified` from 02:01:36 to 02:03:53 UTC on the
+  next day, 10:01 to 10:04 PM US Eastern time on its date, as SRC-5 found
+  from the listing. The listing's own `Last-Modified` was 05:45:21 UTC on
+  October 16, and 05:45:15 UTC on October 7: 1:45 AM Eastern, about 3
+  hours and 45 minutes after the previous day's master index.
+  Shown by the October 16 records of the listing and the ten master
+  indexes, and the October 7 listing, in the records cited.
+- **SRC-24** (Q1, Q2) `submissions` can change the `acceptanceDateTime` of
+  a filing it already lists. Between October 7 and October 16, every
+  filing in both versions of Microsoft's and of Walmart's
+  `filings.recent` moved later by the US Eastern offset from UTC on its
+  date: by 4 hours for the 607 of Microsoft's and 652 of Walmart's in
+  daylight time, and by 5 hours for the 391 and 348 in standard time.
+  Between October 10 and October 16, Microsoft's first further file
+  changed the same way, all 2,002 of its filings, 1,297 by 4 hours and 705
+  by 5. No other column of those filings changed. So each of Microsoft's
+  24 10-Ks and 10-Qs in `filings.recent`, and each of Walmart's 14, now
+  has an `acceptanceDateTime` on the day after its `filingDate`, between
+  00:01:56 and 03:21:40 UTC, where SRC-9 found none. Apple's
+  `filings.recent` gives the 1,000 filings it listed on October 7
+  unchanged, beside two new Forms 4, and its further file and Walmart's
+  two didn't change: their bodies are those of October 10. Microsoft's
+  `filings.recent` now lists 1,000 filings, not 1,002, since its four
+  oldest moved to its first further file, now of 2,006. And
+  `filings.files` gives other `filingTo` dates: 2020-08-24, not
+  2020-08-06, for Microsoft's first file, and 2008-08-11, not 2008-08-12,
+  for its second; 2023-05-31, not 2023-06-01, for Walmart's first, and
+  2012-06-03, not 2012-06-04, for its second, though those two didn't
+  change. Walmart's `formerNames` give each `from` and `to` at 04:00 or
+  05:00 UTC, where they gave 00:00 UTC, and its current name's `to` is
+  2026-10-14, where it was 2026-10-02.
+  Shown by the October 16 records of the three companies' `submissions`
+  and the four further files, with their October 7 and October 10
+  records, in the records cited.
+- **SRC-25** (Q2) Since the change SRC-24 shows, each of the three
+  companies' `submissions` gives a filing's `acceptanceDateTime` later
+  than its header's digits read as US Eastern time, by the Eastern offset
+  from UTC on its date. Of the eight stored headers (SRC-1), that is 4
+  hours for seven, as SRC-2 found for Apple's three, and 5 hours for
+  Walmart's 8-K/A of January 30: its header gives `20260130161002`, and
+  `submissions` 2026-01-31T02:10:02.000Z. Every value is still RFC 3339
+  with a `Z` and milliseconds of `.000`. Read as the UTC instants they
+  state, with the time of day compared to the second, as SRC-13 compares
+  it, 735 of Microsoft's 1,000 filings in `filings.recent` and 1,372 of
+  the 2,006 in its first further file, and 341 of Walmart's 1,005 in
+  `filings.recent`, fall outside EDGAR's hours of 6:00 a.m. to 10:00 p.m.
+  Eastern Time (SRC-13), where 2, 1, and 0 did. Moved earlier by the
+  Eastern offset on their dates, 2 of Microsoft's 1,000 and none of
+  Walmart's 1,005 fall outside them, and 2 of Apple's 1,002. So
+  `submissions` now gives Microsoft's and Walmart's times as it gave
+  Apple's, and the stored versions still don't show which time is right.
+  Walmart's further files, unchanged, give its filings before 2023-06-02
+  as SRC-13 counted them.
+  Shown by the October 16 records of the three companies' `submissions`
+  and Microsoft's first further file, and the eight headers, in the
+  records cited.
