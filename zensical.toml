@@ -79,6 +79,7 @@ nav = [
       "docs/decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md",
       "docs/decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md",
       "docs/decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md",
+      "docs/decisions/0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md",
     ] },
   ] },
   { "Reference" = [

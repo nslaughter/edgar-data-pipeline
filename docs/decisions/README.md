@@ -19,9 +19,10 @@ A record's status is **Proposed** until the owner accepts it, then
 | [0007](0007-control-the-pipeline-through-custom-resources.md) | Control the pipeline through custom resources, reconciled by the scheduler | Accepted |
 | [0008](0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md) | Monitor with Prometheus and Grafana, then Tempo and Loki | Accepted |
 | [0009](0009-read-edgar-through-a-public-point-in-time-library.md) | Read EDGAR through a public point-in-time library, in its own repository | Accepted |
-| [0010](0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md) | Poll each company's `submissions`, at the cadence its `Source` holds, and measure lag from the record | Accepted |
+| [0010](0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md) | Poll each company's `submissions`, at the cadence its `Source` holds, and measure lag from the record | Accepted; superseded in part by 0013 |
 | [0011](0011-install-the-definitions-and-operators-before-the-umbrella-chart.md) | Install the definitions and the operators before the umbrella chart, in four releases | Accepted |
 | [0012](0012-publish-the-documents-as-a-site-built-with-zensical.md) | Publish the documents as a site built with Zensical, served by GitHub Pages | Accepted |
+| [0013](0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md) | Measure each feed's lag in a bounded study, then keep only the lists' changes and coverage | Accepted |
 
 Decisions still to come: scaling workers by queue depth, and the XBRL
 parser.

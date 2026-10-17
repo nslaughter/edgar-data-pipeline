@@ -9,7 +9,7 @@
 - **Planned:** The fake EDGAR; The drills.
 <!-- end status -->
 
-For each decision record, 0001 to 0012: what it chose, the alternatives it
+For each decision record, 0001 to 0013: what it chose, the alternatives it
 weighed and why they lost, what the choice costs, and what would change it.
 Where a record says what would change it, this page cites it. Where it
 doesn't, what follows is analysis, set apart as such. The records
@@ -32,6 +32,7 @@ themselves hold the full context and their sources; the
 | [0010] | Each company's `submissions` as the notice source, at its Source's cadence; each lag measured from the record | Waiting for the investigation; the latest-filings feed; the daily indexes | The lags the record shows ([T11]); past about 25 companies at 10 seconds, a feed that covers every company |
 | [0011] | Four Helm releases, installed in order | One release with workarounds; one chart as two releases; three releases | Not stated |
 | [0012] | Zensical, from the documents where they are, served by GitHub Pages | GitHub's own rendering; MkDocs with Material; Sphinx with MyST; generators outside Python; another static host | Not stated for the generator; the site's one version is revisited when the pipeline has releases ([§9 of the site][site-questions]) |
+| [0013] | A bounded study of `submissions`' lag, with a record of every poll; then only the lists' changes and coverage | Keeping [0010] as it is; keeping only changes at once; building nightly from the daily index | The study's lags: if no use needs filings within the day, a later record can replace the polls with the nightly index |
 
 Two decisions are still to come: how the parse workers scale with their
 queue's depth ([T10]), and which XBRL parser reads the instances ([T12])
@@ -441,7 +442,9 @@ chart's values; the chart's Sources for the three companies start at 10
 seconds. The pipeline records every time raw, as its source gives it, and
 measures each lag from the record, interpreting time zones only in queries
 ([0010]). The chart refuses a configuration whose Sources together would
-poll faster than half the fetcher's limit ([VAL-3]).
+poll faster than half the fetcher's limit ([VAL-3]). After a bounded
+study of the lag, the record keeps only the lists' changes and coverage,
+not every poll ([0013]).
 
 **Why.** The source and cadence were to wait for the investigation's Q4,
 how soon each feed shows a new filing. Polling every minute, as the
@@ -576,6 +579,56 @@ pipeline has releases ([§9 of the site][site-questions]).
 > the record weighed are the ones to weigh again, and a configuration in
 > MkDocs's form could keep that move small.
 
+## 0013: Measure each feed's lag in a bounded study, then keep only changes
+
+**Accepted.** The owner chose this record's option on October 16, 2026,
+and accepted the record on October 17; the
+[index](../decisions/README.md) gives its status ([0013]).
+
+**The choice.** The pipeline is built as its specifications say, with a
+record for every poll, and studies how long after acceptance `submissions`
+shows a filing, at the chart's 10 seconds, for a length the owner sets.
+After the study, a poll that returns the version its URL's latest record
+names adds no record, and coverage is kept as intervals that still bound
+each lag ([0013]).
+
+**Why.** Which filings exist can be recovered later without the poll
+record: `submissions` keeps listing a filing, moving older ones to its
+further files ([SRC-12], [SRC-24]), and a day's master index didn't change
+once published ([SRC-23]). So can each filing's acceptance time, from its
+header ([SRC-1]), and its files, at URLs made from its accession number
+([SRC-21]), though whether those files ever change is the investigation's
+Q1, which [T8] checks ([questions][edgar-questions]). When each feed first
+showed a filing can't: no source records it afterwards, and a day's master
+index is published about 10 PM Eastern on its date ([SRC-23], [0013]).
+It's a property of the feed, measured over many filings. A record of every
+poll for as long as the pipeline runs adds little to that measure, and
+most of the record's cost: at the default, 25,920 records a day, 17.0 to
+25.6 MB a day in PostgreSQL ([0013], [estimates](estimates.md)).
+
+**Alternatives weighed.**
+
+- **Keeping [0010] as it is:** a record of every poll for as long as the
+  pipeline runs, at that cost.
+- **Keeping only changes at once:** most of the records go from the
+  start, before a study with every poll gives the measured margin.
+- **Stopping the polls, and building nightly** from each day's master
+  index, with each filing's time from its header: the simplest and
+  cheapest, and "as of" answers are unchanged, since they rest on
+  acceptance times. But it gives up notices within the day, and any
+  measure of a feed's lag.
+
+**What it costs.** The study's records stay, since none is changed or
+removed ([LOG-3]). After the study, the snapshot store's specification
+takes a major version, and the notices', the controls', and the
+telemetry's each take a version of their own. Keeping only changes keeps
+few records only if `submissions`' body changes only with its filings,
+which the study shows ([0013]).
+
+**What would change it.** The record says what would. If the study shows
+that no use needs filings within the day, a later record can replace the
+polls with the nightly index ([0013]).
+
 [0001]: ../decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
 [0002]: ../decisions/0002-store-bodies-in-garage.md
 [0003]: ../decisions/0003-queue-work-in-nats-jetstream.md
@@ -588,9 +641,11 @@ pipeline has releases ([§9 of the site][site-questions]).
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
 [0011]: ../decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md
 [0012]: ../decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md
+[0013]: ../decisions/0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md
 [design-decisions]: ../design.md#decisions
 [notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [T5]: ../plan.md#investigation
+[T8]: ../plan.md#investigation
 [T10]: ../plan.md#facts
 [T11]: ../plan.md#observing-filings
 [T12]: ../plan.md#facts
@@ -600,13 +655,19 @@ pipeline has releases ([§9 of the site][site-questions]).
 [telemetry]: ../../spec/telemetry.md
 [telemetry-questions]: ../../spec/telemetry.md#11-open-questions
 [site-questions]: ../../spec/site.md#9-open-questions
+[edgar-questions]: ../../investigation/edgar.md#questions
 [deployment-later]: ../../spec/deployment.md#9-later-versions
 [deployment-pg]: ../../spec/deployment.md#7-postgresql
 [store-jobs]: ../../spec/snapshots.md#jobs-and-events
 [store-scope-cluster]: ../../spec/snapshots.md#the-scope-and-the-cluster
+[SRC-1]: ../../investigation/edgar.md#findings-so-far
 [SRC-2]: ../../investigation/edgar.md#findings-so-far
 [SRC-4]: ../../investigation/edgar.md#findings-so-far
 [SRC-5]: ../../investigation/edgar.md#findings-so-far
+[SRC-12]: ../../investigation/edgar.md#findings-so-far
+[SRC-21]: ../../investigation/edgar.md#findings-so-far
+[SRC-23]: ../../investigation/edgar.md#findings-so-far
+[SRC-24]: ../../investigation/edgar.md#findings-so-far
 [OBJ-1]: ../../spec/snapshots.md#5-objects
 [REC-3]: ../../spec/snapshots.md#6-records
 [LOG-3]: ../../spec/snapshots.md#8-history
