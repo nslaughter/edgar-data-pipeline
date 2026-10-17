@@ -23,8 +23,9 @@ What's recoverable later, without the poll record:
 - **Each filing's acceptance time,** from its header (SRC-1), which is
   part of the filing. It's the time each fact is known from
   ([0004](0004-keep-the-record-in-postgresql-18.md)). `submissions`'
-  rendering of it is what's unstable: it changed for every filing of two
-  companies in nine days (SRC-24, SRC-25).
+  rendering of it is what's unstable: within nine days, it changed for
+  every filing in Microsoft's and Walmart's `filings.recent`, and in
+  Microsoft's first further file (SRC-24, SRC-25).
 - **A filing's files,** at URLs made from its accession number (SRC-21).
   Whether they ever change is for Q1 to show (T8); an amendment is a filing
   of its own (SRC-16).
@@ -41,22 +42,29 @@ What only the poll record gives:
 The first is the one the pipeline can't get elsewhere, and it's a property
 of each feed, measured over many filings. Keeping a record of every poll
 for as long as the pipeline runs adds little to it, and most of the cost:
-at 10 seconds, the three companies' polls are 25,920 records a day, nearly
-all of a body already held, 17 to 26 MB a day in PostgreSQL, before the
-daily base backups multiply it
-([estimates](../explanation/estimates.md)). Each poll also downloads the
-whole body, 157 to 185 KB, since `submissions` sends no validators (SRC-4,
-SRC-22). A cadence of 1 or 2 seconds would narrow each lag's bounds, but
-not the feed's own delay, and would multiply the cost about eightfold.
+at 10 seconds, the three companies' polls are 25,920 records a day, 17.0
+to 25.6 MB a day in PostgreSQL, before the daily base backups multiply it
+([estimates](../explanation/estimates.md)). That range runs from the
+estimates' low case, a list that changes only with its filings, so that
+nearly every poll returns a body already held, to their high case, a list
+that changes at every poll. Each poll also receives the whole body again,
+a body of 158 to 185 KB on October 16, since `submissions` sends no
+validators (SRC-4, SRC-22). A cadence of 1 or 2 seconds would narrow each
+lag's bounds, but not the feed's own delay, and would multiply the cost
+about eightfold.
 
 ## Options
 
 - **A. Keep polling, and keep only changes.** A poll that returns the
-  version already held adds no record; a new version adds one, with its
-  object, as now. Coverage is kept as intervals, each from a successful
-  poll to the last one before the next change or gap. The lag's bounds,
-  the gaps, and the live notices remain; most of the records go. It
-  changes the snapshot store's rule of one record per fetch.
+  version its URL's latest record names adds no record. Any other poll
+  adds one, as now: a new version, with its object; a return to an earlier
+  version ([VER-1](../../spec/snapshots.md#7-versions)); and a poll that
+  gets no version, such as a `403`
+  ([FETCH-9](../../spec/snapshots.md#10-fetching)). Coverage is kept as
+  intervals, each from a successful poll to the last one before the next
+  change or gap. The lag's bounds, the gaps, and the live notices remain;
+  most of the records go. It changes the snapshot store's rule of one
+  record per fetch.
 - **B. Stop polling, and build nightly.** Read each day's master index once
   it's published, fetch the new filings, and take each one's time from its
   header. Simplest and cheapest, and "as of" answers are unchanged, since
@@ -72,20 +80,31 @@ not the feed's own delay, and would multiply the cost about eightfold.
 
 C, then A:
 
-1. **The study.** The pipeline is built as the specifications now say,
-   with a record for every poll, and runs a bounded study of how long
-   after acceptance `submissions` shows a filing, at the 10 seconds the
-   chart's `Source` resources start at. The study's length, and so its
-   end, is the owner's to set. Its lags reach `data/` through the
-   transfer, so findings cite them, as
+1. **The study.** The pipeline is built as its specifications say, with
+   a record for every poll, as the snapshot store's says now. The notices
+   take the version T44 writes for SRC-24 and SRC-25 before T24 builds
+   the discoverer, as the owner decided ([the plan](../plan.md)). The
+   pipeline then runs a bounded study of how long after acceptance
+   `submissions` shows a filing, at the 10 seconds the chart's `Source`
+   resources start at. Those resources poll only the three companies'
+   `submissions`
+   ([0010](0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)),
+   so the study measures that feed alone. It leaves the rest of Q4 open:
+   how soon `companyfacts` and the daily index show a filing, and the
+   latest-filings feed, which T11 weighs on what T5 records. The study's
+   length, and so its end, is the owner's to set; the proposed default is
+   8 weeks from the pipeline's first poll. Its lags reach `data/` through
+   the transfer, T36, so findings cite them, as
    [0010](0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)
    decided.
 2. **After the study, keep only changes and coverage.** A poll that
-   returns the version already held adds no record, and coverage is kept
-   as intervals, with enough of each interval's polls to bound each lag as
-   now: the last poll that didn't show a filing, and the first that did.
-   The specifications that define the record say how, each in a version
-   of its own: the snapshot store's, the notices', and the telemetry's.
+   returns the version its URL's latest record names adds no record, and
+   any other poll adds one, as in A. Coverage is kept as intervals, with
+   enough of each interval's polls to bound each lag as now: the last poll
+   that didn't show a filing, and the first that did. The specifications
+   that define the record, or read it, say how, each in a version of its
+   own: the snapshot store's, the notices', the controls', and the
+   telemetry's.
 3. **The record's purpose.** Each fact is known from its filing's
    acceptance time, from the header, as before
    ([0004](0004-keep-the-record-in-postgresql-18.md)). The poll record
@@ -102,26 +121,42 @@ day, a later record can replace the polls with the nightly index.
 
 ## Consequences
 
-- **Nothing changes before the study.** The specifications stay as they
-  are, and T22 to T24 build them, so the study has every poll to measure
-  from. The records it adds stay, since no record is ever changed or
-  removed ([LOG-3](../../spec/snapshots.md#8-history)).
+- **The poll record doesn't change before the study.** The snapshot
+  store's specification keeps a record for every poll, and T22 to T24
+  build the pipeline on it, so the study has every poll to measure from.
+  The notices still take T44's version before T24, as the plan says. The
+  records the study adds stay, since no record is ever changed or removed
+  ([LOG-3](../../spec/snapshots.md#8-history)).
 - **After it, the records shrink to the lists' changes.** For three
   companies, about 1.4 new filings a day, against 25,920 polls. That holds
   only if `submissions`' body changes only with its filings; if it
   changed at every poll, keeping changes would keep every poll. The study
   shows which (Q1).
 - **The snapshot store's rule changes.** One record per fetch becomes one
-  per version, with coverage beside it: a major version of the store's
+  record per change: a poll adds one unless it returns the version its
+  URL's latest record names, so a return to an earlier version
+  ([VER-1](../../spec/snapshots.md#7-versions)) and a poll that gets no
+  version, such as a `403`
+  ([FETCH-9](../../spec/snapshots.md#10-fetching)), still add one.
+  Coverage is kept beside them. It's a major version of the store's
   specification, which says how a record stored under the old rule is
-  read. The notices' polls and gaps, and the telemetry's views of coverage,
-  follow it.
-- **The fetcher's clock check moves.** It reads each response's `Date`
-  ([METRIC-4](../../spec/telemetry.md#the-fetchers-clock)); once
-  unchanged polls add no record, it reads them from the fetcher's metrics,
-  not from records.
-- **T11 has its measurement.** Revisiting the notice source and its
-  cadence rests on the study's lags.
+  read. What reads the poll records follows it: the notices' polls and
+  gaps; the controls' `Source` status, which the scheduler sets from those
+  records ([SOURCE-4](../../spec/controls.md#6-source)), and their term
+  for a poll that succeeds, one whose record names a version
+  ([§2 of the controls](../../spec/controls.md#2-terms)); and the
+  telemetry's fetcher metrics, which count records, and its views of
+  coverage.
+- **The fetcher's clock check stays as it is.** The fetcher sets its skew
+  from each response's `Date` as the response arrives
+  ([METRIC-4](../../spec/telemetry.md#the-fetchers-clock)), not from
+  records. What goes after the study is each unchanged poll's `Date`,
+  which its record keeps now beside its request's and arrival's times
+  ([REC-10](../../spec/snapshots.md#6-records)); the study's records keep
+  every poll's.
+- **T11 has its measurement of `submissions`.** Revisiting the notice
+  source and its cadence, once T28's monitoring shows the lags, rests on
+  the study's lags.
 - **The cadence stays at 10 seconds** through the study. A shorter one
   waits for the study's measure of the feed's own delay.
 
@@ -131,3 +166,5 @@ day, a later record can replace the polls with the nightly index.
   [`investigation/edgar.md`](../../investigation/edgar.md#findings-so-far).
   SRC-22 to SRC-25 are those of the first refetch.
 - The record's growth in [the estimates](../explanation/estimates.md).
+- The tasks T5, T11, T22 to T24, T28, T36, and T44 in
+  [the plan](../plan.md).
