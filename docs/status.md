@@ -34,7 +34,7 @@ the plan's tasks wait on.
 | --- | --- | --- | --- | --- | --- | --- |
 | Scheduler | Specified | [0006](decisions/0006-write-the-services-in-go-and-python.md), [0007](decisions/0007-control-the-pipeline-through-custom-resources.md) | [`controls.md`](../spec/controls.md) 1.0.0, [`snapshots.md`](../spec/snapshots.md) 1.0.0, [`notices.md`](../spec/notices.md) 0.1.0, [`telemetry.md`](../spec/telemetry.md) 0.1.0, [`deployment.md`](../spec/deployment.md) 1.1.0 | T14 (done), T15 (done), T16 (done), T19 (done), T34 (done) | T22 (not done) | — |
 | Fetcher | Specified | [0005](decisions/0005-send-sec-requests-through-one-active-fetcher.md), [0006](decisions/0006-write-the-services-in-go-and-python.md) | [`snapshots.md`](../spec/snapshots.md) 1.0.0, [`controls.md`](../spec/controls.md) 1.0.0, [`telemetry.md`](../spec/telemetry.md) 0.1.0, [`deployment.md`](../spec/deployment.md) 1.1.0 | T14 (done), T15 (done), T19 (done), T34 (done) | T23 (not done) | — |
-| Discoverer | Specified | [0006](decisions/0006-write-the-services-in-go-and-python.md), [0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md) | [`notices.md`](../spec/notices.md) 0.1.0, [`telemetry.md`](../spec/telemetry.md) 0.1.0, [`deployment.md`](../spec/deployment.md) 1.1.0 | T16 (done), T19 (done), T38 (done) | T24 (not done) | T11 (not done) |
+| Discoverer | Decided; specified in part | [0006](decisions/0006-write-the-services-in-go-and-python.md), [0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md) | [`notices.md`](../spec/notices.md) 0.1.0, [`telemetry.md`](../spec/telemetry.md) 0.1.0, [`deployment.md`](../spec/deployment.md) 1.1.0 | T16 (done), T19 (done), T38 (done), T44 (not done) | T24 (not done) | T11 (not done) |
 | Parse workers | Decided | [0006](decisions/0006-write-the-services-in-go-and-python.md), [0009](decisions/0009-read-edgar-through-a-public-point-in-time-library.md) | — | T17 (not done), T32 (not done) | T25 (not done) | T10 (not done), T12 (not done) |
 | Exporter | Decided | [0002](decisions/0002-store-bodies-in-garage.md), [0006](decisions/0006-write-the-services-in-go-and-python.md) | — | T18 (not done), T32 (not done) | T27 (not done) | — |
 | Query API | Decided | [0006](decisions/0006-write-the-services-in-go-and-python.md), [0009](decisions/0009-read-edgar-through-a-public-point-in-time-library.md) | — | T17 (not done), T32 (not done) | T26 (not done) | — |
@@ -68,7 +68,7 @@ own.
 | T1: Fiscal periods and joins, from the baseline (Q2). | Q2 | October 10, 2026 |
 | T2: Restated and repeated values, from the baseline (Q3). | Q3 | October 11, 2026 |
 | T3: Sizes and the pace of a backfill, from the baseline (Q5). | Q5 | October 11, 2026 |
-| T4: The first refetch (Q1, Q4). | Q1, Q4 | Not done |
+| T4: The first refetch (Q1, Q4). | Q1, Q4 | October 16, 2026 |
 | T5: The latest-filings feed (Q4). | Q4 | Not done |
 | T6: Microsoft's next 10-Q (Q2, Q3). | Q2, Q3 | Not done |
 | T7: Apple's next 10-K (Q2, Q3). | Q2, Q3 | Not done |

@@ -4,8 +4,8 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The charts.
-- **Specified:** Scheduler; Fetcher; Discoverer; Monitoring: traces; The snapshot store in the cluster (built in part); The transfer from the cluster to git; The controls; The documentation site (built in part).
-- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Specified:** Scheduler; Fetcher; Monitoring: traces; The snapshot store in the cluster (built in part); The transfer from the cluster to git; The controls; The documentation site (built in part).
+- **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The fake EDGAR; The drills.
 <!-- end status -->
 
@@ -31,7 +31,7 @@ What each feed holds, as the findings show it:
 
 | Feed | URL | What it holds |
 | --- | --- | --- |
-| `submissions` | `https://data.sec.gov/submissions/CIK##########.json`, one per company | The company's filings, in columns, each with its accession number, form, filing date, and `acceptanceDateTime`. `filings.recent` holds the latest 1,000 or so: Apple's from 2015-09-17, Microsoft's from 2020-08-07, and Walmart's from 2023-06-02 ([SRC-9]). Further files, which `filings.files` names, hold the older ones in the same columns ([SRC-12]). |
+| `submissions` | `https://data.sec.gov/submissions/CIK##########.json`, one per company | The company's filings, in columns, each with its accession number, form, filing date, and `acceptanceDateTime`. `filings.recent` holds the latest 1,000 or so: on October 7, Apple's from 2015-09-17, Microsoft's from 2020-08-07, and Walmart's from 2023-06-02 ([SRC-9]); by October 16, Microsoft's four oldest had moved to its first further file ([SRC-24]). Further files, which `filings.files` names, hold the older ones in the same columns ([SRC-12]). |
 | `companyfacts` | `https://data.sec.gov/api/xbrl/companyfacts/CIK##########.json`, one per company | XBRL values, each with its period, and with the `accn`, `filed`, `form`, `fy`, and `fp` of the filing that reported it, and for some values a `frame` ([SRC-6], [SRC-8], [SRC-14]). |
 | `filings` | Under `https://www.sec.gov/Archives/edgar/data/CIK/` | One directory for each filing, named by its accession number, holding its header, its index page, and its XBRL instance, among its other files ([SRC-21]). |
 | `daily-index` | Under `https://www.sec.gov/Archives/edgar/daily-index/2026/QTR4/` | The quarter's listing, and a master index for each business day, whose files are last modified between 10:01 and 10:04 PM on the day they name ([SRC-5]). |
@@ -74,9 +74,13 @@ keeps][design-keeps]). The findings show that each is a summary, and what
 each leaves out. How often each one's content changes, and whether a URL
 ever returns to an earlier body, is still the investigation's question Q1
 ([questions]): the baseline holds one version of each company's
-`companyfacts` ([SRC-17]). The first refetch is task T4 of the
-[plan][plan-investigation]; the daily refetches after it are runs the owner
-asks for, not tasks, and task T8 reads what they show.
+`companyfacts` ([SRC-17]). The first refetch, task T4 of the
+[plan][plan-investigation], on October 16, found each company's
+`companyfacts` unchanged ([SRC-22]), and Microsoft's and Walmart's
+`submissions` changed beyond their new filings: each gave every filing it
+already listed a later `acceptanceDateTime` ([SRC-24]). The daily refetches
+after it are runs the owner asks for, not tasks, and task T8 reads what
+they show.
 
 ### No validators on the summaries
 
@@ -125,20 +129,32 @@ A filing's acceptance time is in two places, and they disagree:
 
 - The header gives 14 digits, `YYYYMMDDHHMMSS`, with no time zone
   ([SRC-1]).
-- `submissions` gives an RFC 3339 time with a `Z`. It's later than the
-  header's by 4 hours for Microsoft's and Walmart's filings from March to
-  August, and 5 hours for Walmart's of January 30, as converting US Eastern
-  time to UTC would make it. For Apple's three stored filings it's 8 hours
-  later, which puts its 8-K/A's acceptance on the day after its filing date
+- `submissions` gives an RFC 3339 time with a `Z`. Since the first
+  refetch, on October 16, it's later than the header's digits read as US
+  Eastern time, by the Eastern offset from UTC on the filing's date, for
+  each of the three companies: by 4 hours for seven of the eight stored
+  filings, and 5 hours for Walmart's of January 30 ([SRC-25]). On October
+  7, only Apple's were later by that offset; Microsoft's and Walmart's were
+  later than the header's digits only as converting US Eastern time to UTC
+  would make them ([SRC-2]). Between the two, `submissions` moved every
+  filing in Microsoft's and Walmart's `filings.recent`, and in Microsoft's
+  first further file, later by that offset, and changed no other column of
+  them. That puts each of their 10-Ks and 10-Qs in `filings.recent` on the
+  day after its filing date ([SRC-24]), as it puts Apple's 8-K/A
   ([SRC-2]).
 - Read as the UTC instants they state, `submissions`' times put most of
   Apple's filings, and most of Walmart's before June 2023, outside the hours
   the SEC gives for EDGAR. Moved 8 hours earlier and read as Eastern time,
-  nearly all of them fall within those hours ([SRC-13]).
+  nearly all of them fall within those hours ([SRC-13]). Since the change,
+  they put 735 of Microsoft's 1,000 filings in `filings.recent`, and 341 of
+  Walmart's 1,005, outside those hours too. Moved earlier by the Eastern
+  offset on their dates, all but 2 of those 1,000 and all of those 1,005
+  fall within them ([SRC-25]).
 
-Neither feed says which time is right for Apple's filings, or why they
-differ ([SRC-2]). Which acceptance time to trust, and its time zone, waits
-on the investigation ([what waits][design-waits]).
+Neither feed says which time is right for any of the three companies'
+filings, and the stored versions don't show it ([SRC-25]). Which
+acceptance time to trust, and its time zone, waits on the investigation
+([what waits][design-waits]).
 
 ### What no feed says
 
@@ -180,7 +196,7 @@ keeps][design-keeps]). Each rests on statements of the specifications.
 
 | Question | What the feeds give | What the record adds |
 | --- | --- | --- |
-| When was this filing accepted? | Two times that disagree for Apple's filings ([SRC-2]) | Both, kept as given, read as instants only in queries ([LAG-1], [0010]) |
+| When was this filing accepted? | Two times that disagree for each of the three companies' filings ([SRC-25]) | Both, kept as given, read as instants only in queries ([LAG-1], [0010]) |
 | When did a feed first show it? | Nothing | The last poll that didn't show it and the first that did ([SEEN-3]) |
 | What did `submissions` say yesterday at 14:00? | The body served when it's read | Each version observed, by its SHA-256, and each poll's record ([VER-1]) |
 | What was known at T? | Each filing's values side by side, with a filing date ([SRC-14]) | An answer by acceptance time ([times][design-times]) |
@@ -249,9 +265,9 @@ one known, the 10-K's is earlier, and the two later 10-Qs' are later
 
 That answer needs each filing's acceptance time, and the time has to be
 trusted: a filing date doesn't order two filings of one day ([SRC-10]), and
-the two sources of acceptance disagree for Apple's filings ([SRC-2]). So the
-record keeps both acceptance times raw, and interprets their zones only in
-queries ([0010]).
+the two sources of acceptance disagree for each of the three companies'
+filings ([SRC-25]). So the record keeps both acceptance times raw, and
+interprets their zones only in queries ([0010]).
 
 The record answers a second question too: what the pipeline held at T. That
 follows from first-seen times, and a sighting's gap flag says when the
@@ -306,6 +322,9 @@ SEC's ([times][design-times]).
 [SRC-19]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far
 [SRC-21]: ../../investigation/edgar.md#findings-so-far
+[SRC-22]: ../../investigation/edgar.md#findings-so-far
+[SRC-24]: ../../investigation/edgar.md#findings-so-far
+[SRC-25]: ../../investigation/edgar.md#findings-so-far
 [store-scope]: ../../spec/snapshots.md#9-scope
 [store-scope-cluster]: ../../spec/snapshots.md#the-scope-and-the-cluster
 [VER-1]: ../../spec/snapshots.md#7-versions

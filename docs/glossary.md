@@ -23,10 +23,13 @@ and a 10-Q a quarter of it, numbered from the start of the fiscal year
 When the SEC accepted a filing, and so when what it reports became known.
 EDGAR gives it twice: as the header's `ACCEPTANCE-DATETIME`, 14 digits with
 no time zone ([SRC-1]), and as `submissions`' `acceptanceDateTime`, in UTC.
-In the stored filings, the second is 4 or 5 hours later than the header's
-digits for Microsoft's and Walmart's, and 8 hours later for Apple's
-([SRC-2]). The pipeline keeps both as given, and reads time zones only in
-queries ([times][design-times], [0010]).
+Since the first refetch, on October 16, 2026, the second is later than the
+header's digits read as US Eastern time, by the Eastern offset from UTC on
+the filing's date, for each of the three companies' filings; on October 7,
+only Apple's were ([SRC-2], [SRC-25]). `submissions` can change it for a
+filing it already lists ([SRC-24]), and the stored versions don't show
+which time is right ([SRC-25]). The pipeline keeps both as given, and reads
+time zones only in queries ([times][design-times], [0010]).
 
 ### Accession number
 
@@ -762,6 +765,8 @@ open. A statement checked by `operator` is the owner's to keep
 [SRC-19]: ../investigation/edgar.md#findings-so-far
 [SRC-20]: ../investigation/edgar.md#findings-so-far
 [SRC-21]: ../investigation/edgar.md#findings-so-far
+[SRC-24]: ../investigation/edgar.md#findings-so-far
+[SRC-25]: ../investigation/edgar.md#findings-so-far
 [OBJ-1]: ../spec/snapshots.md#5-objects
 [VER-1]: ../spec/snapshots.md#7-versions
 [XFER-1]: ../spec/snapshots.md#records-the-cluster-made
