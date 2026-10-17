@@ -1,8 +1,7 @@
 # 13. Measure each feed's lag in a bounded study, then keep only the lists' changes and coverage
 
-**Status:** Proposed, October 16, 2026. The owner chose this option on
-October 16, 2026; it's Accepted once the owner accepts this record. Once
-accepted, it supersedes the part of
+**Status:** Accepted, October 17, 2026. The owner chose its option on
+October 16, 2026, and accepted it on October 17. It supersedes the part of
 [0010](0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)
 that keeps a record of every poll for as long as the pipeline runs.
 
@@ -93,9 +92,9 @@ C, then A:
    ([0010](0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)),
    so the study measures that feed alone. It leaves the rest of Q4 open:
    how soon `companyfacts` and the daily index show a filing, and the
-   latest-filings feed, which T11 weighs on what T5 records. The study's
-   length, and so its end, is the owner's to set; the proposed default is
-   8 weeks from the pipeline's first poll. Its lags reach `data/` through
+   latest-filings feed, which T11 weighs on what T5 records. The study
+   runs for 8 weeks from the pipeline's first poll, as the owner decided.
+   Its lags reach `data/` through
    the transfer, T36, so findings cite them, as
    [0010](0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)
    decided.
@@ -120,6 +119,20 @@ day, a later record can replace the polls with the nightly index.
 
 1. **C, then A,** on October 16, 2026, over keeping 0010 as it is, A at
    once, and B.
+2. **This record,** accepted on October 17, 2026.
+3. **The study's length:** 8 weeks from the pipeline's first poll, about
+   78 of the three companies' filings at the baseline's rate.
+4. **Building while the study runs:** T22 to T24 build the specifications
+   as they stand, with T44's version of the notices before T24, rather
+   than writing the versions that keep only changes before the fetcher.
+5. **Which polls add a record after the study:** each change, as the
+   decision says: a new version, a return to an earlier one, and a poll
+   that gets no version. One record per version would lose the return
+   to an earlier body, and the `403` a stop is recorded from.
+6. **The plan's tasks:** T45, the study, and T46, the specifications'
+   versions that keep only changes, after it.
+7. **The title,** kept, though the study measures `submissions` alone, as
+   the decision says.
 
 ## Consequences
 

@@ -32,7 +32,7 @@ themselves hold the full context and their sources; the
 | [0010] | Each company's `submissions` as the notice source, at its Source's cadence; each lag measured from the record | Waiting for the investigation; the latest-filings feed; the daily indexes | The lags the record shows ([T11]); past about 25 companies at 10 seconds, a feed that covers every company |
 | [0011] | Four Helm releases, installed in order | One release with workarounds; one chart as two releases; three releases | Not stated |
 | [0012] | Zensical, from the documents where they are, served by GitHub Pages | GitHub's own rendering; MkDocs with Material; Sphinx with MyST; generators outside Python; another static host | Not stated for the generator; the site's one version is revisited when the pipeline has releases ([§9 of the site][site-questions]) |
-| [0013], Proposed | A bounded study of `submissions`' lag, with a record of every poll; then only the lists' changes and coverage | Keeping [0010] as it is; keeping only changes at once; building nightly from the daily index | The study's lags: if no use needs filings within the day, a later record can replace the polls with the nightly index |
+| [0013] | A bounded study of `submissions`' lag, with a record of every poll; then only the lists' changes and coverage | Keeping [0010] as it is; keeping only changes at once; building nightly from the daily index | The study's lags: if no use needs filings within the day, a later record can replace the polls with the nightly index |
 
 Two decisions are still to come: how the parse workers scale with their
 queue's depth ([T10]), and which XBRL parser reads the instances ([T12])
@@ -442,7 +442,9 @@ chart's values; the chart's Sources for the three companies start at 10
 seconds. The pipeline records every time raw, as its source gives it, and
 measures each lag from the record, interpreting time zones only in queries
 ([0010]). The chart refuses a configuration whose Sources together would
-poll faster than half the fetcher's limit ([VAL-3]).
+poll faster than half the fetcher's limit ([VAL-3]). After a bounded
+study of the lag, the record keeps only the lists' changes and coverage,
+not every poll ([0013]).
 
 **Why.** The source and cadence were to wait for the investigation's Q4,
 how soon each feed shows a new filing. Polling every minute, as the
@@ -579,8 +581,8 @@ pipeline has releases ([§9 of the site][site-questions]).
 
 ## 0013: Measure each feed's lag in a bounded study, then keep only changes
 
-**Proposed.** The owner chose this record's option on October 16, 2026,
-and the record is Accepted once the owner accepts it; the
+**Accepted.** The owner chose this record's option on October 16, 2026,
+and accepted the record on October 17; the
 [index](../decisions/README.md) gives its status ([0013]).
 
 **The choice.** The pipeline is built as its specifications say, with a

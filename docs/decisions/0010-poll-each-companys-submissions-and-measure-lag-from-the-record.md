@@ -1,6 +1,8 @@
 # 10. Poll each company's `submissions`, and measure lag from the record
 
-**Status:** Accepted, October 10, 2026.
+**Status:** Accepted, October 10, 2026. Superseded in part by
+[0013](0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md),
+which ends the record of every poll after a bounded study.
 
 ## Context
 
