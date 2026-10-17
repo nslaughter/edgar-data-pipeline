@@ -33,8 +33,10 @@ What's recoverable later, without the poll record:
 What only the poll record gives:
 
 1. **When each feed first showed a filing,** and so the lag from
-   acceptance to each feed. No source records it afterwards: the daily
-   index gives the date alone, published about 10 PM Eastern (SRC-23).
+   acceptance to each feed. No source records it afterwards: each day's
+   master index is published about 10 PM Eastern on its date (SRC-5,
+   SRC-23), so it can't show when a feed first showed a filing within the
+   day.
 2. **Coverage and gaps:** when the pipeline was polling, and when it
    wasn't.
 3. **The feeds' own versions,** such as the rewrite SRC-24 shows.
