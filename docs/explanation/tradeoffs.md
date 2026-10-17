@@ -590,13 +590,19 @@ After the study, a poll that returns the version its URL's latest record
 names adds no record, and coverage is kept as intervals that still bound
 each lag ([0013]).
 
-**Why.** Which filings exist, their acceptance times, and their files can
-be recovered later without the poll record. When each feed first showed a
-filing can't, and it's a property of the feed, measured over many filings.
-A record of every poll for as long as the pipeline runs adds little to
-that measure, and most of the record's cost: at the default, 25,920
-records a day, 17.0 to 25.6 MB a day in PostgreSQL ([0013],
-[estimates](estimates.md)).
+**Why.** Which filings exist can be recovered later without the poll
+record: `submissions` keeps listing a filing, moving older ones to its
+further files ([SRC-12], [SRC-24]), and a day's master index didn't change
+once published ([SRC-23]). So can each filing's acceptance time, from its
+header ([SRC-1]), and its files, at URLs made from its accession number
+([SRC-21]), though whether those files ever change is the investigation's
+Q1, which [T8] checks ([questions][edgar-questions]). When each feed first
+showed a filing can't: no source records it afterwards, and a day's master
+index is published about 10 PM Eastern on its date ([SRC-23], [0013]).
+It's a property of the feed, measured over many filings. A record of every
+poll for as long as the pipeline runs adds little to that measure, and
+most of the record's cost: at the default, 25,920 records a day, 17.0 to
+25.6 MB a day in PostgreSQL ([0013], [estimates](estimates.md)).
 
 **Alternatives weighed.**
 
@@ -637,6 +643,7 @@ polls with the nightly index ([0013]).
 [design-decisions]: ../design.md#decisions
 [notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [T5]: ../plan.md#investigation
+[T8]: ../plan.md#investigation
 [T10]: ../plan.md#facts
 [T11]: ../plan.md#observing-filings
 [T12]: ../plan.md#facts
@@ -646,13 +653,19 @@ polls with the nightly index ([0013]).
 [telemetry]: ../../spec/telemetry.md
 [telemetry-questions]: ../../spec/telemetry.md#11-open-questions
 [site-questions]: ../../spec/site.md#9-open-questions
+[edgar-questions]: ../../investigation/edgar.md#questions
 [deployment-later]: ../../spec/deployment.md#9-later-versions
 [deployment-pg]: ../../spec/deployment.md#7-postgresql
 [store-jobs]: ../../spec/snapshots.md#jobs-and-events
 [store-scope-cluster]: ../../spec/snapshots.md#the-scope-and-the-cluster
+[SRC-1]: ../../investigation/edgar.md#findings-so-far
 [SRC-2]: ../../investigation/edgar.md#findings-so-far
 [SRC-4]: ../../investigation/edgar.md#findings-so-far
 [SRC-5]: ../../investigation/edgar.md#findings-so-far
+[SRC-12]: ../../investigation/edgar.md#findings-so-far
+[SRC-21]: ../../investigation/edgar.md#findings-so-far
+[SRC-23]: ../../investigation/edgar.md#findings-so-far
+[SRC-24]: ../../investigation/edgar.md#findings-so-far
 [OBJ-1]: ../../spec/snapshots.md#5-objects
 [REC-3]: ../../spec/snapshots.md#6-records
 [LOG-3]: ../../spec/snapshots.md#8-history
