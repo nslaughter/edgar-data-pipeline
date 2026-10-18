@@ -55,6 +55,10 @@
     {
       "url": "https://www.sec.gov/Archives/edgar/daily-index/2026/QTR4/",
       "reason": "EDGAR's daily indexes of every filing accepted this quarter: a candidate source of notices of new filings, and a check on whether a published day's index changes."
+    },
+    {
+      "url": "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=&company=&dateb=&owner=include&start=0&count=100&output=atom",
+      "reason": "EDGAR's latest filings of every company, every form with ownership forms included, the latest 100 as an Atom feed: a candidate second source of notices of new filings, for T11 to weigh (Q4)."
     }
   ]
 }
