@@ -67,8 +67,8 @@ flowchart LR
 
 An arrow from a task to a task is a dependency; one from a task to a
 question is what the task answers. Each task in the diagram but [T11] sends
-requests to the SEC, and [T5] also widens the scope, once the owner
-confirms the feed's URL ([investigation][plan-investigation]). [T11] waits
+requests to the SEC, and [T5] also widened the scope, once the owner had
+confirmed the feed's URL ([investigation][plan-investigation]). [T11] waits
 for the monitoring that shows the lags, [T28], and for the owner.
 
 ### Q1: what each feed returns and how it changes

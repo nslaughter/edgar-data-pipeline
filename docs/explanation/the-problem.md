@@ -17,9 +17,10 @@ against its `main`, at commit `515bb0d`, on October 14, 2026.
 
 ## What EDGAR publishes
 
-The investigation reads four feeds, for three companies in the Dow Jones
-Industrial Average, chosen for their different fiscal years, and for this
-quarter's daily indexes ([scope], [feeds]):
+The investigation reads five feeds, for three companies in the Dow Jones
+Industrial Average, chosen for their different fiscal years, for this
+quarter's daily indexes, and for the latest filings of every company
+([scope], [feeds]):
 
 | Company | CIK | Fiscal year ends |
 | --- | --- | --- |
@@ -35,6 +36,7 @@ What each feed holds, as the findings show it:
 | `companyfacts` | `https://data.sec.gov/api/xbrl/companyfacts/CIK##########.json`, one per company | XBRL values, each with its period, and with the `accn`, `filed`, `form`, `fy`, and `fp` of the filing that reported it, and for some values a `frame` ([SRC-6], [SRC-8], [SRC-14]). |
 | `filings` | Under `https://www.sec.gov/Archives/edgar/data/CIK/` | One directory for each filing, named by its accession number, holding its header, its index page, and its XBRL instance, among its other files ([SRC-21]). |
 | `daily-index` | Under `https://www.sec.gov/Archives/edgar/daily-index/2026/QTR4/` | The quarter's listing, and a master index for each business day, whose files are last modified between 10:01 and 10:04 PM on the day they name ([SRC-5]). |
+| `latest-filings` | `https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=&company=&dateb=&owner=include&start=0&count=100&output=atom` | The latest filings of every company and form, newest first, in an Atom document made for each request, which sends no validators ([SRC-26]). Each of a filing's parties has an entry of its own, with the filing's accession number, form, filing date, and a time to the second ([SRC-27]). Fetched on a Sunday, its 100 entries held 50 filings from the last 2 hours and 48 minutes of Friday evening ([SRC-28]). |
 
 Each filing has an accession number, which names its directory in EDGAR's
 archive, under the CIK of the company whose `submissions` lists it
@@ -325,6 +327,9 @@ SEC's ([times][design-times]).
 [SRC-22]: ../../investigation/edgar.md#findings-so-far
 [SRC-24]: ../../investigation/edgar.md#findings-so-far
 [SRC-25]: ../../investigation/edgar.md#findings-so-far
+[SRC-26]: ../../investigation/edgar.md#findings-so-far
+[SRC-27]: ../../investigation/edgar.md#findings-so-far
+[SRC-28]: ../../investigation/edgar.md#findings-so-far
 [store-scope]: ../../spec/snapshots.md#9-scope
 [store-scope-cluster]: ../../spec/snapshots.md#the-scope-and-the-cluster
 [VER-1]: ../../spec/snapshots.md#7-versions
