@@ -38,7 +38,7 @@ owner asks for ([method][inv-method], step 2).
 | **Q1.** What each feed returns and how it changes | Which validators each kind of URL sends ([SRC-4]); the URLs of a company's lists and of a filing's files ([SRC-21]); a `304` for a conditional request whose body hasn't changed ([SRC-22]); `submissions` changing a filing it already lists ([SRC-24]) | How often each feed changes, and whether a URL returns to an earlier body; whether a filing's archived files ever change | [T8] | Which feeds the pipeline reads, and how often |
 | **Q2.** Where each time comes from | The two acceptance times and how they differ ([SRC-1], [SRC-24], [SRC-25]); fiscal years and periods, and how each value joins to its filing ([SRC-3], [SRC-6] to [SRC-12]) | Which acceptance time is right for each company's filings, and the header's time zone | [T6], [T7], [T9] | The time model |
 | **Q3.** How restatements and amendments appear | Every filing's value kept beside the others, restatements, amendments, and frames ([SRC-14] to [SRC-17]) | Whether a frame moves to a later filing's value when that filing appears; how the next reports' values appear | [T6], [T7], [T9] | What a query as of a past date returns |
-| **Q4.** How new filings are announced | When the daily index files are written ([SRC-5]); that a published day's master index didn't change ([SRC-23]) | How soon each feed shows a new filing; when each day's index appears; what the latest-filings feed holds | [T5], [T8], and the pipeline's record | Whether to keep the notice source, and how often to poll ([0010], [T11]) |
+| **Q4.** How new filings are announced | When the daily index files are written ([SRC-5]); that a published day's master index didn't change ([SRC-23]); what the latest-filings feed holds, and how far back its latest 100 entries reached on a Sunday ([SRC-26] to [SRC-28]) | How soon each feed shows a new filing; when each day's index appears | [T8], and the pipeline's record | Whether to keep the notice source, and how often to poll ([0010], [T11]) |
 | **Q5.** Sizes and pace | Bytes per URL and per filing, and the pace of a backfill ([SRC-18] to [SRC-20]) | Growth per refetch | [T8] | The store's budget, and whether the pace suits backfills |
 
 The questions and what each decides are the investigation's
@@ -67,8 +67,8 @@ flowchart LR
 
 An arrow from a task to a task is a dependency; one from a task to a
 question is what the task answers. Each task in the diagram but [T11] sends
-requests to the SEC, and [T5] also widens the scope, once the owner
-confirms the feed's URL ([investigation][plan-investigation]). [T11] waits
+requests to the SEC, and [T5] also widened the scope, once the owner had
+confirmed the feed's URL ([investigation][plan-investigation]). [T11] waits
 for the monitoring that shows the lags, [T28], and for the owner.
 
 ### Q1: what each feed returns and how it changes
@@ -138,9 +138,15 @@ after the pipeline's first part runs, and the investigation finishes after
 it ([0010]). The first refetch, [T4], showed that a published day's
 master index didn't change: the four stored on October 7 were unchanged 9
 to 14 days after their `Last-Modified` ([SRC-23]). The daily refetches,
-which [T8] reads, show when each day's index appears; [T5] records what
+which [T8] reads, show when each day's index appears. [T5] recorded what
 the latest-filings feed holds, so that [T11] can weigh it as a second
-notice source.
+notice source: one entry for each of a filing's parties, newest first,
+with a time to the second, in a body made for each request that sends no
+validators ([SRC-26], [SRC-27]). Fetched on a Sunday, its latest 100
+entries held 50 filings from the last 2 hours and 48 minutes of Friday
+evening; at the average pace of the stored master indexes, counting each
+filing's CIKs once, they would span about 14 to 31 minutes of a business
+day ([SRC-28]).
 
 Two of the specifications' open questions are parts of Q4: whether a
 filing's files are in EDGAR's archive once its company's `submissions`
@@ -580,6 +586,9 @@ revisit: whether to keep each company's `submissions` as the notice source
 [SRC-23]: ../../investigation/edgar.md#findings-so-far
 [SRC-24]: ../../investigation/edgar.md#findings-so-far
 [SRC-25]: ../../investigation/edgar.md#findings-so-far
+[SRC-26]: ../../investigation/edgar.md#findings-so-far
+[SRC-27]: ../../investigation/edgar.md#findings-so-far
+[SRC-28]: ../../investigation/edgar.md#findings-so-far
 [STORE-3]: ../../spec/snapshots.md#the-cluster-store
 [SCOPE-4]: ../../spec/snapshots.md#9-scope
 [SCOPE-5]: ../../spec/snapshots.md#9-scope

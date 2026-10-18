@@ -457,9 +457,9 @@ decided that the running pipeline measures it ([0010]).
 - **Waiting for the investigation:** notices wait for weeks of watching,
   and the watching measures only to its polling interval.
 - **EDGAR's latest-filings feed:** one request covers every company, but
-  its URL isn't confirmed, the scope must be widened to it, it changes on
-  nearly every poll, so the store keeps a body each time, and a poll that
-  comes too late can miss filings in a busy burst.
+  its URL wasn't yet confirmed, the scope had to be widened to it, it
+  changes on nearly every poll, so the store keeps a body each time, and
+  a poll that comes too late can miss filings in a busy burst.
 - **The daily indexes:** complete and kept in the archive, but published
   around 10 PM ([SRC-5]), so a filing is first seen hours after its
   acceptance.
@@ -480,8 +480,8 @@ this one; a new cadence is only a change to a Source. At 10 seconds, half
 the fetcher's limit covers about 25 companies, and past that a feed that
 covers every company becomes the better source ([0010]). The plan's [T11]
 makes that revisit when the owner asks for it, once the monitoring shows
-the lags ([T28]), and weighs the latest-filings feed if [T5] has recorded
-what it holds.
+the lags ([T28]), and weighs the latest-filings feed, whose first version
+[T5] recorded ([SRC-26] to [SRC-28]).
 
 ## 0011: Install the definitions and the operators before the umbrella chart
 
@@ -668,6 +668,9 @@ polls with the nightly index ([0013]).
 [SRC-21]: ../../investigation/edgar.md#findings-so-far
 [SRC-23]: ../../investigation/edgar.md#findings-so-far
 [SRC-24]: ../../investigation/edgar.md#findings-so-far
+[SRC-26]: ../../investigation/edgar.md#findings-so-far
+[SRC-27]: ../../investigation/edgar.md#findings-so-far
+[SRC-28]: ../../investigation/edgar.md#findings-so-far
 [OBJ-1]: ../../spec/snapshots.md#5-objects
 [REC-3]: ../../spec/snapshots.md#6-records
 [LOG-3]: ../../spec/snapshots.md#8-history

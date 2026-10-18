@@ -233,9 +233,10 @@ network; a fake EDGAR in the cluster serves stored versions instead
   stay outside it ([§9 of the store][store-scope]). The cluster polls the
   Sources the owner's values name, starting with each company's
   `submissions` ([§5 of the controls][controls-values]). EDGAR's
-  latest-filings feed, which covers every company, is outside the scope
-  until the owner confirms its URL and widens the scope to it (task T5,
-  [plan][plan-investigation]).
+  latest-filings feed, which covers every company, is in the git store's
+  scope for the investigation, which recorded what it holds (task T5,
+  [plan][plan-investigation]; [SRC-26] to [SRC-28]), but no Source polls
+  it.
 - **Filing documents in general.** For each filing, the pipeline fetches
   its header, its index page, and the XBRL instance the index page names
   ([FILE-1]). `edgar-asof` leaves filing documents and forms in general to
@@ -357,6 +358,9 @@ network; a fake EDGAR in the cluster serves stored versions instead
 [SOURCE-2]: ../../spec/controls.md#6-source
 [SOURCE-5]: ../../spec/controls.md#6-source
 [SRC-20]: ../../investigation/edgar.md#findings-so-far
+[SRC-26]: ../../investigation/edgar.md#findings-so-far
+[SRC-27]: ../../investigation/edgar.md#findings-so-far
+[SRC-28]: ../../investigation/edgar.md#findings-so-far
 [STORE-1]: ../../spec/snapshots.md#the-cluster-store
 [STORE-3]: ../../spec/snapshots.md#the-cluster-store
 [store-guarantees]: ../../spec/snapshots.md#1-guarantees

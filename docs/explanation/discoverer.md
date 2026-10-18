@@ -481,9 +481,9 @@ record ([0010]):
 | The daily indexes | Complete and kept in the archive, but published around 10 PM ([SRC-5]), so a filing is first seen hours after its acceptance. |
 
 Task T11 revisits the choice from the lags the record shows: whether to
-keep each company's `submissions`, add the latest-filings feed once task T5
-has recorded it, or change the cadence, in a decision record that
-supersedes 0010 if anything changes ([plan][plan-observing]).
+keep each company's `submissions`, add the latest-filings feed, whose
+first version task T5 recorded ([SRC-26] to [SRC-28]), or change the
+cadence, in a decision record that supersedes 0010 if anything changes ([plan][plan-observing]).
 
 Decision 0006 put the discoverer in Python, with the other services that
 read what EDGAR publishes, so a change in EDGAR's formats touches one
@@ -557,6 +557,9 @@ these statements' tests await it, and T28 and T29 its metrics' and traces'
 [SRC-13]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far
 [SRC-21]: ../../investigation/edgar.md#findings-so-far
+[SRC-26]: ../../investigation/edgar.md#findings-so-far
+[SRC-27]: ../../investigation/edgar.md#findings-so-far
+[SRC-28]: ../../investigation/edgar.md#findings-so-far
 [notices]: ../../spec/notices.md
 [notices.sql]: ../../spec/schemas/notices.sql
 [job.schema.json]: ../../spec/schemas/job.schema.json

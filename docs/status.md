@@ -69,7 +69,7 @@ own.
 | T2: Restated and repeated values, from the baseline (Q3). | Q3 | October 11, 2026 |
 | T3: Sizes and the pace of a backfill, from the baseline (Q5). | Q5 | October 11, 2026 |
 | T4: The first refetch (Q1, Q4). | Q1, Q4 | October 16, 2026 |
-| T5: The latest-filings feed (Q4). | Q4 | Not done |
+| T5: The latest-filings feed (Q4). | Q4 | October 18, 2026 |
 | T6: Microsoft's next 10-Q (Q2, Q3). | Q2, Q3 | Not done |
 | T7: Apple's next 10-K (Q2, Q3). | Q2, Q3 | Not done |
 | T8: What the refetches show (Q1, Q4, Q5). | Q1, Q4, Q5 | Not done |
