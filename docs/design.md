@@ -1,6 +1,6 @@
 # Design: the EDGAR data pipeline
 
-**Status:** Draft, October 14, 2026. This document explains the pipeline's
+**Status:** Draft, October 18, 2026. This document explains the pipeline's
 architecture and the reasons for it. It makes no rules: the specifications
 under [`spec/`](../spec/) govern, the records under
 [`docs/decisions/`](decisions/) record each significant choice, and
@@ -236,6 +236,9 @@ follows, with logs that carry the accession number.
   It records every request, so the same checks of the fetching rules run
   against `snapshot.py` and the Go fetcher
   ([0006](decisions/0006-write-the-services-in-go-and-python.md)).
+  [`spec/fake-edgar.md`](../spec/fake-edgar.md) specifies it, and
+  [`spec/deployment.md`](../spec/deployment.md#the-fake-edgar) how CI
+  installs it.
 - The scheduler's controller is tested against a real API server with
   envtest, and the alert rules with `promtool test rules`.
 - Drills delete the active fetcher, fail over the database, and block the
