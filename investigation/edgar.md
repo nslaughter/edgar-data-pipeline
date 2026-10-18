@@ -815,8 +815,8 @@ a `200`, `36a5016d80ce` at 10:22:42.614Z.
   and Microsoft's first further file, and the eight headers, in the
   records cited.
 - **SRC-26** (Q1) The latest-filings feed is an Atom document made for
-  each request, and sends no validators. Asked for the latest 100 filings,
-  it returned a `200` with the `Content-Type` `application/atom+xml`:
+  each request, and sends no validators. Asked with `count=100`, it
+  returned a `200` with the `Content-Type` `application/atom+xml`:
   56,306 bytes of XML whose declaration gives its encoding as ISO-8859-1,
   every byte of them ASCII. It sent neither `ETag` nor `Last-Modified`, so
   a refetch can't be conditional
@@ -828,7 +828,8 @@ a `200`, `36a5016d80ce` at 10:22:42.614Z.
   but a body that states when it was made differs from one made in another
   second, so each such fetch is a new version
   ([VER-1](../spec/snapshots.md#7-versions)), even when it lists the same
-  filings. `count=100` gave 100 entries.
+  filings. `count=100` gave 100 entries, not 100 filings: they hold 50
+  filings (SRC-27).
   Shown by the `latest-filings` record in the records cited.
 - **SRC-27** (Q4) The latest-filings feed lists filings newest first, with
   one entry for each of a filing's parties, each giving the filing's
@@ -838,11 +839,14 @@ a `200`, `36a5016d80ce` at 10:22:42.614Z.
   entry's `title` is the form, the party's name and ten-digit CIK, and the
   party's role: `Reporting` and `Issuer` for a Form 4 or 4/A, `Reporting`
   and `Subject` for a Form 144, and `Filed by` and `Subject` for a
-  Schedule 13D, 13D/A, or 13G. Its `link` is the filing's index page,
-  `ACCESSION-index.htm`, in the directory under that party's CIK
-  (SRC-21); its `summary` gives the filing date as `Filed`, the accession
-  number as `AccNo`, and a size in KB or MB, such as `5 KB`; its `category`'s
-  `term` is the form; and its `id` is
+  Schedule 13D, 13D/A, or 13G. Its `link` is `ACCESSION-index.htm` in the
+  filing's directory, `https://www.sec.gov/Archives/edgar/data/CIK/NODASHES/`
+  (SRC-21), with that party's CIK. SRC-21's index page is
+  `ACCESSION-index.html`, and no URL ending `-index.htm` is stored, so the
+  stored versions don't show whether the two are the same page. An
+  entry's `summary` gives the filing
+  date as `Filed`, the accession number as `AccNo`, and a size in KB or
+  MB, such as `5 KB`; its `category`'s `term` is the form; and its `id` is
   `urn:tag:sec.gov,2008:accession-number=` followed by the accession
   number. Every `updated` has the offset `-04:00`, US Eastern daylight
   time. The stored version doesn't show whether it is the filing's
