@@ -89,6 +89,7 @@ nav = [
     { "Notices" = "spec/notices.md" },
     { "Telemetry" = "spec/telemetry.md" },
     { "The documentation site" = "spec/site.md" },
+    { "The fake EDGAR" = "spec/fake-edgar.md" },
     { "The investigation of EDGAR" = "investigation/edgar.md" },
     { "Glossary" = "docs/glossary.md" },
   ] },
