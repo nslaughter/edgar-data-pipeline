@@ -71,12 +71,12 @@ shows, in a decision record that supersedes 0010 if anything changes
 
 > **Analysis.** No task, decision record, or specification covers this.
 > The pipeline could go past the budget in three ways. It could poll a
-> feed that covers every company, such as EDGAR's latest-filings feed once
-> its URL is confirmed and the scope widened to it (task T5), so one poll
-> serves every company; the daily indexes cover every company too, but
-> appear hours after acceptance ([SRC-5], [0010]). It could poll closely
-> only the companies whose filings matter soonest, and the rest at longer
-> cadences, as each Source's own cadence allows
+> feed that covers every company, such as EDGAR's latest-filings feed, so
+> one poll serves every company, as long as the polls come closer together
+> than its latest 100 entries span ([SRC-28]); the daily indexes cover
+> every company too, but appear hours after acceptance ([SRC-5], [0010]).
+> It could poll closely only the companies whose filings matter soonest,
+> and the rest at longer cadences, as each Source's own cadence allows
 > ([§6 of the controls][controls-source]). Or it could give the polls more
 > of the fetcher's limit than half, at the cost of the new filings' fetches
 > and Backfills, which share the rest.
@@ -338,6 +338,7 @@ each part would stop:
 [SRC-5]: ../../investigation/edgar.md#findings-so-far
 [SRC-18]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far
+[SRC-28]: ../../investigation/edgar.md#findings-so-far
 [store-guarantees]: ../../spec/snapshots.md#1-guarantees
 [store-open]: ../../spec/snapshots.md#13-open-questions
 [store-scope]: ../../spec/snapshots.md#9-scope
