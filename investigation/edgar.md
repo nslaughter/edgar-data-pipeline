@@ -1,7 +1,7 @@
 # Source investigation: EDGAR
 
 **Status:** Started October 7, 2026. The baseline was fetched October 7;
-twenty-five findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
+twenty-eight findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
 and SRC-14 to SRC-17, on restated and repeated values, were read from it
 on October 10. SRC-12 and SRC-13, on `submissions`' further files and its
 acceptance times, were read from them and the baseline once they were
@@ -14,9 +14,11 @@ SRC-21, on the URLs of a company's lists and of a filing's files, was read
 from them on October 14, for the notices specification. SRC-22 to SRC-25
 were read from the first refetch, on October 16, with the further files
 refetched beside it; SRC-24 and SRC-25 superseded SRC-2 and SRC-13, as the
-owner decided that day. Since October 10, how soon each feed shows a new
-filing (Q4) is measured from the pipeline's record. Data here comes from
-the U.S. Securities and Exchange Commission's EDGAR system.
+owner decided that day. SRC-26 to SRC-28 were read from the latest-filings
+feed, fetched once on October 18, once the owner had confirmed its URL.
+Since October 10, how soon each feed shows a new filing (Q4) is measured
+from the pipeline's record. Data here comes from the U.S. Securities and
+Exchange Commission's EDGAR system.
 
 This document records how EDGAR's feeds and filings behave, each finding
 shown by versions in the snapshot store
@@ -27,7 +29,8 @@ answer the snapshot store's open questions 1, 2, and 4.
 ## Scope
 
 Three companies in the Dow Jones Industrial Average, chosen for their
-different fiscal years, and EDGAR's daily indexes for this quarter.
+different fiscal years, EDGAR's daily indexes for this quarter, and its
+latest-filings feed.
 [`data/scope.json`](../data/scope.json) lists the URLs, each with its reason.
 
 | Company | CIK | Fiscal year ends |
@@ -47,6 +50,7 @@ expected to hold; findings say what it does hold.
 | `companyfacts` | `https://data.sec.gov/api/xbrl/companyfacts/CIK##########.json` | A company's XBRL values, each with its period, fiscal year and period, form, filing date, and accession number. |
 | `filings` | Under `https://www.sec.gov/Archives/edgar/data/CIK/` | Directory listings, and the index, header, and XBRL documents of selected filings. |
 | `daily-index` | Under `https://www.sec.gov/Archives/edgar/daily-index/2026/QTR4/` | Each business day's list of the filings accepted. |
+| `latest-filings` | `https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=&company=&dateb=&owner=include&start=0&count=100&output=atom` | The latest filings of every company and form, newest first. |
 
 ## Method
 
@@ -107,8 +111,8 @@ Each question says what the pipeline's specification needs from it.
 - **Q4. How new filings are announced.** How long after acceptance a filing
   appears in `submissions`, `companyfacts`, and the daily index; when a
   day's index is published; and whether a published index changes. EDGAR's
-  latest-filings feed is a further candidate, once its URL is confirmed and
-  the scope widened to cover it. The pipeline's record measures how soon
+  latest-filings feed is a further candidate, whose first version shows
+  what it holds (SRC-26 to SRC-28). The pipeline's record measures how soon
   each feed shows a filing (method, step 3), and the daily refetches show
   when indexes are published and whether they change. Decides whether the
   pipeline keeps the notice source it starts with
@@ -256,6 +260,14 @@ the version it confirms, the one stored on October 7
 | Microsoft's first further file `CIK0000789019-submissions-001.json` | 200 | `451415b0dfe6` 13:34:26.529Z |
 | Walmart's first further file `CIK0000104169-submissions-001.json` | 200 | `7a164befa763` 13:34:26.730Z |
 | Walmart's second further file `CIK0000104169-submissions-002.json` | 200 | `e162c62bfcae` 13:34:26.932Z |
+
+The latest-filings feed, fetched once on October 18, 2026, a Sunday, by
+`scripts/snapshot.py` at commit `329507a`, which widened the scope to it
+on T5's branch. That branch is squash-merged, so `main`'s history doesn't
+hold the commit; `scripts/snapshot.py` is the same there as at `edb78e8`.
+In `latest-filings` at
+`https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=&company=&dateb=&owner=include&start=0&count=100&output=atom`:
+a `200`, `36a5016d80ce` at 10:22:42.614Z.
 
 ### Findings so far
 
@@ -802,3 +814,61 @@ the version it confirms, the one stored on October 7
   Shown by the October 16 records of the three companies' `submissions`
   and Microsoft's first further file, and the eight headers, in the
   records cited.
+- **SRC-26** (Q1) The latest-filings feed is an Atom document made for
+  each request, and sends no validators. Asked for the latest 100 filings,
+  it returned a `200` with the `Content-Type` `application/atom+xml`:
+  56,306 bytes of XML whose declaration gives its encoding as ISO-8859-1,
+  every byte of them ASCII. It sent neither `ETag` nor `Last-Modified`, so
+  a refetch can't be conditional
+  ([FETCH-4](../spec/snapshots.md#10-fetching)) and receives the whole
+  body, as SRC-4 found for `submissions`. The feed's own `updated` is
+  2026-10-18T06:22:42-04:00 and its `title` `Latest Filings - Sun, 18 Oct
+  2026 06:22:42 EDT`: the response's `Date`, 10:22:42 GMT, to the second,
+  in US Eastern time. One version can't show how often the body changes,
+  but a body that states when it was made differs from one made in another
+  second, so each such fetch is a new version
+  ([VER-1](../spec/snapshots.md#7-versions)), even when it lists the same
+  filings. `count=100` gave 100 entries.
+  Shown by the `latest-filings` record in the records cited.
+- **SRC-27** (Q4) The latest-filings feed lists filings newest first, with
+  one entry for each of a filing's parties, each giving the filing's
+  accession number, form, filing date, and a time to the second with its
+  offset from UTC. Its 100 entries hold 50 filings. A filing's entries are
+  adjacent, and share its accession number and its `updated` time. An
+  entry's `title` is the form, the party's name and ten-digit CIK, and the
+  party's role: `Reporting` and `Issuer` for a Form 4 or 4/A, `Reporting`
+  and `Subject` for a Form 144, and `Filed by` and `Subject` for a
+  Schedule 13D, 13D/A, or 13G. Its `link` is the filing's index page,
+  `ACCESSION-index.htm`, in the directory under that party's CIK
+  (SRC-21); its `summary` gives the filing date as `Filed`, the accession
+  number as `AccNo`, and a size in KB or MB, such as `5 KB`; its `category`'s
+  `term` is the form; and its `id` is
+  `urn:tag:sec.gov,2008:accession-number=` followed by the accession
+  number. Every `updated` has the offset `-04:00`, US Eastern daylight
+  time. The stored version doesn't show whether it is the filing's
+  acceptance time: none of these filings is one of the three companies',
+  whose filings the scope holds, so no header of theirs is stored
+  (SRC-1). One Form 4 has two reporting owners, and three entries. The
+  100th entry, a Form 4's reporting owner, is the only entry of its
+  filing, where each of the other 40 Forms 4 and 4/A has its issuer's
+  entry too; that fits a limit that counts entries and cut the filing's
+  issuer off, which one version can't show.
+  Shown by the `latest-filings` record in the records cited.
+- **SRC-28** (Q4) Fetched on a Sunday morning, the latest-filings feed's
+  100 entries reached back 2 hours and 48 minutes into the business day
+  before, Friday, October 16: their `updated` times run from 19:09:43 to
+  21:57:56 Eastern, the newest 2 minutes before EDGAR's hours end at
+  10:00 p.m. (SRC-25), and none is from the weekend. Every entry's `Filed`
+  date is October 16. The 50 filings are 39 Forms 4, 2 Forms 4/A, 3 Forms
+  144, and 6 Schedules 13D, 13D/A, and 13G: none is a 10-K, a 10-Q, or an
+  8-K, and none is the three companies'. The master indexes stored for
+  the ten business days from October 1 to 15 list a filing once for each
+  CIK it names, as the feed lists a filing's parties: 1.39 to 1.62 lines a
+  filing, and about 2 for each Form 4. They hold 3,159 to 7,159 lines a
+  day. If the feed's entries come at that pace, spread evenly over EDGAR's
+  16 hours, 100 entries span about 13 to 30 minutes, and less in a busier
+  hour, so a poll that comes later than that after the one before can miss
+  filings. How the pace varies within a day is for the pipeline's record
+  to show.
+  Shown by the `latest-filings` record, and the master indexes of October
+  1 to 15, in the records cited.
