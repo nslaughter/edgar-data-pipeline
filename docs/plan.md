@@ -1,9 +1,8 @@
 # Plan: the EDGAR data pipeline
 
-**Status:** October 16, 2026. T1 to T4, T13 to T16, T19, T20, T34, T35,
+**Status:** October 18, 2026. T1 to T5, T13 to T16, T19, T20, T34, T35,
 T38, and T39 to T42 are done, and T37 is split into T39 to T43. The next
-ready is T21. T5 waits for the owner to confirm the latest-filings feed's
-URL, and T6, T7, and T9 for each company's next report; the
+ready is T21. T6, T7, and T9 wait for each company's next report; the
 investigation's daily refetches can run when the owner asks.
 
 The tasks that build the pipeline, in the order they're to be done, and
@@ -54,7 +53,7 @@ not from these tasks.
 | T2 | **Restated and repeated values, from the baseline (Q3).** From the stored `companyfacts`: whether a value a later filing reports for the same concept and period is kept beside the earlier one, how a restated value differs from one reported again unchanged, and how amendments appear. `edgar-asof`'s specification cites these findings too. | — | October 11, 2026: SRC-14 to SRC-17 |
 | T3 | **Sizes and the pace of a backfill, from the baseline (Q5).** Bytes per URL and per filing, and the requests and time a backfill of each company's filings takes at 5 requests a second, from the filings its `submissions` lists. Growth per refetch waits for T8. | — | October 11, 2026: SRC-18 to SRC-20 |
 | T4 | **The first refetch (Q1, Q4).** The [method's](../investigation/edgar.md#method) step 2 for the first time: refetch `submissions`, `companyfacts`, and the daily index listing; fetch the master indexes not yet stored; and refetch the stored ones. Shows whether a conditional request gets a `304` (SRC-4), and whether a published index changes. | T35, run | October 16, 2026: SRC-22 to SRC-25, from the refetch, with the four further `submissions` files in the scope refetched beside it, as the owner asked. A conditional request gets a `304`, and no published index changed; `submissions` changed Microsoft's and Walmart's acceptance times, so SRC-24 and SRC-25 superseded SRC-2 and SRC-13, as the owner decided. On the same day, the owner confirmed the run, made in the morning, as T4's, decided that SRC-24 supersedes SRC-9 and SRC-12 in part, and that T44 takes SRC-24 and SRC-25 into the notices specification. |
-| T5 | **The latest-filings feed (Q4).** Once the owner confirms its URL, widen the scope to it in its own commit, fetch it, and record what it holds, so T11 can weigh it as a second notice source. | T35, scope, run | |
+| T5 | **The latest-filings feed (Q4).** Once the owner confirms its URL, widen the scope to it in its own commit, fetch it, and record what it holds, so T11 can weigh it as a second notice source. | T35, scope, run | October 18, 2026: SRC-26 to SRC-28, from one fetch on a Sunday morning, after the owner confirmed the URL `https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=&company=&dateb=&owner=include&start=0&count=100&output=atom`, of every form with ownership forms included, and asked for the widening and the fetch. The feed is made for each request and sends no validators; it lists one entry for each of a filing's parties, newest first, and its latest 100 entries held 50 filings from Friday evening's last 2 hours and 48 minutes. |
 | T6 | **Microsoft's next 10-Q (Q2, Q3).** The method's step 4, after the report expected in late October or early November: fetch its index, header, and XBRL instance, and refetch `submissions` and `companyfacts`. Records whether its header and `submissions` agree (SRC-2), and how its values appear in `companyfacts`. | T35, run | |
 | T7 | **Apple's next 10-K (Q2, Q3).** The same as T6, for Apple's report. It also shows whether Apple's times still differ by 8 hours (SRC-2), its fiscal year end (SRC-3), and how a 10-K reports earlier years' values again. | T35, run | |
 | T8 | **What the refetches show (Q1, Q4, Q5).** From the daily refetches stored through T6 and T7: how often each feed changed, whether a URL returned to an earlier body, when each day's index appeared, and growth per refetch. Also refetches the baseline's eight filings, to see whether any archived file changed (Q1). | T4, T6, T7, T35, run | |
