@@ -144,8 +144,9 @@ notice source: one entry for each of a filing's parties, newest first,
 with a time to the second, in a body made for each request that sends no
 validators ([SRC-26], [SRC-27]). Fetched on a Sunday, its latest 100
 entries held 50 filings from the last 2 hours and 48 minutes of Friday
-evening; at the average pace of the stored master indexes, they would
-span about 13 to 30 minutes of a business day ([SRC-28]).
+evening; at the average pace of the stored master indexes, counting each
+filing's CIKs once, they would span about 14 to 31 minutes of a business
+day ([SRC-28]).
 
 Two of the specifications' open questions are parts of Q4: whether a
 filing's files are in EDGAR's archive once its company's `submissions`

@@ -866,13 +866,18 @@ a `200`, `36a5016d80ce` at 10:22:42.614Z.
   date is October 16. The 50 filings are 39 Forms 4, 2 Forms 4/A, 3 Forms
   144, and 6 Schedules 13D, 13D/A, and 13G: none is a 10-K, a 10-Q, or an
   8-K, and none is the three companies'. The master indexes stored for
-  the ten business days from October 1 to 15 list a filing once for each
-  CIK it names, as the feed lists a filing's parties: 1.39 to 1.62 lines a
-  filing, and about 2 for each Form 4. They hold 3,159 to 7,159 lines a
-  day. If the feed's entries come at that pace, spread evenly over EDGAR's
-  16 hours, 100 entries span about 13 to 30 minutes, and less in a busier
-  hour, so a poll that comes later than that after the one before can miss
-  filings. How the pace varies within a day is for the pipeline's record
-  to show.
+  the ten business days from October 1 to 15 list a filing on a line for
+  each CIK it names, as the feed lists a filing's parties, and give some
+  of those lines two or three times, identically: 21 to 92 repeats a day,
+  554 of the 582 for Forms 485BXT, ABS-15G, 485APOS, and 485BPOS, and one
+  for a Form 4, `0001035422-26-000016` on October 6. They hold
+  3,159 to 7,159 lines a day, and 3,110 to 7,090 pairs of filing and CIK
+  without the repeats: 1.35 to 1.61 pairs a filing, and about 2 for each
+  Form 4. The feed's 100 entries are 100 such pairs, none repeated. If the
+  feed's entries come at the pace of those pairs, spread evenly over
+  EDGAR's 16 hours, 100 entries span about 14 to 31 minutes, and less in a
+  busier hour, so a poll that comes later than that after the one before
+  can miss filings. How the pace varies within a day is for the
+  pipeline's record to show.
   Shown by the `latest-filings` record, and the master indexes of October
   1 to 15, in the records cited.
