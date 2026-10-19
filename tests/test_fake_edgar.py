@@ -18,6 +18,7 @@ import copy
 import gzip
 import hashlib
 import http.client
+import io
 import json
 import os
 import re
@@ -734,6 +735,27 @@ def test_a_validator_beyond_ascii_comes_back_as_its_record_holds_it(tmp_path: Pa
 
     assert (answer.status, answer.headers["etag"]) == (200, '"é"')
     assert (unchanged.status, unchanged.headers["etag"]) == (304, '"é"')
+
+
+@pytest.mark.spec("SERVE-3", "SERVE-4")
+@pytest.mark.parametrize("etag", ['"v1" ', 'W/"v1"\t', '"v1" \t '])
+def test_a_validator_ending_in_whitespace_comes_back_and_matches(tmp_path: Path, etag: str) -> None:
+    # http.client drops the whitespace before a header's value but keeps
+    # what follows it, so snapshot.py can store an ETag that ends in some.
+    assert http.client.parse_headers(io.BytesIO(f"ETag: {etag}\r\n\r\n".encode()))["etag"] == etag
+    fetched(tmp_path / "data", INDEX, LISTING, at=0, etag=etag)
+    edgar = FakeEdgar(tmp_path / "data")
+    edgar.start()
+    try:
+        answer = get(edgar.port, target(INDEX))
+        unchanged = get(edgar.port, target(INDEX), {"If-None-Match": answer.headers["etag"]})
+        stripped = get(edgar.port, target(INDEX), {"If-None-Match": '"v1"'})
+    finally:
+        edgar.stop()
+
+    assert (answer.status, answer.headers["etag"]) == (200, etag)
+    assert (unchanged.status, unchanged.headers["etag"]) == (304, etag)
+    assert stripped.status == 304
 
 
 def certificate(directory: Path) -> tuple[Path, Path, Path]:

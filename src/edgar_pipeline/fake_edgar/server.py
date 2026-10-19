@@ -59,7 +59,14 @@ def http_date(value: str) -> datetime | None:
 
 
 def opaque(tag: str) -> str:
-    """An entity tag without its weakness, for weak comparison (RFC 9110, 8.8.3.2)."""
+    """An entity tag without its weakness, for weak comparison (RFC 9110, 8.8.3.2).
+
+    A field's value excludes the spaces and tabs around it (RFC 9110, 5.5),
+    but http.client keeps those after it, so a record's ETag may end in
+    them; they're dropped here, and the ETag is still sent as the record
+    holds it (SERVE-3, SERVE-4).
+    """
+    tag = tag.strip(" \t")
     return tag[2:] if tag.startswith("W/") else tag
 
 
