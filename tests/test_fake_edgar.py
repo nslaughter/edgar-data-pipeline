@@ -14,6 +14,7 @@ statement checked by `tests` or `kind` to have one, or to await a later task.
 
 from __future__ import annotations
 
+import copy
 import gzip
 import hashlib
 import http.client
@@ -586,11 +587,14 @@ def test_only_the_headers_a_record_has_are_sent(tmp_path: Path) -> None:
 def test_the_latest_version_and_its_headers_are_by_requested_at(tmp_path: Path) -> None:
     data = tmp_path / "data"
     # The later fetches, in the log first; then an earlier version fetched
-    # again, without a Content-Type, and confirmed by a 304.
+    # again, without a Content-Type, and confirmed by a 304; then, last in
+    # the log but earlier in time, a record of each version.
     fetched(data, INDEX, SECOND, at=200, etag='"second"')
     fetched(data, INDEX, FIRST, at=100, etag='"first"', content_type="text/plain")
     fetched(data, INDEX, FIRST, at=300, etag='"again"', content_type=None)
     fetched(data, INDEX, FIRST, at=400, status=304, etag='"confirmed"', content_type=None)
+    fetched(data, INDEX, FIRST, at=350, etag='"stale"', content_type="text/plain")
+    fetched(data, INDEX, SECOND, at=250, etag='"second"')
     edgar = FakeEdgar(data)
     edgar.start()
     try:
@@ -955,7 +959,9 @@ def test_a_version_on_cue_that_isnt_one_gets_a_404(
 @pytest.mark.parametrize("accept", [None, "gzip"])
 def test_a_cut_sends_half_the_body_then_closes(fake: FakeEdgar, accept: str | None) -> None:
     add_cue(fake, {"url": FACTS, "responses": [{"cut": True}]})
-    headers = {"If-Modified-Since": "Thu, 08 Oct 2026 00:00:00 GMT"}
+    # A conditional request that the version matches, which would get a 304
+    # without the cut (SERVE-4).
+    headers = {"If-None-Match": "*"}
     if accept:
         headers["Accept-Encoding"] = accept
 
@@ -1041,8 +1047,18 @@ def test_a_header_sent_more_than_once_has_its_values_joined_in_order(fake: FakeE
 
 
 @pytest.mark.spec("REQ-1")
-def test_the_log_holds_a_request_once_its_client_has_the_answer(fake: FakeEdgar) -> None:
-    for n in range(1, 21):
+def test_the_log_holds_a_request_once_its_client_has_the_answer(
+    fake: FakeEdgar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    append = fake.state.append
+
+    def slowly(entry: dict[str, Any]) -> None:
+        """Logs the request well after its client has the answer."""
+        time.sleep(0.2)
+        append(entry)
+
+    monkeypatch.setattr(fake.state, "append", slowly)
+    for n in range(1, 4):
         get(fake.port, target(FACTS), {"Accept-Encoding": "gzip"})
 
         assert [entry["n"] for entry in requests(fake.admin_port, after=n - 1)] == [n]
@@ -1313,37 +1329,116 @@ VALUES = st.recursive(
     ),
     max_leaves=10,
 )
-RESPONSES = st.dictionaries(
-    st.sampled_from(["status", "headers", "body", "sha256", "cut", "drop", "x"]),
-    st.one_of(
-        VALUES,
-        st.just(True),
-        st.integers(100, 599),
-        st.dictionaries(st.text(max_size=3), st.text(max_size=3), max_size=2),
+HEADERS = st.dictionaries(st.text(max_size=3), st.text(max_size=3), max_size=2)
+STATUSES = st.one_of(st.integers(100, 599), st.just(403.0))
+# Responses of each form the schema accepts, some with a field it doesn't know:
+# a status, with headers and a body or without; sha256, cut, or both; or drop.
+RESPONSES = st.one_of(
+    st.fixed_dictionaries(
+        {"status": STATUSES},
+        optional={"headers": HEADERS, "body": st.text(max_size=5), "x": VALUES},
     ),
-    max_size=4,
-)
-CUES = st.one_of(
-    VALUES,
-    st.dictionaries(
-        st.sampled_from(["url", "responses", "x"]),
-        st.one_of(VALUES, st.lists(RESPONSES, max_size=3), st.just(URL)),
-        max_size=3,
+    st.fixed_dictionaries(
+        {"sha256": st.just(SHA256)}, optional={"cut": st.just(True), "x": VALUES}
     ),
+    st.fixed_dictionaries({"cut": st.just(True)}, optional={"x": VALUES}),
+    st.fixed_dictionaries({"drop": st.just(True)}, optional={"x": VALUES}),
 )
+VALID_CUES = st.fixed_dictionaries(
+    {"responses": st.lists(RESPONSES, min_size=1, max_size=3)},
+    optional={
+        "url": st.sampled_from([URL, "https://www.sec.gov/", "https://data.sec.gov/x?y=1"]),
+        "x": VALUES,
+    },
+)
+# For each field of a cue or a response: values the schema accepts for it,
+# then values close to those that it refuses. And for "x", which neither
+# has, values that it ignores.
+FIELD_VALUES: dict[str, list[Any]] = {
+    "url": [
+        *(URL, "https://www.sec.gov/"),
+        *("https://www.sec.gov", "https://example.com/", "http://data.sec.gov/", None, 0),
+    ],
+    "responses": [[{"status": 403}], [], [{}], {"status": 403}, None],
+    "status": [100, 599, 403.0, 99, 600, 403.5, "403", True, None],
+    "headers": [{}, {"Retry-After": "1"}, {"Retry-After": 1}, ["Retry-After: 1"], "", None],
+    "body": ["", "refused", 0, None],
+    "sha256": [SHA256, SHA256.upper(), SHA256[:-1], SHA256 + "\n", None],
+    "cut": [True, False, "true", 1, None],
+    "drop": [True, False, "true", 1, None],
+    "x": [None, False, {"status": 99}],
+}
+
+
+@st.composite
+def changed_cues(draw: st.DrawFn) -> dict[str, Any]:
+    """A cue the schema accepts, with one field of it or of one of its
+    responses removed, added, or given another value."""
+    changed = draw(VALID_CUES)
+    place = draw(st.sampled_from([changed, *changed["responses"]]))
+    fields = CUE_FIELDS if place is changed else RESPONSE_FIELDS
+    name = draw(st.sampled_from([*(field for field, _ in fields), "x"]))
+    value = draw(st.one_of(st.sampled_from([ABSENT, *FIELD_VALUES[name]]), VALUES))
+    if value is ABSENT:
+        place.pop(name, None)
+    else:
+        place[name] = copy.deepcopy(value)
+    return changed
+
+
+CUES = st.one_of(VALUES, VALID_CUES, changed_cues())
+
+
+def parses(value: Any) -> bool:
+    try:
+        cues.parse(value)
+    except cues.NotACue:
+        return False
+    return True
 
 
 @pytest.mark.spec("ADMIN-1")
 @settings(max_examples=500, deadline=None)
 @given(CUES)
 def test_a_cue_is_a_body_that_validates_against_the_cues_schema(value: Any) -> None:
-    try:
-        cues.parse(value)
-        parsed = True
-    except cues.NotACue:
-        parsed = False
+    assert parses(value) == validator(CUE).is_valid(value)
 
-    assert parsed == validator(CUE).is_valid(value)
+
+# A response of each form the schema accepts.
+FORMS = [
+    {"status": 403},
+    {"status": 429, "headers": {"Retry-After": "1"}, "body": "Slow down"},
+    {"sha256": SHA256},
+    {"cut": True},
+    {"sha256": SHA256, "cut": True},
+    {"drop": True},
+]
+
+
+def changed_once() -> Iterator[dict[str, Any]]:
+    """Each cue one change makes of a cue with a response of each form: a
+    field of the cue or of its response removed, added, or given each of
+    its values."""
+    for form in FORMS:
+        for place, fields in (("cue", CUE_FIELDS), ("response", RESPONSE_FIELDS)):
+            for name in [*(field for field, _ in fields), "x"]:
+                for value in [ABSENT, *FIELD_VALUES[name]]:
+                    changed: dict[str, Any] = {"url": URL, "responses": [copy.deepcopy(form)]}
+                    where = changed if place == "cue" else changed["responses"][0]
+                    if value is ABSENT:
+                        where.pop(name, None)
+                    else:
+                        where[name] = copy.deepcopy(value)
+                    yield changed
+
+
+@pytest.mark.spec("ADMIN-1")
+def test_a_cue_changed_once_is_a_cue_only_if_it_validates_against_the_schema() -> None:
+    check = validator(CUE)
+    changed = list(changed_once())
+
+    assert [value for value in changed if parses(value) != check.is_valid(value)] == []
+    assert {check.is_valid(value) for value in changed} == {True, False}
 
 
 @pytest.mark.spec("ADMIN-1")
@@ -1442,6 +1537,16 @@ def test_the_checks_report_a_request_less_than_018_seconds_after_the_one_before(
 
     assert checks.check(entries, UA) == [
         "request 2: FETCH-6: 0.179 s after the request before it",
+    ]
+
+
+@pytest.mark.spec("CHECK-1")
+def test_the_checks_time_each_request_from_the_one_before_even_one_reported() -> None:
+    entries = [entry_at(1, 0), entry_at(2, 0.1), entry_at(3, 0.2)]
+
+    assert checks.check(entries, UA) == [
+        "request 2: FETCH-6: 0.100 s after the request before it",
+        "request 3: FETCH-6: 0.100 s after the request before it",
     ]
 
 
