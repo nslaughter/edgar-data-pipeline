@@ -124,10 +124,11 @@ records of their fetches.
   latest record of the URL that names that version, and only where that
   record has one, so each URL carries the validators EDGAR gave it
   ([SRC-4]); `Date`, the fake EDGAR's clock, as RFC 9110 gives it; and
-  `Content-Length`. When the request's `Accept-Encoding` accepts `gzip`,
-  as RFC 9110 reads that header, the fake EDGAR sends the version's object
-  as it's stored, which is gzip data ([OBJ-1]), with
-  `Content-Encoding: gzip`. Otherwise it sends the body itself, without a
+  `Content-Length`. When the request has an `Accept-Encoding` that
+  accepts `gzip`, as RFC 9110 reads that header, the fake EDGAR sends the
+  version's object as it's stored, which is gzip data ([OBJ-1]), with
+  `Content-Encoding: gzip`. Otherwise, as when the request has no
+  `Accept-Encoding`, it sends the body itself, without a
   `Content-Encoding`. It sends no redirect.
 - **SERVE-4** (rule) A conditional `GET` for a stored URL gets a `304`
   when the version [SERVE-3] would send hasn't changed, as RFC 9110 says:
@@ -294,7 +295,7 @@ second, and nothing after a `403`.
 | --- | --- | --- | --- |
 | SERVE-1 | rule | tests | The fake EDGAR serves the `data/` it's given, read at its start, changes nothing, and sends nothing. |
 | SERVE-2 | rule | tests | A `GET` is for the stored URL it names; one for none gets a `404`, and another method a `405`. |
-| SERVE-3 | rule | tests | A `GET` for a stored URL gets its latest version, with its record's headers, gzip-encoded when the request accepts it. |
+| SERVE-3 | rule | tests | A `GET` for a stored URL gets its latest version, with its record's headers, gzip-encoded only when the request's `Accept-Encoding` accepts it. |
 | SERVE-4 | rule | tests | A conditional `GET` gets a `304` when the version hasn't changed, as RFC 9110 says. |
 | SERVE-5 | rule | tests | Its server speaks HTTPS with a certificate, plain HTTP without one, and answers one request at a time. |
 | CUE-1 | rule | tests | Cues are kept in order until each response is given, or a test removes them. |
@@ -384,7 +385,7 @@ three more, and they await the owner too:
    same commit builds the same software. The alternative is base images
    named by tag, which their publishers may move to other images.
 
-This version settles one more of its own, and it awaits the owner too:
+This version settles two more of its own, and they await the owner too:
 
 9. **No metrics or traces** ([§11](#11-left-to-other-specifications)).
    Proposed: the fake EDGAR exposes no metrics and sends no traces, since
@@ -395,6 +396,17 @@ This version settles one more of its own, and it awaits the owner too:
    traces. The alternative is metrics and traces, as [0006] says of every
    service: they'd need Prometheus's and OpenTelemetry's client libraries
    beside the standard library.
+10. **A request without `Accept-Encoding`** ([SERVE-3]). Proposed: the body
+    itself, without a `Content-Encoding`, as to a request whose
+    `Accept-Encoding` doesn't accept `gzip`, so a client that sends no
+    `Accept-Encoding`, such as Python's `urllib.request` or `curl` without
+    `--compressed`, reads the body as it's sent. The writers send
+    `Accept-Encoding: gzip` ([FETCH-3]), so neither choice changes what
+    they get, and no finding says what EDGAR sends such a request. The
+    alternative is the stored object, with `Content-Encoding: gzip`, which
+    RFC 9110 allows for a request without the header: the fake EDGAR would
+    decode nothing, but such a client would get gzip data it doesn't
+    decode.
 
 ## 11. Left to other specifications
 
@@ -436,6 +448,7 @@ a retired statement stays in the index.
 [FAKE-1]: deployment.md#the-fake-edgar
 [FETCH-1]: snapshots.md#10-fetching
 [FETCH-2]: snapshots.md#10-fetching
+[FETCH-3]: snapshots.md#10-fetching
 [FETCH-4]: snapshots.md#10-fetching
 [FETCH-5]: snapshots.md#10-fetching
 [FETCH-6]: snapshots.md#10-fetching
