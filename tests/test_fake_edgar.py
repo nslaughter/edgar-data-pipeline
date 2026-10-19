@@ -23,6 +23,7 @@ import re
 import signal
 import socket
 import ssl
+import struct
 import subprocess
 import sys
 import time
@@ -1041,6 +1042,38 @@ def test_a_malformed_request_is_an_entry_too(fake: FakeEdgar) -> None:
     [entry] = requests(fake.admin_port)
     assert reply.startswith(b"HTTP/1.0 400 ")
     assert (entry["target"], entry["url"], entry["status"]) == (target(SUBMISSIONS), None, 400)
+
+
+LARGE_URL = "https://www.sec.gov/Archives/edgar/full-index/2026/QTR4/master.idx"
+
+
+@pytest.mark.spec("REQ-1")
+@pytest.mark.parametrize("cued", [False, True])
+def test_an_entry_names_the_url_and_the_cue_when_its_client_goes_away(
+    data: Path, cued: bool
+) -> None:
+    # Larger than a connection's buffers hold, at both of its ends, so the
+    # fake EDGAR is still sending it when a client that read its head goes.
+    large = b"x" * (32 << 20)
+    fetched(data, LARGE_URL, large, at=90, content_type="text/plain")
+    edgar = FakeEdgar(data)
+    edgar.start()
+    try:
+        if cued:
+            add_cue(edgar, {"url": LARGE_URL, "responses": [{"sha256": sha(large)}]})
+        with socket.create_connection(("127.0.0.1", edgar.port), timeout=10) as connection:
+            connection.sendall(f"GET {target(LARGE_URL)} HTTP/1.1\r\nHost: x\r\n\r\n".encode())
+            head = b""
+            while b"\r\n\r\n" not in head:
+                head += connection.recv(65536)
+            # Gone, with the body mostly unsent: its connection reset.
+            connection.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+        [entry] = requests(edgar.admin_port)
+    finally:
+        edgar.stop()
+
+    assert head.startswith(b"HTTP/1.0 200 ")
+    assert (entry["url"], entry["status"], entry["cued"]) == (LARGE_URL, 200, cued)
 
 
 # A user agent and a header that tests send the fake EDGAR, and look for in

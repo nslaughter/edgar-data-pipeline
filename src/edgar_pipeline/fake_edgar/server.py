@@ -266,30 +266,33 @@ class EdgarHandler(Handler):
                     self.send_error(HTTPStatus.REQUEST_URI_TOO_LONG)
                 elif self.parse_request():
                     entry["headers"] = joined(self.headers)
-                    entry["url"], entry["cued"] = self.answer(entry["method"], entry["target"])
+                    self.answer(entry)
             except OSError:
                 pass  # the client went away, or was too slow
             finally:
                 entry["status"] = self.status
                 self.server.state.append(entry)
 
-    def answer(self, method: str, target: str) -> tuple[str | None, bool]:
-        """Answers the request; returns the stored URL it was for and
-        whether a cue answered it (SERVE-2, CUE-2)."""
-        named = self.server.named(target, self.headers.get("Host"))
+    def answer(self, entry: dict[str, Any]) -> None:
+        """Answers the request. Before it sends anything, it notes in the
+        request's entry the stored URL it's for and whether a cue answers
+        it, so the entry has them even if the client goes away (SERVE-2,
+        CUE-2, REQ-1)."""
+        named = self.server.named(entry["target"], self.headers.get("Host"))
         stored = next((self.server.stored[u] for u in named if u in self.server.stored), None)
-        if method != "GET":
+        if entry["method"] != "GET":
             self.discard_body()
             self.reply(HTTPStatus.METHOD_NOT_ALLOWED, {"Allow": "GET"}, b"")
-            return None, False
-        url = stored.url if stored else None
+            return
+        entry["url"] = stored.url if stored else None
         cue = self.server.state.take(named)
         if cue is None:
             if stored is None:
                 self.reply(HTTPStatus.NOT_FOUND, {}, b"")
             else:
                 self.serve(stored.versions[stored.latest])
-            return url, False
+            return
+        entry["cued"] = True
         if cue.drop:
             self.drop()
         elif cue.status is not None:
@@ -300,7 +303,6 @@ class EdgarHandler(Handler):
                 self.reply(HTTPStatus.NOT_FOUND, {}, b"")
             else:
                 self.serve(version, cut=cue.cut)
-        return url, True
 
     def serve(self, version: Version, *, cut: bool = False) -> None:
         """A version as EDGAR gave it, or a 304 if the request's validators
