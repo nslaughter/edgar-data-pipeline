@@ -4,8 +4,8 @@ version = "0.0.0.dev0"
 description = "A reproducible pipeline for SEC EDGAR filings: versioned feed snapshots, bulk import, and bitemporal queries over restated financial data."
 readme = "README.md"
 requires-python = ">=3.12"
-# The scripts use only the standard library, so a rerun needs no pinned
-# packages. The pipeline's own dependencies arrive with its specification.
+# The scripts and the fake EDGAR use only the standard library, so a rerun
+# needs no pinned packages. The services' own dependencies arrive with them.
 dependencies = []
 
 [project.urls]
@@ -26,7 +26,8 @@ dev = [
 ]
 
 [tool.uv]
-# Nothing to build yet: the repository holds scripts, not a package.
+# Nothing to build: the scripts run as they are, and each service under src/
+# runs from its source, in an image of its own (spec/deployment.md, IMG-5).
 package = false
 
 [tool.ruff]
@@ -39,12 +40,12 @@ select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "PT"]
 
 [tool.mypy]
 strict = true
-files = ["scripts", "tests"]
-mypy_path = "scripts"
+files = ["scripts", "src", "tests"]
+mypy_path = "scripts:src"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["scripts"]
+pythonpath = ["scripts", "src"]
 addopts = ["-ra", "--strict-config", "--strict-markers", "--import-mode=importlib"]
 xfail_strict = true
 markers = ["spec(*ids): the spec/*.md statements a test checks"]
