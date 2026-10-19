@@ -1,7 +1,7 @@
 # Testing and verification
 
 <!-- status: The fake EDGAR; The drills; The snapshot store in git -->
-**Status** ([status page](../status.md)): The fake EDGAR: Specified. The drills: Planned. The snapshot store in git: Built.
+**Status** ([status page](../status.md)): The fake EDGAR: Built. The drills: Planned. The snapshot store in git: Built.
 <!-- end status -->
 
 How the repository checks that its data, scripts, charts, and services do
@@ -70,17 +70,17 @@ without the behavior it covers ([doing the next item][agents-next], step
 | Specification | Statements with tests now | Statements awaiting a task |
 | --- | --- | --- |
 | [`snapshots.md`][snapshots] 1.0.0 | Those `verify.py` checks, and `snapshot.py`'s rules, brought to this version by [T35], done October 13, 2026; and the schemas': [STORE-1], [REC-13], [JOB-1] | [T22], the scheduler's jobs; [T23], the fetcher and the cluster store; [T24], the discoverer's jobs and its use of `edgar-asof` ([FETCH-18]); [T36], the transfer ([XFER-1] to [XFER-3]) |
-| [`deployment.md`][deployment] 1.2.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind | [T21], the pipeline's images and the fake EDGAR's installation ([IMG-1] to [IMG-3], [IMG-5], [FAKE-1] to [FAKE-5]); [T23], the fetcher's Lease ([LEASE-1], [LEASE-2]) ([§3][deployment-ids]) |
+| [`deployment.md`][deployment] 1.2.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind; and the pipeline's images' and the fake EDGAR's installation, written by [T21] ([IMG-1] to [IMG-3], [IMG-5], [FAKE-1] to [FAKE-5]) | [T23], the fetcher's Lease ([LEASE-1], [LEASE-2]) ([§3][deployment-ids]) |
 | [`controls.md`][controls] 1.0.0 | [API-1] | [T22], [T23], [T24], and [T28] ([§3][controls-ids]) |
 | [`notices.md`][notices] 0.1.0 | [TABLE-1], [MSG-1] | [T24], the discoverer, with the scheduler's side of the Backfills ([§3][notices-ids]) |
 | [`telemetry.md`][telemetry] 0.1.0 | [VIEW-1] | [T28], the monitoring of observing filings; [T29], the traces ([§3][telemetry-ids]) |
 | [`site.md`][site] 0.1.0 | The site's statements checked by `tests`, written by [T40], and [PAGE-4]'s, written by [T42] once every topic had its page | None |
-| [`fake-edgar.md`][fake-edgar] 0.1.0 | The schemas': [CUE-3], [REQ-3] | [T21], the fake EDGAR; [T23], the checks of the fetcher's requests to it on kind ([CHECK-3]) ([§3][fake-edgar-ids]) |
+| [`fake-edgar.md`][fake-edgar] 0.1.0 | The schemas': [CUE-3], [REQ-3]; and the fake EDGAR's, with the checks of `snapshot.py`'s requests to it, written by [T21] | [T23], the checks of the fetcher's requests to it on kind ([CHECK-3]) ([§3][fake-edgar-ids]) |
 
 ## What the tests check today
 
 The status block above says which of the parts this page describes are
-built. The tests that run today check five things.
+built. The tests that run today check six things.
 
 **The git store's invariants, with `verify.py`.** `verify.py` checks every
 invariant of the git store, each of which holds whenever `data/` is at
@@ -124,18 +124,31 @@ part's status matches the plan, the specifications, and the decision
 records ([STATUS-3]). So each of CI's jobs fails on a site that doesn't
 build, and the site needs no job of its own ([0012]).
 
+**The fake EDGAR, on one machine.** Its tests run it on a `data/` of
+their own and send it requests on the machine they run on: what it serves
+([SERVE-1] to [SERVE-5]), the responses a test cues ([CUE-1], [CUE-2]),
+its log of requests ([REQ-1], [REQ-2]), and its admin port ([ADMIN-1]).
+The checks of the fetching rules report what breaks them ([CHECK-1]), and
+`snapshot.py`'s requests to the fake EDGAR pass them, through a body cut
+short, a `429`, and no response, each retried, and a stop on a `403`
+([CHECK-2], [T21]).
+
 **The charts, rendered and installed.** The deployment's invariants are
-checked by rendering each of the four charts with `helm template`, and the
-hook Jobs' scripts against fakes of `nats`, of `psql`, and of Garage's
-admin API; the deployment's rules, on a kind cluster the charts are installed on
+checked by rendering each of the four charts with `helm template`; the
+hook Jobs' scripts, against fakes of `nats`, of `psql`, and of Garage's
+admin API; and the command that builds the pipeline's images, against
+fakes of `docker` and `kind` ([IMG-2]). The deployment's rules are checked
+on a kind cluster the charts are installed on
 ([T20], [chart tests and tests on kind](#chart-tests-and-tests-on-kind)).
 
 CI runs these checks in three jobs, one for each of Python 3.12, 3.13, and
 3.14: the format check, the lint, the type check, the tests, and
 `uv run scripts/verify.py --since origin/main` ([commands][agents-commands],
 [doing the next item][agents-next], step 9). A fourth job, `kind`, creates
-a kind cluster, installs the four charts and upgrades them, and runs the
-tests of the installed charts. A pull request merges only once the jobs
+a kind cluster, builds the pipeline's images and loads them into it, points
+its DNS for the SEC's hosts at the fake EDGAR, installs the four charts,
+the fake EDGAR among them, and upgrades them, and runs the tests of the
+installed charts ([FAKE-4]). A pull request merges only once the jobs
 pass that a ruleset on `main` requires; only the owner changes the ruleset
 ([commits and pull requests][agents-commits]).
 
@@ -149,7 +162,7 @@ rebuild of the facts. Each comes with the task that builds what it tests.
 | Layer | What it checks | Task |
 | --- | --- | --- |
 | Tests on kind | The `kind` statements of each service, against the installed charts, as [T20]'s are of the charts | Each task that builds a service |
-| The fake EDGAR | The fetching rules, from every request the fetcher sends | [T21], [T23] |
+| The fake EDGAR | The fetching rules, from every request the fetcher sends | [T23] |
 | envtest | The scheduler's controller, and the API server's rules for the resources, against a real API server | [T22] |
 | `promtool test rules` | The alert rules | [T28], [T33] |
 | The drills | Recovery from outages caused on purpose, and the restore of the database | [T31] |
@@ -180,7 +193,10 @@ and lets no service change one ([STORE-2], [LOG-3], [PG-9]), nor any but
 the discoverer add to the notices' tables, lets each service's role read
 the notices' views, and lets Grafana's role read only its views
 ([PG-14]); that Grafana's data source connects, verifying the server ([MON-6]); that
-one fetcher pod holds the Lease ([LEASE-2]); that each ServiceAccount can
+the SEC's hosts resolve to the fake EDGAR, and a pod's request for a
+stored URL reaches it over HTTPS and gets the version `data/` holds
+([FAKE-4], [FAKE-5]); that the pipeline's images run as built from the
+commit installed ([IMG-3]); that one fetcher pod holds the Lease ([LEASE-2]); that each ServiceAccount can
 do exactly what the table of grants allows ([RBAC-5]); and that the
 notices' and dashboards' views give what their sections define ([GAP-2],
 [LAG-1], [VIEW-4]). The cluster store's own invariants, that every object
@@ -240,9 +256,10 @@ flowchart LR
 
 So the whole chart can be installed on kind in CI and tested end to end
 without the SEC ([design][design-testing], [0001]). [T47] specified the
-fake EDGAR, and [T21] builds it. As the first service code, T21 also sets
-where the services live in the Python project, and adds the command that
-builds the pipeline's images and loads them into kind ([IMG-2]).
+fake EDGAR, and [T21] built it. As the first service code, T21 also set
+where the Python services live, a package each under `src/edgar_pipeline/`,
+and added the command that builds the pipeline's images and loads them into
+kind, `scripts/build_images.py` ([IMG-2]).
 
 ### The scheduler, under envtest
 

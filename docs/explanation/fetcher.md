@@ -476,8 +476,9 @@ have tests already: the rules it shares with `snapshot.py`, [FETCH-1] to
 schemas' statements, [STORE-1] and [JOB-1]; and those of its bucket,
 database role, and credentials, which T20 wrote with the charts
 ([GARAGE-4], [PG-6] to [PG-9], [SECRET-1]). The others' tests await the
-tasks that build what they describe: T21 its image ([IMG-1]); T23 the rest
-of the fetcher, its Lease, jobs, and writes among them; T24 [FETCH-18]; and
+tasks that build what they describe: T23 the fetcher, its Lease, jobs, and
+writes among them, whose image [IMG-1]'s test, written in T21 with the fake
+EDGAR's, checks once the chart renders it; T24 [FETCH-18]; and
 T28 and T29 its metrics, its alert, and its traces
 ([§3 of the store][snapshots-ids], [§3 of the controls][controls-ids], [§3
 of deployment][deployment-ids], [§3 of telemetry][telemetry-ids]).

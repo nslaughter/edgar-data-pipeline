@@ -50,7 +50,7 @@ the plan's tasks wait on.
 | The transfer from the cluster to git | Specified | [0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md) | [`snapshots.md`](../spec/snapshots.md) 1.0.0 | T15 (done) | T36 (not done) | — |
 | The controls | Specified | [0007](decisions/0007-control-the-pipeline-through-custom-resources.md) | [`controls.md`](../spec/controls.md) 1.0.0 | T14 (done) | T22 (not done) | — |
 | The charts | Built | [0001](decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md), [0011](decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md) | [`deployment.md`](../spec/deployment.md) 1.2.0 | T13 (done), T34 (done), T38 (done) | T20 (done) | — |
-| The fake EDGAR | Specified | [0001](decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md), [0006](decisions/0006-write-the-services-in-go-and-python.md) | [`fake-edgar.md`](../spec/fake-edgar.md) 0.1.0, [`deployment.md`](../spec/deployment.md) 1.2.0 | T47 (done) | T21 (not done) | — |
+| The fake EDGAR | Built | [0001](decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md), [0006](decisions/0006-write-the-services-in-go-and-python.md) | [`fake-edgar.md`](../spec/fake-edgar.md) 0.1.0, [`deployment.md`](../spec/deployment.md) 1.2.0 | T47 (done) | T21 (done) | — |
 | The drills | Planned | — | — | — | T31 (not done) | — |
 | The documentation site | Specified; built in part | [0012](decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md) | [`site.md`](../spec/site.md) 0.1.0 | T39 (done) | T40 (done), T41 (done), T42 (done), T43 (not done) | — |
 <!-- end generated: parts -->

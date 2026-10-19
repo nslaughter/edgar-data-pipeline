@@ -1,7 +1,7 @@
 # Deployment
 
 <!-- status: The charts; The fake EDGAR -->
-**Status** ([status page](../status.md)): The charts: Built. The fake EDGAR: Specified.
+**Status** ([status page](../status.md)): The charts: Built. The fake EDGAR: Built.
 <!-- end status -->
 
 The pipeline is installed on Kubernetes with Helm, by four charts in a
@@ -328,8 +328,10 @@ The commit reaches the record. The fetcher's records name it in their
 image's tag gives ([§6 of the store][records]), and each of the
 discoverer's readings as `discoverer@` and its commit ([§6 of the
 notices][readings]). So each record and each reading says which code wrote
-it. The command and `images.commit` arrive with the first of the pipeline's
-images, the fake EDGAR, task T21 ([plan][plan-observing]).
+it. The command, `scripts/build_images.py`, and `images.commit` arrived
+with the first of the pipeline's images, the fake EDGAR's, in task T21,
+which builds each directory of `images/` as an image of its own
+([plan][plan-observing]).
 
 ## The fake EDGAR
 
@@ -425,9 +427,10 @@ Each statement of the deployment's specification is one of two kinds
   it where no cluster is installed.
 
 The statements came before the charts they describe. Task T20 built the
-charts and wrote their tests, apart from those of [IMG-1] to [IMG-3],
-which T21 writes with the first of the pipeline's images, and those of
-[LEASE-1] and [LEASE-2], which T23 writes with the fetcher ([deployment,
+charts and wrote their tests. Task T21 wrote those of the pipeline's images
+and the fake EDGAR's installation, [IMG-1] to [IMG-3], [IMG-5], and
+[FAKE-1] to [FAKE-5], with the first of the pipeline's images. Those of
+[LEASE-1] and [LEASE-2] await T23, which builds the fetcher ([deployment,
 §3][ids]). The tests on kind, the fake EDGAR they run against, and the
 drills are on [Testing and verification](testing-and-verification.md).
 
