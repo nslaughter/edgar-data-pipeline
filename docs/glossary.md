@@ -205,8 +205,9 @@ for its specification to give ([T18]).
 
 A service for tests that answers for the SEC's hosts from the stored
 versions under `data/`, gives the failures a test cues, and logs every
-request it receives, so the fetching rules are checked without the SEC
-([`fake-edgar.md`][fake-edgar], [testing on kind][design-testing], [T21]).
+request its server receives, so the fetching rules are checked without the
+SEC ([`fake-edgar.md`][fake-edgar], [testing on kind][design-testing],
+[T21]).
 
 ### Feed
 

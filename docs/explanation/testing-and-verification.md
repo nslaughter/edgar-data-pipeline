@@ -235,7 +235,7 @@ flowchart LR
     S["snapshot.py, in its tests"] -->|requests| FE
     F["The Go fetcher, on kind"] -->|requests to www.sec.gov and data.sec.gov| FE
     T["A test"] -->|cues, through the admin port| FE
-    FE["The fake EDGAR: serves the stored versions in data/, and logs every request"] -->|its log of requests| C["One set of checks: the user agent, at most 5 a second, nothing after a 403"]
+    FE["The fake EDGAR: serves the stored versions in data/, and logs every request to its server"] -->|its log of requests| C["One set of checks: the user agent, at most 5 a second, nothing after a 403"]
 ```
 
 So the whole chart can be installed on kind in CI and tested end to end

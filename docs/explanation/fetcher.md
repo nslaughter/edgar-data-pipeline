@@ -404,9 +404,9 @@ were checked against its `main` on October 14, 2026, at commit `515bb0d`.
 
 The fetching rules have two implementations, `snapshot.py` for the git
 store and the fetcher for the cluster. A fake EDGAR in the cluster serves
-stored versions and records every request it receives, so one set of
-checks on those requests, of the user agent, the rate, and nothing after a
-`403`, runs against both ([0006], [testing on kind][design-testing]). The
+stored versions and records every request its server receives, so one set
+of checks on those requests, of the user agent, the rate, and nothing after
+a `403`, runs against both ([0006], [testing on kind][design-testing]). The
 transfer copies the cluster's records of the git store's scope into
 `data/`, reading only the cluster store, never the SEC ([XFER-1]).
 

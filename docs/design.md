@@ -233,8 +233,8 @@ follows, with logs that carry the accession number.
 - Unit tests still never reach the network.
 - A fake EDGAR in the cluster serves stored versions from the git store, so
   end-to-end tests install the whole chart on kind in CI without the SEC.
-  It records every request, so the same checks of the fetching rules run
-  against `snapshot.py` and the Go fetcher
+  It records every request to its server, so the same checks of the
+  fetching rules run against `snapshot.py` and the Go fetcher
   ([0006](decisions/0006-write-the-services-in-go-and-python.md)).
   [`spec/fake-edgar.md`](../spec/fake-edgar.md) specifies it, and
   [`spec/deployment.md`](../spec/deployment.md#the-fake-edgar) how CI

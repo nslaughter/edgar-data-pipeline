@@ -4,9 +4,9 @@
 the fake EDGAR, a service for tests that answers as EDGAR from the stored
 versions in the git store: which version it serves for a request, and how
 it answers a conditional one; the responses a test cues it to give
-instead; its log of the requests it receives, and how tests read it; and
-the one set of checks of the fetching rules that reads that log, for
-`scripts/snapshot.py` and for the fetcher. How the charts install it on
+instead; its log of the requests its server receives, and how tests read
+it; and the one set of checks of the fetching rules that reads that log,
+for `scripts/snapshot.py` and for the fetcher. How the charts install it on
 kind, with its image and its certificate, is the deployment's
 ([`deployment.md`](deployment.md#the-fake-edgar)). Where code and this
 document disagree, the code is wrong or this document needs a new version;
@@ -34,7 +34,7 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
    `429`, a `403`, or any other status, an earlier version, a body cut
    short, or no response, so each fetching rule's failures can be tested.
    [CUE-1], [CUE-2], [CUE-3].
-3. **Every request the fake EDGAR receives is in its log, in order,** with
+3. **Every request its server receives is in its log, in order,** with
    its headers and the answer it got, and no request header leaves the
    fake EDGAR but through the answers of its admin port. [SERVE-5],
    [REQ-1], [REQ-2], [REQ-3], [ADMIN-1].
