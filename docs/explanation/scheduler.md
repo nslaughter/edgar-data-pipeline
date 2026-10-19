@@ -218,12 +218,13 @@ adds each of the pipeline's services, with its replicas
 its Deployment and Lease, its ServiceAccount and grants, its access to
 NATS, and its image, specified before T22 builds it ([plan][plan-observing]).
 
-> **Analysis.** No task, decision record, or specification covers this.
-> Two active replicas would each queue every Source's polls, so each Source
-> would be polled twice a cadence and take twice its share of the budget,
-> and each Backfill would be ordered twice, which [LIST-1] makes harmless.
-> The pipeline could instead split the Sources between active replicas, at
-> the cost of a way to assign each Source to one of them.
+> **Analysis.** No task, decision record, or specification covers more
+> than one active replica. Two active replicas would each queue every
+> Source's polls, so each Source would be polled twice a cadence and take
+> twice its share of the budget, and each Backfill would be ordered twice,
+> which [LIST-1] makes harmless. The pipeline could instead split the
+> Sources between active replicas, at the cost of a way to assign each
+> Source to one of them.
 
 ## How it scales
 
