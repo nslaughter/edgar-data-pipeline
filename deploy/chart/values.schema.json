@@ -1,10 +1,35 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "title": "The umbrella chart's values",
-  "description": "What the umbrella chart's values must hold (spec/deployment.md). Every credential, and the database archive's server name, is required, and no committed values file sets it, so the chart renders only once they're given (SECRET-1, PG-4).",
+  "description": "What the umbrella chart's values must hold (spec/deployment.md). Every credential, the database archive's server name, and the commit of the pipeline's own images are required, and no committed values file sets them, so the chart renders only once they're given (SECRET-1, PG-4, IMG-1).",
   "type": "object",
-  "required": ["credentials", "database", "jetstream", "garageSetup"],
+  "required": ["credentials", "database", "jetstream", "garageSetup", "images", "fakeEdgar"],
   "properties": {
+    "images": {
+      "type": "object",
+      "required": ["commit"],
+      "additionalProperties": false,
+      "properties": {
+        "commit": {
+          "description": "The commit the pipeline's own images are built from and tagged with: 40 lower-case hexadecimal digits (IMG-1).",
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      }
+    },
+    "fakeEdgar": {
+      "description": "The fake EDGAR, which only CI installs (FAKE-1).",
+      "type": "object",
+      "required": ["enabled", "image"],
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "image": {
+          "description": "The repository of its image, one of the pipeline's own, which images.commit tags (IMG-1).",
+          "type": "string"
+        }
+      }
+    },
     "credentials": {
       "type": "object",
       "required": ["garage", "garageKeys", "database", "grafana"],

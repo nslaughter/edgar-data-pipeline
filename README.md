@@ -96,12 +96,21 @@ kind, kubectl, and Helm 4.
 
 ```sh
 kind create cluster --config deploy/kind.yaml
+uv run scripts/build_images.py
 helm install prometheus-crds deploy/prometheus-crds --namespace edgar --create-namespace --wait
 helm install cert-manager deploy/cert-manager --namespace cert-manager --create-namespace --wait
 helm install operators deploy/operators --namespace cnpg-system --create-namespace --wait
-helm install edgar deploy/chart --namespace edgar --values deploy/edgar-values.yaml --wait --timeout 20m
+helm install edgar deploy/chart --namespace edgar --values deploy/edgar-values.yaml \
+  --set images.commit="$(git rev-parse HEAD)" --wait --timeout 20m
 EDGAR_KUBE_CONTEXT=kind-edgar uv run pytest tests/test_kind.py
 ```
+
+[`scripts/build_images.py`](scripts/build_images.py) builds the pipeline's
+own images from the commit checked out, from their Dockerfiles under
+[`images/`](images/), tags each with the commit, and loads it into kind's
+nodes; it refuses a working tree with uncommitted changes. The umbrella
+chart runs each by that commit, its value `images.commit`, and never pulls
+one.
 
 `deploy/edgar-values.yaml`, which git ignores, holds what the umbrella chart
 requires and no committed file sets: each credential, and a name for the
@@ -110,7 +119,11 @@ database's archive in Garage, new for each cluster.
 their places and forms, and CI's [workflow](.github/workflows/ci.yml)
 generates a set for each cluster it creates. An upgrade runs `helm upgrade`
 in the same order; with `EDGAR_CHARTS_UPGRADED=true`, as CI sets, the tests
-also require each release to have been upgraded. `deploy/kind.yaml` keeps
+also require each release to have been upgraded. CI also installs a fake
+EDGAR, which answers for the SEC's hosts from the stored versions under
+`data/`, so the tests on kind never reach the SEC, and points the cluster's
+DNS for those hosts at it; with `EDGAR_FAKE_EDGAR=true`, as CI sets, the
+tests require it. The owner's installations never include it. `deploy/kind.yaml` keeps
 every volume's data in `/var/tmp/edgar-kind/volumes` on the machine that
 runs kind's nodes, so a cluster created again finds it; on macOS, that's Docker's Linux VM, not the
 Mac's own disk. The tests of the installed charts run against the cluster the context

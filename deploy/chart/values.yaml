@@ -11,6 +11,22 @@
 #     grafana: {adminPassword}
 #   database:
 #     backups: {serverName}
+#
+# So is the commit the pipeline's own images are built from (IMG-1), which CI
+# and the owner give as the commit checked out, after scripts/build_images.py
+# has built and loaded its images (IMG-3, IMG-4):
+#
+#   images:
+#     commit: 40 lower-case hexadecimal digits
+
+# The fake EDGAR, which answers for the SEC's hosts from the stored versions
+# under data/, for the tests on kind (spec/fake-edgar.md). Only CI sets
+# enabled to true, so the owner's installations never include it (FAKE-1).
+# Its image is the pipeline's own, built from images/fake-edgar/ and tagged
+# with images.commit (FAKE-2, IMG-1).
+fakeEdgar:
+  enabled: false
+  image: edgar/fake-edgar
 
 # The pipeline's database: one CloudNativePG Cluster, whose Services and
 # Secrets are named after it (spec/deployment.md, section 7).

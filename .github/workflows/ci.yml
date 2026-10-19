@@ -64,6 +64,9 @@ jobs:
       # The job upgrades each release after installing it, so the tests
       # require each release's history to show both (CHART-4).
       EDGAR_CHARTS_UPGRADED: "true"
+      # The job installs the fake EDGAR, which only CI installs, so the tests
+      # require it (FAKE-4, FAKE-5).
+      EDGAR_FAKE_EDGAR: "true"
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
@@ -85,6 +88,36 @@ jobs:
         run: uv sync --locked
       - name: Create the kind cluster
         run: kind create cluster --config deploy/kind.yaml --wait 120s
+      # The pipeline's own images, built from the commit checked out, tagged
+      # with it, and loaded into each node, by the one command that does so
+      # (IMG-2, IMG-3).
+      - name: Build the pipeline's images and load them into kind
+        run: uv run scripts/build_images.py
+      # Before the umbrella chart is installed, CoreDNS answers a pod's query
+      # for the SEC's hosts with the address of the fake EDGAR's Service in
+      # the release namespace, so no pod of the installed charts reaches the
+      # SEC (FAKE-4). Each name is rewritten to the Service's, and the
+      # answer's name back to the name asked for, which resolvers check.
+      - name: Point the cluster's DNS for the SEC's hosts at the fake EDGAR
+        run: |
+          rules=$(cat <<'EOF'
+              rewrite stop {
+                  name regex ^www\.sec\.gov\.$ fake-edgar.edgar.svc.cluster.local.
+                  answer name ^fake-edgar\.edgar\.svc\.cluster\.local\.$ www.sec.gov.
+              }
+              rewrite stop {
+                  name regex ^data\.sec\.gov\.$ fake-edgar.edgar.svc.cluster.local.
+                  answer name ^fake-edgar\.edgar\.svc\.cluster\.local\.$ data.sec.gov.
+              }
+          EOF
+          )
+          kubectl get configmap coredns --namespace kube-system -o json \
+            | jq --arg rules "$rules" '.data.Corefile |= sub("^\\.:53 \\{\n"; ".:53 {\n" + $rules + "\n")' \
+            >"$RUNNER_TEMP/coredns.json"
+          jq -e '.data.Corefile | contains("fake-edgar")' "$RUNNER_TEMP/coredns.json" >/dev/null
+          kubectl replace -f "$RUNNER_TEMP/coredns.json"
+          kubectl rollout restart deployment coredns --namespace kube-system
+          kubectl rollout status deployment coredns --namespace kube-system --timeout 120s
       # New credentials for each cluster, and a new name for its database's
       # archive, each masked in the log and kept outside the repository
       # (SECRET-4, PG-10).
@@ -122,15 +155,19 @@ jobs:
           echo "EDGAR_VALUES=$values" >>"$GITHUB_ENV"
       # The four releases, each in its namespace, in order, each once the one
       # before it is ready (CHART-4); then each upgraded in the same order,
-      # which runs the umbrella chart's hook Jobs again.
+      # which runs the umbrella chart's hook Jobs again. The umbrella chart
+      # runs the images built from the commit checked out (IMG-3), and the
+      # fake EDGAR (FAKE-4).
       - name: Install and upgrade the charts
         run: |
+          commit=$(git rev-parse HEAD)
           for action in install upgrade; do
             create=$([ "$action" = install ] && echo --create-namespace || true)
             helm "$action" prometheus-crds deploy/prometheus-crds --namespace edgar $create --wait --timeout 10m
             helm "$action" cert-manager deploy/cert-manager --namespace cert-manager $create --wait --timeout 10m
             helm "$action" operators deploy/operators --namespace cnpg-system $create --wait --timeout 10m
-            helm "$action" edgar deploy/chart --namespace edgar --values "$EDGAR_VALUES" --wait --timeout 20m
+            helm "$action" edgar deploy/chart --namespace edgar --values "$EDGAR_VALUES" \
+              --set images.commit="$commit" --set fakeEdgar.enabled=true --wait --timeout 20m
           done
       - name: Test the installed charts
         run: uv run pytest tests/test_kind.py -v
@@ -142,6 +179,9 @@ jobs:
           kubectl get pods --all-namespaces -o wide
           kubectl get events --all-namespaces --sort-by=.lastTimestamp | tail -100
           kubectl get jobs,clusters.postgresql.cnpg.io,backups.postgresql.cnpg.io --namespace edgar
+          kubectl get issuers.cert-manager.io,certificates.cert-manager.io --namespace edgar
+          # The fake EDGAR writes no request header to its output (REQ-2).
+          kubectl logs --namespace edgar deployment/fake-edgar --tail=100 || true
           for job in garage-setup jetstream-setup database-setup; do
             echo "--- $job"
             kubectl logs --namespace edgar "job/$job" --tail=100 || true
