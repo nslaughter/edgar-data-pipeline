@@ -1,6 +1,6 @@
 # Specification: the fake EDGAR
 
-**Status:** Version 0.1.0, draft, October 18, 2026. This document governs
+**Status:** Version 0.1.0, draft, October 19, 2026. This document governs
 the fake EDGAR, a service for tests that answers as EDGAR from the stored
 versions in the git store: which version it serves for a request, and how
 it answers a conditional one; the responses a test cues it to give
@@ -313,17 +313,17 @@ second, and nothing after a `403`.
 
 The owner decided on October 18, 2026 that the fake EDGAR is specified,
 here and in the deployment's version 1.2.0, before T21 builds it, since no
-specification covered it. Each detail this version settles is stated as its
-proposed default. The owner keeps each default or chooses another before
-this version is merged:
+specification covered it. None is open: the owner confirmed on October 19,
+2026 each detail this version settles, keeping each proposed default over
+its alternative:
 
-1. **Which version it serves** ([SERVE-2] to [SERVE-4]). Proposed: each
+1. **Which version it serves** ([SERVE-2] to [SERVE-4]). Decided: each
    URL's latest version, an earlier one on cue, a `304` as RFC 9110 gives
    it, and a `404` for a URL not stored. The alternative is each version
    in turn, one for each request, in the order stored: it replays a URL's
    history without a cue, but what a test gets would depend on how many
    requests came before it.
-2. **Failures on cue** ([§5](#5-cues)). Proposed: cues through the admin
+2. **Failures on cue** ([§5](#5-cues)). Decided: cues through the admin
    port, for one URL or any, each response given once, in order: a status,
    an earlier version, a body cut short, or no response. No cue delays a
    response, as a test of [FETCH-5]'s timeout would need, or sends a body
@@ -336,14 +336,14 @@ this version is merged:
    writer must be asked to fetch in place of the URL whose failure a test
    needs.
 3. **Its log of requests** ([§6](#6-the-request-log), [ADMIN-1]).
-   Proposed: kept in memory, and read through the admin port from a place
+   Decided: kept in memory, and read through the admin port from a place
    in it, with one request answered at a time, so the log's order is the
    requests'. The alternative is a JSON line for each request on its
    output, read on kind with `kubectl logs`: no admin port, but the user
    agent would be in the pod's log, which [REQ-2] rules out.
 4. **How requests reach it** ([SERVE-5], and the deployment's
    [FAKE-3](deployment.md#the-fake-edgar) and
-   [FAKE-4](deployment.md#the-fake-edgar)). Proposed: in the cluster,
+   [FAKE-4](deployment.md#the-fake-edgar)). Decided: in the cluster,
    HTTPS with a certificate for the SEC's hosts, from an authority that the
    release makes only when the fake EDGAR is installed, and kind's DNS
    answering the SEC's names with the fake EDGAR's Service, so the writers
@@ -354,17 +354,17 @@ this version is merged:
    sends to instead of the SEC's hosts: no certificate or DNS, but an
    exception to [FETCH-1], the fetcher's TLS untested, and nothing to stop
    another pod from reaching the SEC.
-5. **The checks' allowance** ([CHECK-1]). Proposed: 20 milliseconds less
+5. **The checks' allowance** ([CHECK-1]). Decided: 20 milliseconds less
    than [FETCH-6]'s 0.2 seconds, by when each request arrives. The
    alternative is no allowance: it holds arrivals to [FETCH-6] exactly,
    but fails a run in which one request arrives late, as after a TLS
    handshake, and the next on time.
 
 The deployment's version 1.2.0, which installs the fake EDGAR, settles
-three more, and they await the owner too:
+three more, which the owner confirmed too:
 
 6. **How it's installed** ([FAKE-1](deployment.md#the-fake-edgar),
-   [FAKE-2](deployment.md#the-fake-edgar)). Proposed: by the umbrella
+   [FAKE-2](deployment.md#the-fake-edgar)). Decided: by the umbrella
    chart, only when the value `fakeEdgar.enabled` is `true`, which CI sets
    and no committed values file does, as one replica behind a Service. The
    alternative is a chart or manifests of its own, which CI installs apart
@@ -373,22 +373,22 @@ three more, and they await the owner too:
    service is built, so [IMG-3](deployment.md#the-pipelines-own-images)'s
    test has nothing to check.
 7. **How `data/` reaches it** ([IMG-5](deployment.md#the-pipelines-own-images)).
-   Proposed: in its image, which [IMG-2](deployment.md#the-pipelines-own-images)'s
+   Decided: in its image, which [IMG-2](deployment.md#the-pipelines-own-images)'s
    command builds from the files of the commit it tags, so the image
    serves that commit's `data/`, 2.7 MB now. The alternative is the
    checkout's `data/`, which `deploy/kind.yaml` mounts into the nodes as it
    mounts the volumes' directory: no new image when `data/` changes, but
    the image wouldn't say which `data/` it serves.
 8. **The base images, by digest**
-   ([IMG-5](deployment.md#the-pipelines-own-images)). Proposed: each of the
+   ([IMG-5](deployment.md#the-pipelines-own-images)). Decided: each of the
    pipeline's images is built from base images named by digest, so the
    same commit builds the same software. The alternative is base images
    named by tag, which their publishers may move to other images.
 
-This version settles two more of its own, and they await the owner too:
+This version settles two more of its own, which the owner confirmed too:
 
 9. **No metrics or traces** ([§11](#11-left-to-other-specifications)).
-   Proposed: the fake EDGAR exposes no metrics and sends no traces, since
+   Decided: the fake EDGAR exposes no metrics and sends no traces, since
    it's not one of the services the telemetry's specification observes,
    and its request log shows what its server receives. [0006] lists it
    apart from the six services, for tests, with the standard library
@@ -396,7 +396,7 @@ This version settles two more of its own, and they await the owner too:
    traces. The alternative is metrics and traces, as [0006] says of every
    service: they'd need Prometheus's and OpenTelemetry's client libraries
    beside the standard library.
-10. **A request without `Accept-Encoding`** ([SERVE-3]). Proposed: the body
+10. **A request without `Accept-Encoding`** ([SERVE-3]). Decided: the body
     itself, without a `Content-Encoding`, as to a request whose
     `Accept-Encoding` doesn't accept `gzip`, so a client that sends no
     `Accept-Encoding`, such as Python's `urllib.request` or `curl` without
@@ -422,8 +422,8 @@ This version leaves to others what the fake EDGAR relies on:
 
 It exposes no metrics and sends no traces, since it's not one of the
 services the telemetry's specification observes
-([`telemetry.md`](telemetry.md)), as open question 9 proposes
-([§10](#10-open-questions)).
+([`telemetry.md`](telemetry.md)), as the owner decided
+([§10](#10-open-questions), question 9).
 
 ## 12. Changes to this document
 

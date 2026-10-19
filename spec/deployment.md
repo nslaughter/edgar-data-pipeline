@@ -1,6 +1,6 @@
 # Specification: deployment
 
-**Status:** Version 1.2.0, draft, October 18, 2026. This document governs
+**Status:** Version 1.2.0, draft, October 19, 2026. This document governs
 what the pipeline's Helm charts install, in which order and at which
 versions, and how they configure what they install: the charts, operators,
 and images they pin; the custom resource definitions they install; each
@@ -976,8 +976,8 @@ what the notices' version 0.1.0 leaves to this document, before the
 discoverer is built, and with it what the telemetry's version 0.1.0 leaves
 to it for Grafana: version 1.1.0. The owner decided on October 18, 2026
 that the fake EDGAR is specified, in [`fake-edgar.md`](fake-edgar.md) and
-in a version of this document, before it's built: version 1.2.0. The
-details that version settles await the owner's decision, as
+in a version of this document, before it's built: version 1.2.0. The owner
+confirmed on October 19, 2026 the details that version settles, as
 [`fake-edgar.md`, §10](fake-edgar.md#10-open-questions) lists them.
 
 ## 10. Changes to this document
