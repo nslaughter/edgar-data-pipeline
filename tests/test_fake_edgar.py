@@ -1061,6 +1061,28 @@ def test_a_malformed_request_is_an_entry_too(fake: FakeEdgar) -> None:
     assert (entry["target"], entry["url"], entry["status"]) == (target(SUBMISSIONS), None, 400)
 
 
+@pytest.mark.spec("REQ-1", "REQ-3")
+@pytest.mark.parametrize("header", ["X-A,B: 1", "X(1): 2"])
+def test_a_request_with_a_header_name_that_isnt_a_token_gets_a_400(
+    fake: FakeEdgar, header: str
+) -> None:
+    with socket.create_connection(("127.0.0.1", fake.port), timeout=10) as connection:
+        connection.sendall(f"GET {target(INDEX)} HTTP/1.1\r\nHost: x\r\n{header}\r\n\r\n".encode())
+        reply = b""
+        while chunk := connection.recv(65536):
+            reply += chunk
+
+    [entry] = requests(fake.admin_port)
+    assert reply.startswith(b"HTTP/1.0 400 ")
+    assert (entry["target"], entry["url"], entry["headers"], entry["status"]) == (
+        target(INDEX),
+        None,
+        {},
+        400,
+    )
+    assert list(validator(REQUEST).iter_errors(entry)) == []
+
+
 LARGE_URL = "https://www.sec.gov/Archives/edgar/full-index/2026/QTR4/master.idx"
 
 

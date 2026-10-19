@@ -41,6 +41,7 @@ MAX_DISCARD = 1 << 20  # the most of a request's body read only to discard it
 ETAG = re.compile(r'(?:W/)?"[^"]*"')
 QVALUE = re.compile(r"0(?:\.[0-9]{0,3})?|1(?:\.0{0,3})?")
 AFTER = re.compile(r"[0-9]+")
+TOKEN = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+")  # RFC 9110, 5.6.2
 
 
 def now() -> str:
@@ -285,8 +286,13 @@ class EdgarHandler(Handler):
                     self.requestline, self.request_version, self.command = "", "", ""
                     self.send_error(HTTPStatus.REQUEST_URI_TOO_LONG)
                 elif self.parse_request():
-                    entry["headers"] = joined(self.headers)
-                    self.answer(entry)
+                    if all(TOKEN.fullmatch(name) for name in self.headers):
+                        entry["headers"] = joined(self.headers)
+                        self.answer(entry)
+                    else:
+                        # A header's name is a token (RFC 9110, 5.1), as the
+                        # log's are (REQ-3), so the request is malformed.
+                        self.send_error(HTTPStatus.BAD_REQUEST, "Bad header name")
             except OSError:
                 pass  # the client went away, or was too slow
             finally:
