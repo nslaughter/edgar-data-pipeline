@@ -5,12 +5,13 @@ tests (spec/deployment.md, section 3). They run only where
 EDGAR_KUBE_CONTEXT names the kube context of a cluster the charts are
 installed on, as the owner's can be, and are skipped elsewhere. Where
 EDGAR_CHARTS_UPGRADED is true, as in CI, each release must also have been
-upgraded since it was installed, which a cluster only installed hasn't. They
-reach the cluster through kubectl and Helm, and nothing else: each check
-inside it runs in a pod there. A credential they read from a Secret goes to
-its pod on standard input, never in a command's arguments, so a failure
-never shows it. Each test carries the IDs of the statements it checks, as
-@pytest.mark.spec(...).
+upgraded since it was installed, which a cluster only installed hasn't; and
+where EDGAR_FAKE_EDGAR is true, as in CI, the fake EDGAR must be installed,
+which only CI installs (FAKE-4). They reach the cluster through kubectl and
+Helm, and nothing else: each check inside it runs in a pod there. A
+credential they read from a Secret goes to its pod on standard input, never
+in a command's arguments, so a failure never shows it. Each test carries
+the IDs of the statements it checks, as @pytest.mark.spec(...).
 """
 
 from __future__ import annotations
@@ -29,11 +30,15 @@ from typing import Any
 import pytest
 import yaml
 
+from edgar_pipeline.fake_edgar.store import SEC_HOSTS, load
+
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMAS = ROOT / "spec" / "schemas"
 CONTEXT = os.environ.get("EDGAR_KUBE_CONTEXT", "")
 # Whether the releases were upgraded after they were installed, as CI's are.
 UPGRADED = os.environ.get("EDGAR_CHARTS_UPGRADED", "") == "true"
+# Whether the fake EDGAR is installed, as only CI installs it (FAKE-1, FAKE-4).
+FAKE_EDGAR = os.environ.get("EDGAR_FAKE_EDGAR", "") == "true"
 NAMESPACE = "edgar"
 NATS_URL = "nats://nats:4222"
 
@@ -50,6 +55,8 @@ RELEASES = [
 ]
 # A third-party image, named by its tag and its digest (PIN-4, PIN-5).
 PINNED_IMAGE = re.compile(r"^[^\s@]+:[^\s@/:]+@sha256:[0-9a-f]{64}$")
+# One of the pipeline's own images, named by the commit it's built from (IMG-1).
+OWN_IMAGE = re.compile(r"^edgar/[a-z0-9][a-z0-9-]*:[0-9a-f]{40}$")
 
 
 def kubectl(*args: str, input: str | None = None, check: bool = True) -> str:
@@ -259,10 +266,46 @@ def test_every_container_of_the_charts_runs_an_image_named_by_digest() -> None:
         for namespace in namespaces
         for pod in kubectl_json("get", "pods", "-n", namespace)["items"]
         for container in [*pod["spec"].get("initContainers", []), *pod["spec"]["containers"]]
-        if not PINNED_IMAGE.match(container["image"])
+        if not PINNED_IMAGE.match(container["image"]) and not OWN_IMAGE.match(container["image"])
     ]
 
     assert unpinned == []
+
+
+# IMG
+
+
+def checked_out() -> str:
+    """The commit checked out, from which CI builds the images and installs the charts."""
+    return subprocess.run(
+        ["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+    ).stdout.strip()
+
+
+def own_containers() -> list[tuple[str, dict[str, Any]]]:
+    """Each container of the charts' pods that runs one of the pipeline's images."""
+    namespaces = sorted({namespace for _, namespace in RELEASES})
+    return [
+        (pod["metadata"]["name"], container)
+        for namespace in namespaces
+        for pod in kubectl_json("get", "pods", "-n", namespace)["items"]
+        for container in [*pod["spec"].get("initContainers", []), *pod["spec"]["containers"]]
+        if OWN_IMAGE.match(container["image"])
+    ]
+
+
+@pytest.mark.spec("IMG-3")
+def test_each_of_the_pipelines_images_runs_as_built_from_the_commit_installed() -> None:
+    commit = checked_out()
+    found = own_containers()
+
+    assert helm_json("get", "values", "edgar", "-n", NAMESPACE)["images"]["commit"] == commit
+    if FAKE_EDGAR:
+        assert found
+    for pod, container in found:
+        assert container["image"].endswith(f":{commit}"), pod
+        # Never pulled, so only the image built and loaded can run (IMG-1, IMG-2).
+        assert container["imagePullPolicy"] == "Never", pod
 
 
 # PG
@@ -836,3 +879,88 @@ def test_grafanas_postgresql_data_source_reads_each_dashboards_view() -> None:
         result = response["results"]["A"]
         assert result.get("status") == 200, (view, result.get("error"))
         assert "error" not in result, (view, result["error"])
+
+
+# FAKE
+
+
+fake_edgar_installed = pytest.mark.skipif(
+    not FAKE_EDGAR, reason="only CI installs the fake EDGAR: EDGAR_FAKE_EDGAR isn't true"
+)
+
+
+def service_address() -> str:
+    address = kubectl_json("get", "service", "-n", NAMESPACE, "fake-edgar")["spec"]["clusterIP"]
+    assert isinstance(address, str)
+    return address
+
+
+@pytest.mark.spec("FAKE-4")
+@fake_edgar_installed
+def test_ci_installs_the_fake_edgar() -> None:
+    given = helm_json("get", "values", "edgar", "-n", NAMESPACE)
+
+    assert given["fakeEdgar"] == {"enabled": True}
+
+
+@pytest.mark.spec("FAKE-4")
+@fake_edgar_installed
+@pytest.mark.parametrize("host", ["www.sec.gov", "data.sec.gov"])
+def test_a_pods_query_for_an_sec_host_gets_the_fake_edgars_service(host: str) -> None:
+    answer = in_nats_box('nslookup -type=a "$1"', host)
+    # The addresses after the name asked for, not the DNS server's own.
+    addresses = re.findall(r"Address:\s*([0-9.]+)\s*$", answer.split(host, 1)[1], re.M)
+
+    assert addresses == [service_address()]
+
+
+@pytest.mark.spec("FAKE-4")
+@fake_edgar_installed
+def test_the_clusters_dns_pointed_at_the_fake_edgar_before_the_umbrella_chart() -> None:
+    config = kubectl_json("get", "configmap", "-n", "kube-system", "coredns")
+    [installed, *_] = helm_json("history", "edgar", "-n", NAMESPACE)
+    changed = max(helm_time(field["time"]) for field in config["metadata"]["managedFields"])
+
+    assert "fake-edgar.edgar.svc.cluster.local" in config["data"]["Corefile"]
+    assert changed <= helm_time(installed["updated"])
+
+
+@pytest.mark.spec("FAKE-5")
+@fake_edgar_installed
+def test_the_fake_edgars_pod_is_ready() -> None:
+    [pod] = pods("app.kubernetes.io/name=fake-edgar")
+    ready = {c["type"]: c["status"] for c in pod["status"]["conditions"]}["Ready"]
+
+    assert ready == "True"
+
+
+def stored_urls() -> list[str]:
+    """Of data/ at the commit checked out, the first stored URL on each SEC host."""
+    stored = sorted(load(ROOT / "data"))
+    return [next(url for url in stored if url.startswith(f"https://{host}/")) for host in SEC_HOSTS]
+
+
+@pytest.mark.spec("FAKE-5", "SERVE-5")
+@fake_edgar_installed
+@pytest.mark.parametrize("url", stored_urls() if FAKE_EDGAR else [])
+def test_a_pods_get_of_a_stored_url_reaches_the_fake_edgar_over_https(url: str) -> None:
+    authority = base64.b64decode(
+        kubectl_json("get", "secret", "-n", NAMESPACE, "fake-edgar-ca")["data"]["ca.crt"]
+    ).decode()
+    before = len(json.loads(in_nats_box('curl -sf "$1"', "http://fake-edgar:8080/requests")))
+
+    # Checked against the release's authority alone, for the URL's host.
+    digest = in_nats_box(
+        'dir=$(mktemp -d); cat >"$dir/ca.crt"; '
+        'curl -sSf --cacert "$dir/ca.crt" "$1" | sha256sum | cut -d" " -f1',
+        url,
+        input=authority,
+    ).strip()
+    entries = json.loads(
+        in_nats_box('curl -sf "$1"', f"http://fake-edgar:8080/requests?after={before}")
+    )
+
+    assert digest == load(ROOT / "data")[url].latest
+    [entry] = [e for e in entries if e["url"] == url]
+    assert (entry["status"], entry["cued"]) == (200, False)
+    assert entry["headers"]["host"] == url.split("/")[2]

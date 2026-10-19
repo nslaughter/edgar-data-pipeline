@@ -6,7 +6,9 @@ with, apart from the credentials and the database archive's server name, for
 which these tests give values of their own (spec/deployment.md, section 3).
 They need Helm, and jq for the JetStream Job's script; they reach neither a
 cluster nor the network. The hook Jobs' scripts run against fakes: of the
-`nats` and `psql` commands, and of Garage's admin API on a local server.
+`nats` and `psql` commands, and of Garage's admin API on a local server; and
+the command that builds the pipeline's images, against fakes of `docker` and
+`kind` (IMG-2).
 Each test carries the IDs of the statements it checks, as
 @pytest.mark.spec(...).
 """
@@ -17,6 +19,7 @@ import base64
 import copy
 import functools
 import importlib.util
+import io
 import json
 import os
 import re
@@ -26,6 +29,7 @@ import sys
 import tarfile
 import threading
 from collections.abc import Iterator
+from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import ModuleType
@@ -88,13 +92,24 @@ CREDENTIALS: dict[str, Any] = {
     "grafana": {"adminPassword": "test-grafana-admin-password-1e4b7c"},
 }
 SERVER_NAME = "test-server-name"
+# The commit CI installs the umbrella chart with, as images.commit: the one
+# it checks out, from which it builds the pipeline's images (IMG-1, IMG-3);
+# and the fake EDGAR, which CI installs (FAKE-4).
+COMMIT = subprocess.run(
+    ["git", "-C", str(ROOT), "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+).stdout.strip()
 TEST_VALUES: dict[str, Any] = {
     "credentials": CREDENTIALS,
     "database": {"backups": {"serverName": SERVER_NAME}},
+    "images": {"commit": COMMIT},
+    "fakeEdgar": {"enabled": True},
 }
 
 # A third-party image, named by its tag and its digest (PIN-4).
 PINNED_IMAGE = re.compile(r"^[^\s@]+:[^\s@/:]+@sha256:[0-9a-f]{64}$")
+# One of the pipeline's own images, named by the commit it's built from, which
+# images.commit gives (IMG-1): edgar/NAME, built from images/NAME/Dockerfile.
+OWN_IMAGE = re.compile(rf"^edgar/([a-z0-9][a-z0-9-]*):{COMMIT}$")
 SEMVER = re.compile(r"^v?\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$")
 # The API groups Kubernetes itself serves, whose kinds need no definition.
 BUILT_IN_GROUPS = {
@@ -362,8 +377,9 @@ def test_garages_chart_is_committed_as_a_directory_at_its_version() -> None:
 @pytest.mark.parametrize("chart", CHARTS)
 def test_each_image_is_named_by_tag_and_digest(chart: str) -> None:
     found = [image for doc in rendered(chart) for image in images(doc)]
+    third_party = [image for image in found if not OWN_IMAGE.match(image)]
 
-    assert [image for image in found if not PINNED_IMAGE.match(image)] == []
+    assert [image for image in third_party if not PINNED_IMAGE.match(image)] == []
 
 
 @pytest.mark.spec("PIN-4")
@@ -409,6 +425,268 @@ def test_ci_installs_helm_4_and_kind_at_exact_versions() -> None:
         if "helm/kind-action" in step.get("uses", ""):
             # The action would install a Helm of its own otherwise.
             assert step["with"].get("install_only") is True
+
+
+# IMG
+
+
+IMAGES = ROOT / "images"
+BUILD = ROOT / "scripts" / "build_images.py"
+
+
+def pod_specs(doc: dict[str, Any]) -> list[dict[str, Any]]:
+    """The pod spec of a workload the chart renders, if it is one."""
+    template = doc.get("spec", {}).get("template", {})
+    spec = template.get("spec") if isinstance(template, dict) else None
+    return [spec] if isinstance(spec, dict) and "containers" in spec else []
+
+
+@pytest.mark.spec("IMG-1")
+def test_each_image_is_third_party_or_the_pipelines_own_by_commit() -> None:
+    found = {(chart, image) for chart, doc in rendered_all() for image in images(doc)}
+    own = {(chart, image) for chart, image in found if OWN_IMAGE.match(image)}
+
+    assert own
+    assert {chart for chart, _ in own} == {UMBRELLA}
+    assert [image for _, image in found - own if not PINNED_IMAGE.match(image)] == []
+    for _, image in own:
+        match = OWN_IMAGE.match(image)
+        assert match
+        # Each is one that scripts/build_images.py builds (IMG-2).
+        assert (IMAGES / match[1] / "Dockerfile").is_file(), image
+
+
+@pytest.mark.spec("IMG-1")
+def test_each_container_that_runs_one_of_the_pipelines_images_never_pulls_it() -> None:
+    found = [
+        container
+        for doc in rendered(UMBRELLA)
+        for spec in pod_specs(doc)
+        for container in [*spec.get("initContainers", []), *spec["containers"]]
+        if OWN_IMAGE.match(container["image"])
+    ]
+
+    assert found
+    assert {container.get("imagePullPolicy") for container in found} == {"Never"}
+
+
+@pytest.mark.spec("IMG-1")
+@pytest.mark.parametrize(
+    "commit",
+    [None, COMMIT.upper(), COMMIT[:-1], COMMIT + "0", "HEAD", "v" + COMMIT[1:], 12345],
+)
+def test_images_commit_is_required_as_40_lower_case_hexadecimal_digits(commit: Any) -> None:
+    given = copy.deepcopy(TEST_VALUES)
+    if commit is None:
+        del given["images"]
+    else:
+        given["images"]["commit"] = commit
+
+    assert render(UMBRELLA, given, check=False).returncode != 0
+
+
+@pytest.mark.spec("IMG-1")
+def test_the_default_values_set_no_commit() -> None:
+    assert "images" not in values(UMBRELLA)
+    schema = json.loads((DEPLOY / UMBRELLA / "values.schema.json").read_text())
+    assert "images" in schema["required"]
+    assert schema["properties"]["images"]["required"] == ["commit"]
+
+
+# A fake of `docker` and of `kind`, which write down each command they're
+# given; `docker` also keeps what it reads on standard input, the context of
+# a build.
+STUB = """#!/bin/sh
+n=$(ls "$CALLS" | wc -l | tr -d ' ')
+printf '%s\\n' "$(basename "$0")" "$@" >"$CALLS/$n.args"
+if [ "$(basename "$0")" = docker ]; then cat >"$CALLS/$n.stdin"; fi
+"""
+GIT_IDENTITY = {
+    "GIT_AUTHOR_NAME": "Test",
+    "GIT_AUTHOR_EMAIL": "test@example.com",
+    "GIT_COMMITTER_NAME": "Test",
+    "GIT_COMMITTER_EMAIL": "test@example.com",
+}
+
+
+@dataclass
+class Repository:
+    root: Path
+    calls: Path
+    bin: Path
+
+    def git(self, *args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(self.root), *args],
+            capture_output=True,
+            text=True,
+            check=True,
+            env={**os.environ, **GIT_IDENTITY},
+        ).stdout
+
+    def build(self, *args: str) -> subprocess.CompletedProcess[str]:
+        """Runs the repository's copy of the command, with the fakes on PATH."""
+        return subprocess.run(
+            [sys.executable, str(self.root / "scripts" / "build_images.py"), *args],
+            capture_output=True,
+            text=True,
+            check=False,
+            env={
+                **os.environ,
+                "PATH": f"{self.bin}:{os.environ['PATH']}",
+                "CALLS": str(self.calls),
+            },
+        )
+
+    def commands(self) -> list[tuple[list[str], bytes | None]]:
+        """Each command the fakes were given, in order, with its standard input."""
+        found = []
+        for args in sorted(self.calls.glob("*.args"), key=lambda path: int(path.stem)):
+            stdin = args.with_suffix(".stdin")
+            found.append(
+                (args.read_text().splitlines(), stdin.read_bytes() if stdin.exists() else None)
+            )
+        return found
+
+
+@pytest.fixture
+def repository(tmp_path: Path) -> Repository:
+    """A repository with the command and two images, committed, and a file
+    git ignores; with fakes of docker and kind."""
+    root = tmp_path / "repository"
+    for path, text in {
+        "scripts/build_images.py": BUILD.read_text(),
+        "images/one/Dockerfile": "FROM scratch\nCOPY data/ /data/\n",
+        "images/two/Dockerfile": "FROM scratch\n",
+        "images/README.md": "Not an image.\n",
+        "data/scope.json": '{"urls": []}\n',
+        "src/service.py": "print('built')\n",
+        ".gitignore": ".env.dev\n",
+    }.items():
+        (root / path).parent.mkdir(parents=True, exist_ok=True)
+        (root / path).write_text(text)
+    bin, calls = tmp_path / "bin", tmp_path / "calls"
+    bin.mkdir()
+    calls.mkdir()
+    for name in ("docker", "kind"):
+        (bin / name).write_text(STUB)
+        (bin / name).chmod(0o755)
+    repository = Repository(root, calls, bin)
+    repository.git("init", "--quiet", "--initial-branch=main")
+    repository.git("add", "--all")
+    repository.git("commit", "--quiet", "--message", "Add the images")
+    (root / ".env.dev").write_text("SEC_USER_AGENT=ignored@example.com\n")
+    return repository
+
+
+@pytest.mark.spec("IMG-2")
+@pytest.mark.parametrize("change", ["modified", "staged", "untracked", "deleted"])
+def test_the_command_refuses_a_working_tree_with_uncommitted_changes(
+    repository: Repository, change: str
+) -> None:
+    service = repository.root / "src" / "service.py"
+    if change == "modified":
+        service.write_text("print('changed')\n")
+    elif change == "staged":
+        service.write_text("print('changed')\n")
+        repository.git("add", "src/service.py")
+    elif change == "untracked":
+        (repository.root / "src" / "new.py").write_text("")
+    else:
+        service.unlink()
+
+    result = repository.build()
+
+    assert result.returncode != 0
+    assert "uncommitted changes" in result.stderr
+    assert repository.commands() == []
+
+
+@pytest.mark.spec("IMG-2")
+@pytest.mark.parametrize("cluster", [None, "another"])
+def test_the_command_tags_each_image_with_the_commit_and_loads_it_into_each_node(
+    repository: Repository, cluster: str | None
+) -> None:
+    commit = repository.git("rev-parse", "HEAD").strip()
+
+    result = repository.build(*(["--cluster", cluster] if cluster else []))
+
+    assert result.returncode == 0, result.stderr
+    assert re.fullmatch(r"[0-9a-f]{40}", commit)
+    assert [args for args, _ in repository.commands()] == [
+        ["docker", "build", "--tag", f"edgar/one:{commit}", "--file", "images/one/Dockerfile", "-"],
+        ["docker", "build", "--tag", f"edgar/two:{commit}", "--file", "images/two/Dockerfile", "-"],
+        # kind loads an image into every node of the cluster unless told which.
+        ["kind", "load", "docker-image", f"edgar/one:{commit}", "--name", cluster or "edgar"],
+        ["kind", "load", "docker-image", f"edgar/two:{commit}", "--name", cluster or "edgar"],
+    ]
+    assert commit in result.stdout
+
+
+@pytest.mark.spec("IMG-2")
+def test_the_command_never_pushes_or_pulls_an_image() -> None:
+    script = BUILD.read_text()
+
+    assert not re.search(r"\b(push|pull|login|--push|--pull)\b", script)
+
+
+@pytest.mark.spec("IMG-5")
+def test_each_image_is_built_from_the_files_of_its_commit(repository: Repository) -> None:
+    commit = repository.git("rev-parse", "HEAD").strip()
+    committed = repository.git("ls-tree", "-r", "--name-only", commit).split()
+
+    assert repository.build().returncode == 0
+    contexts = [stdin for args, stdin in repository.commands() if args[0] == "docker"]
+    assert len(contexts) == 2
+    for context in contexts:
+        assert context is not None
+        with tarfile.open(fileobj=io.BytesIO(context)) as archive:
+            files = {m.name: m for m in archive.getmembers() if m.isfile()}
+            assert sorted(files) == sorted(committed)
+            for name, member in files.items():
+                extracted = archive.extractfile(member)
+                assert extracted is not None
+                assert extracted.read().decode() == repository.git("show", f"{commit}:{name}")
+
+
+def from_lines(dockerfile: Path) -> list[str]:
+    """The image each FROM of a Dockerfile names, without its flags or stage name."""
+    found = []
+    for line in dockerfile.read_text().splitlines():
+        words = line.split()
+        if words and words[0].upper() == "FROM":
+            found.append(next(word for word in words[1:] if not word.startswith("--")))
+    return found
+
+
+@pytest.mark.spec("IMG-5")
+def test_each_image_is_built_from_base_images_named_by_digest() -> None:
+    dockerfiles = sorted(IMAGES.glob("*/Dockerfile"))
+
+    assert dockerfiles
+    for dockerfile in dockerfiles:
+        bases = from_lines(dockerfile)
+        assert bases, dockerfile
+        for base in bases:
+            assert PINNED_IMAGE.match(base), (dockerfile, base)
+
+
+@pytest.mark.spec("IMG-5", "FAKE-2")
+def test_the_fake_edgars_image_holds_data_which_it_serves() -> None:
+    lines = (IMAGES / "fake-edgar" / "Dockerfile").read_text().splitlines()
+    copies = [line.split()[1:] for line in lines if line.startswith("COPY ")]
+    [entrypoint] = [
+        json.loads(line[len("ENTRYPOINT ") :]) for line in lines if line.startswith("ENTRYPOINT ")
+    ]
+    [deployment] = [
+        d for d in of_kind(UMBRELLA, "Deployment") if d["metadata"]["name"] == "fake-edgar"
+    ]
+    [container] = containers(deployment)
+
+    assert ["data/", "/srv/data/"] in copies
+    assert entrypoint[entrypoint.index("--data") + 1] == "/srv/data"
+    assert "--data" not in container.get("args", [])
+    assert "command" not in container
 
 
 # PG
@@ -1857,6 +2135,139 @@ def test_grafana_verifies_the_server_against_the_clusters_authority_alone() -> N
     assert source["jsonData"]["sslmode"] == "verify-full"
     assert volume["secret"]["secretName"] == f"{the_cluster()['metadata']['name']}-ca"
     assert volume["secret"]["items"] == [{"key": "ca.crt", "path": root.name}]
+
+
+# FAKE
+
+
+# What the umbrella chart renders for the fake EDGAR (FAKE-2, FAKE-3).
+FAKE_EDGAR = {
+    ("Issuer", "fake-edgar-self-signed"),
+    ("Certificate", "fake-edgar-ca"),
+    ("Issuer", "fake-edgar-ca"),
+    ("Certificate", "fake-edgar"),
+    ("Deployment", "fake-edgar"),
+    ("Service", "fake-edgar"),
+}
+
+
+def fake_edgar(enabled: bool) -> set[tuple[str, str]]:
+    given = copy.deepcopy(TEST_VALUES)
+    given["fakeEdgar"]["enabled"] = enabled
+    return {
+        (doc["kind"], doc["metadata"]["name"]) for doc in documents(render(UMBRELLA, given).stdout)
+    }
+
+
+@pytest.mark.spec("FAKE-1")
+def test_the_fake_edgar_is_rendered_only_when_it_is_enabled() -> None:
+    enabled, disabled = fake_edgar(True), fake_edgar(False)
+
+    assert enabled - disabled == FAKE_EDGAR
+    assert disabled - enabled == set()
+
+
+@pytest.mark.spec("FAKE-1")
+def test_no_committed_values_file_enables_the_fake_edgar() -> None:
+    def enables(node: Any) -> bool:
+        if isinstance(node, dict):
+            fake = node.get("fakeEdgar")
+            if isinstance(fake, dict) and fake.get("enabled") is True:
+                return True
+            return any(enables(value) for value in node.values())
+        return isinstance(node, list) and any(enables(item) for item in node)
+
+    tracked = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-files", "*.yaml", "*.yml", "*.json"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    enabling = []
+    for name in tracked:
+        try:
+            loaded = list(yaml.load_all((ROOT / name).read_text(encoding="utf-8"), Loader=Loader))
+        except yaml.YAMLError:
+            continue  # a template, which isn't a values file
+        if any(enables(doc) for doc in loaded):
+            enabling.append(name)
+
+    assert values(UMBRELLA)["fakeEdgar"]["enabled"] is False
+    assert enabling == []
+
+
+@pytest.mark.spec("FAKE-2")
+def test_the_fake_edgar_is_one_replica_of_its_image_with_its_certificate() -> None:
+    deployment = named(UMBRELLA, "Deployment", "fake-edgar")
+    spec = pod_spec(deployment)
+    [container] = spec["containers"]
+    args = container["args"]
+    [volume] = spec["volumes"]
+    [mount] = container["volumeMounts"]
+    certificate = named(UMBRELLA, "Certificate", "fake-edgar")
+
+    assert deployment["spec"]["replicas"] == 1
+    assert deployment["metadata"].get("namespace", "edgar") == "edgar"
+    assert container["image"] == f"edgar/fake-edgar:{COMMIT}"
+    assert volume == {
+        "name": mount["name"],
+        "secret": {
+            "secretName": certificate["spec"]["secretName"],
+            "items": [{"key": "tls.crt", "path": "tls.crt"}, {"key": "tls.key", "path": "tls.key"}],
+        },
+    }
+    assert mount["readOnly"] is True
+    assert args[args.index("--certificate") + 1] == f"{mount['mountPath']}/tls.crt"
+    assert args[args.index("--key") + 1] == f"{mount['mountPath']}/tls.key"
+    assert spec["automountServiceAccountToken"] is False
+    assert "initContainers" not in spec
+    assert "volumeClaimTemplates" not in deployment["spec"]
+
+
+@pytest.mark.spec("FAKE-2")
+def test_the_fake_edgars_service_gives_its_server_at_443_and_its_admin_port_at_8080() -> None:
+    deployment = named(UMBRELLA, "Deployment", "fake-edgar")
+    service = named(UMBRELLA, "Service", "fake-edgar")
+    [container] = pod_spec(deployment)["containers"]
+    args = container["args"]
+    ports = {port["name"]: port["containerPort"] for port in container["ports"]}
+    given = {port["port"]: ports[port["targetPort"]] for port in service["spec"]["ports"]}
+
+    assert (
+        service["spec"]["selector"].items()
+        <= deployment["spec"]["template"]["metadata"]["labels"].items()
+    )
+    assert given == {
+        443: int(args[args.index("--port") + 1]),
+        8080: int(args[args.index("--admin-port") + 1]),
+    }
+
+
+@pytest.mark.spec("FAKE-3")
+def test_a_certificate_authority_of_the_releases_own_issues_the_fake_edgars_certificate() -> None:
+    issuers = {doc["metadata"]["name"]: doc for doc in of_kind(UMBRELLA, "Issuer")}
+    certificates = {doc["metadata"]["name"]: doc for doc in of_kind(UMBRELLA, "Certificate")}
+    deployment = named(UMBRELLA, "Deployment", "fake-edgar")
+    [volume] = pod_spec(deployment)["volumes"]
+
+    def issuer(certificate: dict[str, Any]) -> dict[str, Any]:
+        reference = certificate["spec"]["issuerRef"]
+        assert reference["kind"] == "Issuer"
+        assert reference.get("group", "cert-manager.io") == "cert-manager.io"
+        return issuers[reference["name"]]
+
+    [authority] = [c for c in certificates.values() if c["spec"].get("isCA")]
+    [served] = [c for c in certificates.values() if not c["spec"].get("isCA")]
+    assert issuer(authority)["spec"] == {"selfSigned": {}}
+    assert issuer(served)["spec"] == {"ca": {"secretName": authority["spec"]["secretName"]}}
+    assert served["spec"]["dnsNames"] == ["www.sec.gov", "data.sec.gov"]
+    assert served["spec"]["secretName"] == volume["secret"]["secretName"]
+    assert of_kind(UMBRELLA, "ClusterIssuer") == []
+    for doc in [*issuers.values(), *certificates.values()]:
+        assert doc["metadata"].get("namespace", "edgar") == "edgar"
+    # cert-manager generates each key in the cluster, so no value holds one.
+    for certificate in certificates.values():
+        assert set(certificate["spec"]["privateKey"]) == {"algorithm", "size"}
 
 
 # SECRET
