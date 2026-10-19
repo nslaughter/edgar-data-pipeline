@@ -31,8 +31,10 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
    to a request that asks about the version it would get. [SERVE-1],
    [SERVE-2], [SERVE-3], [SERVE-4].
 2. **A test can have the fake EDGAR refuse or fail on cue,** with a
-   `429`, a `403`, or any other status, an earlier version, a body cut
-   short, or no response, so each fetching rule's failures can be tested.
+   `429`, a `403`, or any other status, with the headers and body the test
+   gives; an earlier version; a body cut short; or no response. So the
+   tests of the fetching rules can have the failures that [FETCH-8],
+   [FETCH-9], [FETCH-10], [FETCH-12], and [FETCH-13] handle.
    [CUE-1], [CUE-2], [CUE-3].
 3. **Every request its server receives is in its log, in order,** with
    its headers and the answer it got, and no request header leaves the
@@ -322,11 +324,16 @@ this version is merged:
    requests came before it.
 2. **Failures on cue** ([§5](#5-cues)). Proposed: cues through the admin
    port, for one URL or any, each response given once, in order: a status,
-   an earlier version, a body cut short, or no response. The alternative is
-   a fixed failure for each of some URLs, such as a path that always
-   answers `403`: no admin port, but each failure is then a URL of its own,
-   which a writer must be asked to fetch in place of the URL whose failure
-   a test needs.
+   an earlier version, a body cut short, or no response. No cue delays a
+   response, as a test of [FETCH-5]'s timeout would need, or sends a body
+   that isn't UTF-8 text, as gzip data is, so no cue gives a body encoded
+   `x-gzip` that decodes ([FETCH-11]); a kind of response for each, such as
+   a delay or a body in base64, would be a minor version
+   ([§12](#12-changes-to-this-document)). The alternative is a fixed
+   failure for each of some URLs, such as a path that always answers
+   `403`: no admin port, but each failure is then a URL of its own, which a
+   writer must be asked to fetch in place of the URL whose failure a test
+   needs.
 3. **Its log of requests** ([§6](#6-the-request-log), [ADMIN-1]).
    Proposed: kept in memory, and read through the admin port from a place
    in it, with one request answered at a time, so the log's order is the
@@ -417,9 +424,13 @@ a retired statement stays in the index.
 [FETCH-1]: snapshots.md#10-fetching
 [FETCH-2]: snapshots.md#10-fetching
 [FETCH-4]: snapshots.md#10-fetching
+[FETCH-5]: snapshots.md#10-fetching
 [FETCH-6]: snapshots.md#10-fetching
 [FETCH-8]: snapshots.md#10-fetching
 [FETCH-9]: snapshots.md#10-fetching
+[FETCH-10]: snapshots.md#10-fetching
+[FETCH-11]: snapshots.md#10-fetching
+[FETCH-12]: snapshots.md#10-fetching
 [FETCH-13]: snapshots.md#10-fetching
 [FETCH-17]: snapshots.md#the-fetcher
 [ID-1]: snapshots.md#10-fetching
