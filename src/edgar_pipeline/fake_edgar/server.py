@@ -94,6 +94,23 @@ def joined(headers: Message) -> dict[str, str]:
     return found
 
 
+def header_line(name: str, value: str, *, stored: bool) -> bytes:
+    """A header as the line that sends it.
+
+    A record keeps a header's value as the response gave it, and snapshot.py
+    reads the response's octets as ISO-8859-1, as Python's http.client does,
+    so a stored version's header is sent as ISO-8859-1, as EDGAR sent it
+    (SERVE-3), and a client reads back the value the record holds. A value
+    ISO-8859-1 can't hold, which no such reading gives, is sent as UTF-8,
+    as is a cue's header, which is any string (CUE-3), as its body is.
+    """
+    line = f"{name}: {value}\r\n"
+    if stored:
+        with contextlib.suppress(UnicodeEncodeError):
+            return line.encode("iso-8859-1")
+    return line.encode("utf-8", "surrogatepass")
+
+
 def hostname(host: str | None) -> str | None:
     """A Host header's host, without its port, in lower case."""
     if host is None:
@@ -207,16 +224,19 @@ class Handler(BaseHTTPRequestHandler):
         self.status = code
         super().send_response_only(code, message)
 
-    def write_head(self, status: int, headers: list[tuple[str, str]]) -> None:
+    def write_head(
+        self, status: int, headers: list[tuple[str, str]], *, stored: bool = False
+    ) -> None:
+        """A status line and headers: a stored version's, or else a cue's or
+        the fake EDGAR's own, each line as header_line encodes it."""
         try:
             phrase = HTTPStatus(status).phrase
         except ValueError:
             phrase = ""
-        lines = [f"{self.protocol_version} {status} {phrase}\r\n"]
-        lines += [f"{name}: {value}\r\n" for name, value in headers]
+        lines = [f"{self.protocol_version} {status} {phrase}\r\n".encode("ascii")]
+        lines += [header_line(name, value, stored=stored) for name, value in headers]
         self.status = int(status)
-        # A cue's header is any string (CUE-3), so it's sent as UTF-8.
-        self.wfile.write("".join([*lines, "\r\n"]).encode("utf-8", "surrogatepass"))
+        self.wfile.write(b"".join([*lines, b"\r\n"]))
 
     def reply(self, status: int, headers: dict[str, str], body: bytes) -> None:
         """A status with headers and a body, adding Date and Content-Length
@@ -314,7 +334,7 @@ class EdgarHandler(Handler):
         ]
         date = ("Date", formatdate(usegmt=True))
         if not cut and self.unchanged(version):
-            self.write_head(HTTPStatus.NOT_MODIFIED, [date, *validators])
+            self.write_head(HTTPStatus.NOT_MODIFIED, [date, *validators], stored=True)
             return
         encoded = accepts_gzip(self.headers.get_all("Accept-Encoding"))
         body = version.object if encoded else gzip.decompress(version.object)
@@ -324,7 +344,7 @@ class EdgarHandler(Handler):
         if encoded:
             headers.append(("Content-Encoding", "gzip"))
         headers.append(("Content-Length", str(len(body))))
-        self.write_head(HTTPStatus.OK, headers)
+        self.write_head(HTTPStatus.OK, headers, stored=True)
         if cut:
             self.wfile.write(body[: len(body) // 2])
             self.drop()

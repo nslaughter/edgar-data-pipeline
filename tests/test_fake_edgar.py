@@ -715,6 +715,23 @@ def test_any_version_matches_a_star(fake: FakeEdgar) -> None:
     assert (answer.status, sorted(answer.names)) == (304, ["Date"])
 
 
+@pytest.mark.spec("SERVE-3", "SERVE-4")
+def test_a_validator_beyond_ascii_comes_back_as_its_record_holds_it(tmp_path: Path) -> None:
+    # snapshot.py reads a header's octets as ISO-8859-1, as http.client does,
+    # so this record's ETag was the octets 22 E9 22.
+    fetched(tmp_path / "data", INDEX, LISTING, at=0, etag='"é"')
+    edgar = FakeEdgar(tmp_path / "data")
+    edgar.start()
+    try:
+        answer = get(edgar.port, target(INDEX))
+        unchanged = get(edgar.port, target(INDEX), {"If-None-Match": answer.headers["etag"]})
+    finally:
+        edgar.stop()
+
+    assert (answer.status, answer.headers["etag"]) == (200, '"é"')
+    assert (unchanged.status, unchanged.headers["etag"]) == (304, '"é"')
+
+
 def certificate(directory: Path) -> tuple[Path, Path, Path]:
     """An authority's certificate, and a certificate and key it issues for
     the SEC's hosts, as the release's authority does in the cluster (FAKE-3)."""
