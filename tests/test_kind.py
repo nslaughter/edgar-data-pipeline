@@ -924,7 +924,11 @@ def test_a_pods_query_for_an_sec_host_gets_the_fake_edgars_service(host: str) ->
 @pytest.mark.spec("FAKE-4")
 @fake_edgar_installed
 def test_the_clusters_dns_pointed_at_the_fake_edgar_before_the_umbrella_chart() -> None:
-    config = kubectl_json("get", "configmap", "-n", "kube-system", "coredns")
+    # When each writer last changed it is in its managed fields, which
+    # kubectl shows only when asked.
+    config = kubectl_json(
+        "get", "configmap", "-n", "kube-system", "coredns", "--show-managed-fields"
+    )
     [installed, *_] = helm_json("history", "edgar", "-n", NAMESPACE)
     changed = max(helm_time(field["time"]) for field in config["metadata"]["managedFields"])
 
