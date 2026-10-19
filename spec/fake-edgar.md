@@ -384,6 +384,18 @@ three more, and they await the owner too:
    same commit builds the same software. The alternative is base images
    named by tag, which their publishers may move to other images.
 
+This version settles one more of its own, and it awaits the owner too:
+
+9. **No metrics or traces** ([§11](#11-left-to-other-specifications)).
+   Proposed: the fake EDGAR exposes no metrics and sends no traces, since
+   it's not one of the services the telemetry's specification observes,
+   and its request log shows what its server receives. [0006] lists it
+   apart from the six services, for tests, with the standard library
+   alone, but says that every service exposes Prometheus metrics and sends
+   traces. The alternative is metrics and traces, as [0006] says of every
+   service: they'd need Prometheus's and OpenTelemetry's client libraries
+   beside the standard library.
+
 ## 11. Left to other specifications
 
 This version leaves to others what the fake EDGAR relies on:
@@ -398,7 +410,8 @@ This version leaves to others what the fake EDGAR relies on:
 
 It exposes no metrics and sends no traces, since it's not one of the
 services the telemetry's specification observes
-([`telemetry.md`](telemetry.md)).
+([`telemetry.md`](telemetry.md)), as open question 9 proposes
+([§10](#10-open-questions)).
 
 ## 12. Changes to this document
 
