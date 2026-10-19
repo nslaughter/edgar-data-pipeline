@@ -1,7 +1,7 @@
 # Testing and verification
 
 <!-- status: The fake EDGAR; The drills; The snapshot store in git -->
-**Status** ([status page](../status.md)): The fake EDGAR: Planned. The drills: Planned. The snapshot store in git: Built.
+**Status** ([status page](../status.md)): The fake EDGAR: Specified. The drills: Planned. The snapshot store in git: Built.
 <!-- end status -->
 
 How the repository checks that its data, scripts, charts, and services do
@@ -70,11 +70,12 @@ without the behavior it covers ([doing the next item][agents-next], step
 | Specification | Statements with tests now | Statements awaiting a task |
 | --- | --- | --- |
 | [`snapshots.md`][snapshots] 1.0.0 | Those `verify.py` checks, and `snapshot.py`'s rules, brought to this version by [T35], done October 13, 2026; and the schemas': [STORE-1], [REC-13], [JOB-1] | [T22], the scheduler's jobs; [T23], the fetcher and the cluster store; [T24], the discoverer's jobs and its use of `edgar-asof` ([FETCH-18]); [T36], the transfer ([XFER-1] to [XFER-3]) |
-| [`deployment.md`][deployment] 1.1.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind | [T21], the pipeline's images ([IMG-1] to [IMG-3]); [T23], the fetcher's Lease ([LEASE-1], [LEASE-2]) ([§3][deployment-ids]) |
+| [`deployment.md`][deployment] 1.2.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind | [T21], the pipeline's images and the fake EDGAR's installation ([IMG-1] to [IMG-3], [IMG-5], [FAKE-1] to [FAKE-5]); [T23], the fetcher's Lease ([LEASE-1], [LEASE-2]) ([§3][deployment-ids]) |
 | [`controls.md`][controls] 1.0.0 | [API-1] | [T22], [T23], [T24], and [T28] ([§3][controls-ids]) |
 | [`notices.md`][notices] 0.1.0 | [TABLE-1], [MSG-1] | [T24], the discoverer, with the scheduler's side of the Backfills ([§3][notices-ids]) |
 | [`telemetry.md`][telemetry] 0.1.0 | [VIEW-1] | [T28], the monitoring of observing filings; [T29], the traces ([§3][telemetry-ids]) |
 | [`site.md`][site] 0.1.0 | The site's statements checked by `tests`, written by [T40], and [PAGE-4]'s, written by [T42] once every topic had its page | None |
+| [`fake-edgar.md`][fake-edgar] 0.1.0 | The schemas': [CUE-3], [REQ-3] | [T21], the fake EDGAR; [T23], the checks of the fetcher's requests to it on kind ([CHECK-3]) ([§3][fake-edgar-ids]) |
 
 ## What the tests check today
 
@@ -110,9 +111,10 @@ response's arrival and `Date` among them ([REC-10]).
 table of records and the JSON Schemas of a record, a job, and an event
 ([STORE-1], [REC-13], [JOB-1]); the definitions of the three custom
 resources ([API-1]); the notices' tables and views, and the schemas of an
-order and a notice ([TABLE-1], [MSG-1]); and the views Grafana reads
-([VIEW-1]). So the contracts between the services are checked before the
-services exist.
+order and a notice ([TABLE-1], [MSG-1]); the views Grafana reads
+([VIEW-1]); and the fake EDGAR's cue and the entry of its log of requests
+([CUE-3], [REQ-3]). So the contracts between the services are checked
+before the services exist.
 
 **The site.** The tests build the site and check it, offline, by running
 `scripts/build_site.py` ([SITE-9]): every link resolves, with its anchor
@@ -190,32 +192,57 @@ way ([STORE-3]).
 The fetching rules have two implementations: `snapshot.py` for the git
 store, and the Go fetcher in the cluster ([0006]). A fake EDGAR keeps them
 from drifting apart. It's a service in Python, using the standard library,
-that serves the stored versions under `data/` and records every request it
-receives ([0006], [T21]). One set of checks reads its record of the
-requests: the user agent, at most 5 requests a second, and nothing after a
-`403`. The checks run against `snapshot.py` in its tests, and against the
-Go fetcher on kind ([0006], [T23]).
+that answers as EDGAR from the stored versions under `data/`
+([`fake-edgar.md`][fake-edgar], [0006]):
+
+- **What it serves.** A request for a stored URL gets the URL's latest
+  version, with the `Content-Type`, `ETag`, and `Last-Modified` its record
+  kept, so each URL carries the validators EDGAR gave it ([SERVE-3],
+  [SRC-4]). A conditional request gets a `304` when the version hasn't
+  changed ([SERVE-4], [SRC-22]), and a request for a URL it doesn't hold a
+  `404` ([SERVE-2]). It reads `data/` once, when it starts, changes
+  nothing, and sends nothing ([SERVE-1]).
+- **Failures on cue.** The stored versions are the responses the SEC gave,
+  and the investigation's fetches all got a `200` or a `304` ([SRC-20],
+  [SRC-22]). The checks of [FETCH-8], [FETCH-9], and [FETCH-13] need a
+  `429`, a `403`, a body cut short, or no response at all. A test cues the
+  fake EDGAR, through its admin port, to give them to the next requests
+  for a URL, or for any URL, and can cue an earlier version too ([CUE-1],
+  [CUE-2], [ADMIN-1]).
+- **Its log of requests.** It logs every request its server receives,
+  with its headers and the status it got, in the order they arrive, since
+  it answers one at a time ([REQ-1], [SERVE-5]). Tests read the log
+  through the admin port. The log is kept in memory, and no request header
+  is written anywhere else, so the user agent stays out of the cluster's
+  logs ([REQ-2]).
+- **One set of checks.** The checks read the log for the user agent, for
+  requests at least 0.2 seconds apart, less 20 milliseconds for the time a
+  request takes to arrive, and for nothing after a `403` ([CHECK-1]). They
+  run against `snapshot.py` in its tests, on one machine ([CHECK-2]), and
+  against the Go fetcher on kind ([CHECK-3]).
+
+On kind, CI installs the fake EDGAR with the umbrella chart, and the
+owner's installations don't ([FAKE-1]). Its image holds `data/` as the
+commit it's built from has it ([IMG-5]). It answers for `www.sec.gov` and
+`data.sec.gov` over HTTPS, with a certificate from an authority that the
+release makes for it through cert-manager ([FAKE-3]). CI points kind's DNS
+for those names at its Service, so the fetcher sends it the requests it
+would send the SEC, at the URLs [FETCH-1] allows, and no pod reaches the
+SEC ([FAKE-4], [FAKE-5]).
 
 ```mermaid
 flowchart LR
     S["snapshot.py, in its tests"] -->|requests| FE
-    F["The Go fetcher, on kind"] -->|requests| FE
-    FE["The fake EDGAR: serves the stored versions in data/, and records every request"] -->|the requests it recorded| C["One set of checks: the user agent, at most 5 a second, nothing after a 403"]
+    F["The Go fetcher, on kind"] -->|requests to www.sec.gov and data.sec.gov| FE
+    T["A test"] -->|cues, through the admin port| FE
+    FE["The fake EDGAR: serves the stored versions in data/, and logs every request to its server"] -->|its log of requests| C["One set of checks: the user agent, at most 5 a second, nothing after a 403"]
 ```
 
 So the whole chart can be installed on kind in CI and tested end to end
-without the SEC ([design][design-testing], [0001]). As the first service
-code, [T21] also sets where the services live in the Python project, and
-adds the command that builds the pipeline's images and loads them into
-kind ([IMG-2]).
-
-> **Analysis.** No task, decision record, or specification covers this.
-> The fake EDGAR serves stored versions, which are the responses the SEC
-> gave, and the investigation's 47 fetches all got a `200` on their first
-> attempt ([SRC-20]). The checks of [FETCH-8], [FETCH-9], and [FETCH-13]
-> need a `429`, a `403`, or a body cut short. The fake EDGAR could be told
-> which response to give each request, so a test can make the SEC refuse or
-> fail on cue. Its specification, if it gets one, could say so.
+without the SEC ([design][design-testing], [0001]). [T47] specified the
+fake EDGAR, and [T21] builds it. As the first service code, T21 also sets
+where the services live in the Python project, and adds the command that
+builds the pipeline's images and loads them into kind ([IMG-2]).
 
 ### The scheduler, under envtest
 
@@ -359,6 +386,7 @@ clock check relies on, waits on a finding
 [T36]: ../plan.md#observing-filings
 [T40]: ../plan.md#documentation
 [T42]: ../plan.md#documentation
+[T47]: ../plan.md#observing-filings
 [agents-rules]: ../../AGENTS.md#rules
 [agents-commands]: ../../AGENTS.md#commands
 [agents-commits]: ../../AGENTS.md#commits-and-pull-requests
@@ -370,6 +398,7 @@ clock check relies on, waits on a finding
 [notices]: ../../spec/notices.md
 [telemetry]: ../../spec/telemetry.md
 [site]: ../../spec/site.md
+[fake-edgar]: ../../spec/fake-edgar.md
 [store-ids]: ../../spec/snapshots.md#3-statement-ids
 [store-questions]: ../../spec/snapshots.md#13-open-questions
 [deployment-ids]: ../../spec/deployment.md#3-statement-ids
@@ -380,6 +409,7 @@ clock check relies on, waits on a finding
 [telemetry-ids]: ../../spec/telemetry.md#3-statement-ids
 [telemetry-questions]: ../../spec/telemetry.md#11-open-questions
 [site-ids]: ../../spec/site.md#3-statement-ids
+[fake-edgar-ids]: ../../spec/fake-edgar.md#3-statement-ids
 [asof-facts]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md
 [asof-facts-guarantees]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#1-guarantees
 [asof-facts-asof]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#7-as-of-t
@@ -409,6 +439,7 @@ clock check relies on, waits on a finding
 [SCOPE-5]: ../../spec/snapshots.md#9-scope
 [XFER-1]: ../../spec/snapshots.md#records-the-cluster-made
 [XFER-3]: ../../spec/snapshots.md#records-the-cluster-made
+[FETCH-1]: ../../spec/snapshots.md#10-fetching
 [FETCH-2]: ../../spec/snapshots.md#10-fetching
 [FETCH-4]: ../../spec/snapshots.md#10-fetching
 [FETCH-6]: ../../spec/snapshots.md#10-fetching
@@ -430,6 +461,7 @@ clock check relies on, waits on a finding
 [IMG-1]: ../../spec/deployment.md#the-pipelines-own-images
 [IMG-2]: ../../spec/deployment.md#the-pipelines-own-images
 [IMG-3]: ../../spec/deployment.md#the-pipelines-own-images
+[IMG-5]: ../../spec/deployment.md#the-pipelines-own-images
 [PG-2]: ../../spec/deployment.md#7-postgresql
 [PG-4]: ../../spec/deployment.md#instances-and-backups
 [PG-5]: ../../spec/deployment.md#instances-and-backups
@@ -443,6 +475,26 @@ clock check relies on, waits on a finding
 [SECRET-4]: ../../spec/deployment.md#credentials
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease
 [LEASE-2]: ../../spec/deployment.md#the-fetchers-lease
+[FAKE-1]: ../../spec/deployment.md#the-fake-edgar
+[FAKE-2]: ../../spec/deployment.md#the-fake-edgar
+[FAKE-3]: ../../spec/deployment.md#the-fake-edgar
+[FAKE-4]: ../../spec/deployment.md#the-fake-edgar
+[FAKE-5]: ../../spec/deployment.md#the-fake-edgar
+[SERVE-1]: ../../spec/fake-edgar.md#4-what-it-serves
+[SERVE-2]: ../../spec/fake-edgar.md#4-what-it-serves
+[SERVE-3]: ../../spec/fake-edgar.md#4-what-it-serves
+[SERVE-4]: ../../spec/fake-edgar.md#4-what-it-serves
+[SERVE-5]: ../../spec/fake-edgar.md#4-what-it-serves
+[CUE-1]: ../../spec/fake-edgar.md#5-cues
+[CUE-2]: ../../spec/fake-edgar.md#5-cues
+[CUE-3]: ../../spec/fake-edgar.md#5-cues
+[REQ-1]: ../../spec/fake-edgar.md#6-the-request-log
+[REQ-2]: ../../spec/fake-edgar.md#6-the-request-log
+[REQ-3]: ../../spec/fake-edgar.md#6-the-request-log
+[ADMIN-1]: ../../spec/fake-edgar.md#7-the-admin-port
+[CHECK-1]: ../../spec/fake-edgar.md#8-the-checks
+[CHECK-2]: ../../spec/fake-edgar.md#8-the-checks
+[CHECK-3]: ../../spec/fake-edgar.md#8-the-checks
 [TABLE-1]: ../../spec/notices.md#4-the-record-of-notices
 [GAP-2]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [MSG-1]: ../../spec/notices.md#streams
@@ -458,4 +510,6 @@ clock check relies on, waits on a finding
 [STATUS-3]: ../../spec/site.md#6-status
 [PAGE-2]: ../../spec/site.md#7-the-pages-written-for-the-site
 [PAGE-4]: ../../spec/site.md#7-the-pages-written-for-the-site
+[SRC-4]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far
+[SRC-22]: ../../investigation/edgar.md#findings-so-far

@@ -1,7 +1,7 @@
 # Deployment
 
-<!-- status: The charts -->
-**Status** ([status page](../status.md)): The charts: Built.
+<!-- status: The charts; The fake EDGAR -->
+**Status** ([status page](../status.md)): The charts: Built. The fake EDGAR: Specified.
 <!-- end status -->
 
 The pipeline is installed on Kubernetes with Helm, by four charts in a
@@ -9,7 +9,7 @@ fixed order, on a kind cluster of one control-plane node and three workers,
 with every chart, image, and tool pinned. This page explains the charts and
 their order, the definitions they install, the kind cluster and its
 volumes, the pins, `edgar-asof`'s among them, the pipeline's own images,
-the credentials, and why each was chosen.
+the fake EDGAR that CI installs, the credentials, and why each was chosen.
 
 ## Kubernetes, Helm, and kind
 
@@ -319,6 +319,9 @@ the owner decided ([deployment, §6][own-images]):
   commit it installs the charts from ([IMG-3]), and the owner installs the
   umbrella chart with `images.commit` set to the commit checked out, after
   building and loading its images ([IMG-4]).
+- **Built from the commit's files.** The command builds each image from
+  the files of the commit it tags, and from base images named by digest,
+  so the same commit builds the same software ([IMG-5]).
 
 The commit reaches the record. The fetcher's records name it in their
 `tool`, as `fetcher@` and the commit its image was built from, which the
@@ -327,6 +330,29 @@ discoverer's readings as `discoverer@` and its commit ([§6 of the
 notices][readings]). So each record and each reading says which code wrote
 it. The command and `images.commit` arrive with the first of the pipeline's
 images, the fake EDGAR, task T21 ([plan][plan-observing]).
+
+## The fake EDGAR
+
+The tests on kind fetch from a fake EDGAR, which answers for the SEC's
+hosts from the stored versions under `data/`, so they never reach the SEC
+([`fake-edgar.md`][fake-edgar], [0001]). The umbrella chart renders it only
+when its value `fakeEdgar.enabled` is `true`, which CI sets and no
+committed values file does, so the owner's installations never include it
+([FAKE-1]). It's one replica of its image, which holds `data/` as the
+commit it's built from has it, so it has no claim. It mounts its
+certificate from a Secret, and no ServiceAccount token. A Service gives its
+server's port, 443, and its admin port, 8080 ([FAKE-2], [IMG-5]).
+
+It answers over HTTPS, with a certificate for `www.sec.gov` and
+`data.sec.gov` from a certificate authority the release makes for it
+through cert-manager ([FAKE-3]). Before CI installs the umbrella chart, it
+points kind's DNS for those names at the fake EDGAR's Service, so the
+fetcher sends it the requests it would send the SEC, at the URLs it's
+allowed, and no pod of the installed charts reaches the SEC ([FAKE-4],
+[FAKE-5]). How the fetcher trusts the authority comes with the version
+that deploys the fetcher ([deployment, §9][later]). What the fake EDGAR
+serves, and how tests cue it and read its log, are on [Testing and
+verification](testing-and-verification.md#the-fake-edgar).
 
 ## Credentials
 
@@ -425,6 +451,10 @@ built, and what Grafana needs to read the record ([deployment, from version
   replicas as Grafana's role ([MON-5], [MON-6]), and that role's password
   among the credentials ([SECRET-1]).
 
+Version 1.2.0 installs the fake EDGAR for CI ([FAKE-1] to [FAKE-5]), and
+says how the pipeline's images are built ([IMG-5]) ([deployment, from
+version 1.1.0][from-1.1.0]).
+
 Later versions add ([deployment, §9][later]):
 
 1. **The pipeline's services,** as each is built, with their replicas,
@@ -453,9 +483,10 @@ Later versions add ([deployment, §9][later]):
 | `PIN` | [PIN-1] to [PIN-7] | Exact versions, committed packages, Garage's vendored chart, images by digest, kind's node image, Helm and kind. | This page |
 | `CRD` | [CRD-1] to [CRD-6] | Every definition a template of the right chart, kept on uninstall, of the version of what uses it. | This page |
 | `KIND`, `VOL`, `PLACE` | [KIND-1], [KIND-2], [VOL-1] to [VOL-3], [PLACE-1], [PLACE-2] | The cluster's nodes, the host directory, the retained class, and one replica on each worker node. | This page |
-| `IMG` | [IMG-1] to [IMG-4] | The pipeline's images, tagged by commit and loaded into kind. | This page |
+| `IMG` | [IMG-1] to [IMG-5] | The pipeline's images, tagged by commit, built from its files, and loaded into kind. | This page |
 | `SECRET` | [SECRET-1] to [SECRET-4] | Credentials as required values, only in Secrets. | This page |
 | `LEASE` | [LEASE-1], [LEASE-2] | The fetcher's Lease and its timings. | This page |
+| `FAKE` | [FAKE-1] to [FAKE-5] | The fake EDGAR, installed only by CI, as the SEC's hosts. | This page, and [Testing and verification](testing-and-verification.md#the-fake-edgar) |
 | `NATS` | [NATS-1] to [NATS-6] | Three servers, the streams, and their durable consumers. | [NATS JetStream](nats-jetstream.md) |
 | `GARAGE` | [GARAGE-1] to [GARAGE-4] | Three nodes, the setup Job, the buckets, and the keys. | [Garage](garage.md) |
 | `PG` | [PG-1] to [PG-14] | PostgreSQL 18, three instances, the database, the roles, the store's table, the notices' tables and views, the dashboards' views, and the backups. | [PostgreSQL 18](postgresql.md) |
@@ -493,6 +524,7 @@ Later versions add ([deployment, §9][later]):
 [dep-guarantees]: ../../spec/deployment.md#1-guarantees
 [dependencies]: ../../spec/deployment.md#5-dependencies
 [from-1.0.0]: ../../spec/deployment.md#from-version-100
+[from-1.1.0]: ../../spec/deployment.md#from-version-110
 [GARAGE-1]: ../../spec/deployment.md#garage
 [GARAGE-2]: ../../spec/deployment.md#garage
 [GARAGE-4]: ../../spec/deployment.md#garage
@@ -501,6 +533,13 @@ Later versions add ([deployment, §9][later]):
 [IMG-2]: ../../spec/deployment.md#the-pipelines-own-images
 [IMG-3]: ../../spec/deployment.md#the-pipelines-own-images
 [IMG-4]: ../../spec/deployment.md#the-pipelines-own-images
+[IMG-5]: ../../spec/deployment.md#the-pipelines-own-images
+[FAKE-1]: ../../spec/deployment.md#the-fake-edgar
+[FAKE-2]: ../../spec/deployment.md#the-fake-edgar
+[FAKE-3]: ../../spec/deployment.md#the-fake-edgar
+[FAKE-4]: ../../spec/deployment.md#the-fake-edgar
+[FAKE-5]: ../../spec/deployment.md#the-fake-edgar
+[fake-edgar]: ../../spec/fake-edgar.md
 [KIND-1]: ../../spec/deployment.md#the-kind-cluster
 [KIND-2]: ../../spec/deployment.md#the-kind-cluster
 [later]: ../../spec/deployment.md#9-later-versions

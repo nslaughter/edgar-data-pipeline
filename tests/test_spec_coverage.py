@@ -28,22 +28,42 @@ CHECKS = {"verify", "tests", "kind", "review", "operator", "first import"}
 # The checks a statement can't pass without a test that carries its ID.
 TESTED_BY = {"verify", "tests", "kind"}
 # Statements whose tests a later task in docs/plan.md writes, with that task:
-# of spec/deployment.md's, T21 the first of the pipeline's images, and T23
-# the fetcher, with its Lease; of spec/controls.md's, T22 the Go types that
-# generate the definitions, the chart's resources, and the scheduler, T23 the
-# fetcher, T24 the discoverer, and T28 the monitoring, after which each
-# ServiceAccount in RBAC-5's table has its grants on kind; of
+# of spec/deployment.md's, T21 the first of the pipeline's images, the fake
+# EDGAR's, with how the charts install it, and T23 the fetcher, with its
+# Lease; of spec/fake-edgar.md's, T21 the fake EDGAR, and T23 the checks of
+# the fetcher's requests to it on kind; of spec/controls.md's, T22 the Go
+# types that generate the definitions, the chart's resources, and the
+# scheduler, T23 the fetcher, T24 the discoverer, and T28 the monitoring,
+# after which each ServiceAccount in RBAC-5's table has its grants on kind; of
 # spec/snapshots.md's, T22 the scheduler's jobs, T23 the fetcher and the
 # cluster store, T24 the discoverer's jobs and its use of edgar-asof, and T36
-# the transfer; of spec/notices.md's, T24 the discoverer, with the
-# scheduler's orders and the status it sets from notices; and of
-# spec/telemetry.md's, T28 the monitoring of observing filings, with the
-# services' metrics, and T29 the traces. Strict, like xfail_strict: a
-# statement listed here that has a test fails too, and so does one whose task
-# the plan marks done, or one checked by verify that verify.py already
-# reports.
+# the transfer; of spec/notices.md's, T24 the discoverer, with the scheduler's
+# orders and the status it sets from notices; and of spec/telemetry.md's, T28
+# the monitoring of observing filings, with the services' metrics, and T29 the
+# traces. Strict, like xfail_strict: a statement listed here that has a test
+# fails too, and so does one whose task the plan marks done, or one checked by
+# verify that verify.py already reports.
 AWAITING = {
-    **dict.fromkeys(["IMG-1", "IMG-2", "IMG-3"], "T21"),
+    **dict.fromkeys(["IMG-1", "IMG-2", "IMG-3", "IMG-5"], "T21"),
+    **dict.fromkeys(["FAKE-1", "FAKE-2", "FAKE-3", "FAKE-4", "FAKE-5"], "T21"),
+    **dict.fromkeys(
+        [
+            "SERVE-1",
+            "SERVE-2",
+            "SERVE-3",
+            "SERVE-4",
+            "SERVE-5",
+            "CUE-1",
+            "CUE-2",
+            "REQ-1",
+            "REQ-2",
+            "ADMIN-1",
+            "CHECK-1",
+            "CHECK-2",
+        ],
+        "T21",
+    ),
+    **dict.fromkeys(["CHECK-3"], "T23"),
     **dict.fromkeys(["LEASE-1", "LEASE-2"], "T23"),
     **dict.fromkeys(
         [

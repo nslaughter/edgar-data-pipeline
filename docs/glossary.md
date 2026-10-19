@@ -203,9 +203,11 @@ for its specification to give ([T18]).
 
 ### Fake EDGAR
 
-A service for tests that serves the stored versions under `data/` and
-records every request it receives, so the fetching rules are checked
-without the SEC ([testing on kind][design-testing], [T21]).
+A service for tests that answers for the SEC's hosts from the stored
+versions under `data/`, gives the failures a test cues, and logs every
+request its server receives, so the fetching rules are checked without the
+SEC ([`fake-edgar.md`][fake-edgar], [testing on kind][design-testing],
+[T21]).
 
 ### Feed
 
@@ -704,6 +706,7 @@ open. A statement checked by `operator` is the owner's to keep
 [inv-scope]: ../investigation/edgar.md#scope
 [inv-feeds]: ../investigation/edgar.md#feeds
 [inv-findings]: ../investigation/edgar.md#findings
+[fake-edgar]: ../spec/fake-edgar.md
 [store-guarantees]: ../spec/snapshots.md#1-guarantees
 [store-terms]: ../spec/snapshots.md#2-terms
 [store-ids]: ../spec/snapshots.md#3-statement-ids

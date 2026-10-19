@@ -4,9 +4,9 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The charts.
-- **Specified:** Scheduler; Fetcher; Monitoring: traces; The snapshot store in the cluster (built in part); The transfer from the cluster to git; The controls; The documentation site (built in part).
+- **Specified:** Scheduler; Fetcher; Monitoring: traces; The snapshot store in the cluster (built in part); The transfer from the cluster to git; The controls; The fake EDGAR; The documentation site (built in part).
 - **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
-- **Planned:** The fake EDGAR; The drills.
+- **Planned:** The drills.
 <!-- end status -->
 
 What the design still waits on, and what could undo it: the investigation's
@@ -279,8 +279,8 @@ backfills is answered (Q5).
 
 ### Deployment
 
-[`deployment.md`][deployment] has no section of open questions. Its
-version 1.1.0 deploys what the notices and the telemetry left to it: the
+[`deployment.md`][deployment] has no section of open questions. Since its
+version 1.1.0, it deploys what the notices and the telemetry left to it: the
 streams `ORDERS` and `NOTICES`, and the durable consumers of the
 discoverer, the scheduler, and the parse workers ([NATS-3], [NATS-5]); the
 discoverer's role and key ([PG-7], [GARAGE-4]); Grafana's role and its
@@ -294,14 +294,30 @@ restored while NATS's data wasn't kept. It follows no message, so nothing
 delivers it again, and the notices don't yet say that the discoverer
 publishes a refused notice again ([GAP-3],
 [durable consumers][deployment-consumers]). The owner decided on October
-15, 2026 that a version of the notices of its own says so ([T38]). Its
-[§9][deployment-later] lists what later versions add: the pipeline's own
-services, with their replicas, credentials, and placement; the fetcher's
-durable consumer of `JOBS`, a work queue, which keeps a job until it's
-acknowledged; migrations for later versions of the record's tables and
-views; each component's requests, limits, and probes, measured on kind;
-Tempo, Loki, and Alloy; and kube-state-metrics' access to the definitions
-of the pipeline's resources.
+15, 2026 that a version of the notices of its own says so ([T38]).
+
+Its version 1.2.0 adds the fake EDGAR, for CI ([§10][deployment-from-1.1.0]).
+The umbrella chart renders it only when `fakeEdgar.enabled` is `true`,
+which no committed values file sets, so the owner's installations never
+include it ([FAKE-1], [FAKE-2]). It answers for `www.sec.gov` and
+`data.sec.gov` over HTTPS, with a certificate from an authority that the
+release makes through cert-manager, and CI first points kind's CoreDNS at
+it for those names, so no pod of the installed charts reaches the SEC
+([FAKE-3] to [FAKE-5]). The same version says how the pipeline's images are
+built: from their commit's files and from base images named by digest, the
+fake EDGAR's holding `data/` ([IMG-5]). The details it settles are listed
+with the fake EDGAR's, and the owner confirmed them
+([below](#the-fake-edgar)).
+
+Its [§9][deployment-later] lists what later versions add: the pipeline's
+own services, with their replicas, credentials, and placement, and, with
+the fetcher, how the fetcher trusts the fake EDGAR's certificate authority
+where CI installs the fake EDGAR ([FAKE-3]); the fetcher's durable consumer
+of `JOBS`, a work queue, which keeps a job until it's acknowledged;
+migrations for later versions of the record's tables and views; each
+component's requests, limits, and probes, measured on kind; Tempo, Loki,
+and Alloy; and kube-state-metrics' access to the definitions of the
+pipeline's resources.
 
 ### Controls
 
@@ -355,6 +371,48 @@ adds a task for it ([alerts][telemetry-alerts]); and logs.
 [`site.md`'s §9][site-questions] has none open. The site shows `main`, with
 no version per release of the pipeline, which is revisited when the
 pipeline has releases.
+
+### The fake EDGAR
+
+[`fake-edgar.md`'s §10][fake-edgar-questions] has none open. The owner
+confirmed on October 19, 2026 each of the ten details that its version
+0.1.0 and the deployment's version 1.2.0 settle, keeping each default:
+
+1. **Which version it serves:** each URL's latest, an earlier one on cue, a
+   `304` as RFC 9110 gives it, and a `404` for a URL not stored
+   ([SERVE-2] to [SERVE-4]).
+2. **Failures on cue,** through its admin port, each response given once,
+   in order: a status, an earlier version, a body cut short, or no
+   response ([CUE-1], [CUE-2]). No cue delays a response or sends a body
+   that isn't UTF-8 text, so neither [FETCH-5]'s timeout nor a body encoded
+   `x-gzip` that decodes ([FETCH-11]) can be cued. A kind of response for
+   each would be a minor version ([§12][fake-edgar-changes]).
+3. **Its log of requests,** kept in memory and read through its admin port,
+   with one request answered at a time, so the log's order is the
+   requests' ([REQ-1], [REQ-2], [ADMIN-1]).
+4. **How requests reach it:** in the cluster, over HTTPS as the SEC's
+   hosts, with kind's DNS answering their names with it; on one machine,
+   over plain HTTP ([SERVE-5], [FAKE-3], [FAKE-4]).
+5. **The checks' allowance:** 20 milliseconds less than [FETCH-6]'s 0.2
+   seconds, by when each request arrives ([CHECK-1]).
+6. **How it's installed:** by the umbrella chart, only when
+   `fakeEdgar.enabled` is `true`, which CI sets and no committed values file
+   does, as one replica behind a Service ([FAKE-1], [FAKE-2]).
+7. **How `data/` reaches it:** in its image, which holds `data/` as the
+   commit it's built from has it ([IMG-5]).
+8. **The base images, by digest,** of each of the pipeline's images, so the
+   same commit builds the same software ([IMG-5]).
+9. **No metrics or traces,** since it's not one of the services the
+   telemetry observes, and its log shows what its server receives
+   ([§11][fake-edgar-other]).
+10. **A request without `Accept-Encoding`** gets the body itself, without a
+    `Content-Encoding` ([SERVE-3]).
+
+What it leaves to other specifications ([§11][fake-edgar-other]), the
+deployment's version 1.2.0 gives ([above](#deployment)), but for how the
+fetcher trusts the fake EDGAR's certificate authority, which comes with the
+version of the deployment that deploys the fetcher
+([§9][deployment-later]).
 
 ### `edgar-asof`'s specifications
 
@@ -548,6 +606,7 @@ revisit: whether to keep each company's `submissions` as the notice source
 [deployment-dependencies]: ../../spec/deployment.md#5-dependencies
 [deployment-later]: ../../spec/deployment.md#9-later-versions
 [deployment-consumers]: ../../spec/deployment.md#durable-consumers
+[deployment-from-1.1.0]: ../../spec/deployment.md#from-version-110
 [controls]: ../../spec/controls.md
 [controls-other]: ../../spec/controls.md#11-other-specifications
 [notices-questions]: ../../spec/notices.md#12-open-questions
@@ -558,6 +617,9 @@ revisit: whether to keep each company's `submissions` as the notice source
 [telemetry-clock]: ../../spec/telemetry.md#the-fetchers-clock
 [telemetry-alerts]: ../../spec/telemetry.md#7-alerts
 [site-questions]: ../../spec/site.md#9-open-questions
+[fake-edgar-questions]: ../../spec/fake-edgar.md#10-open-questions
+[fake-edgar-other]: ../../spec/fake-edgar.md#11-left-to-other-specifications
+[fake-edgar-changes]: ../../spec/fake-edgar.md#12-changes-to-this-document
 [asof-readme]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/README.md
 [asof-facts]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md
 [asof-facts-reading]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#4-reading-a-companys-facts
@@ -593,6 +655,9 @@ revisit: whether to keep each company's `submissions` as the notice source
 [SCOPE-4]: ../../spec/snapshots.md#9-scope
 [SCOPE-5]: ../../spec/snapshots.md#9-scope
 [XFER-1]: ../../spec/snapshots.md#records-the-cluster-made
+[FETCH-5]: ../../spec/snapshots.md#10-fetching
+[FETCH-6]: ../../spec/snapshots.md#10-fetching
+[FETCH-11]: ../../spec/snapshots.md#10-fetching
 [FETCH-18]: ../../spec/snapshots.md#the-fetcher
 [VAL-3]: ../../spec/controls.md#5-the-charts-values
 [ACCESS-3]: ../../spec/controls.md#8-secaccess
@@ -602,6 +667,7 @@ revisit: whether to keep each company's `submissions` as the notice source
 [PG-4]: ../../spec/deployment.md#instances-and-backups
 [PG-7]: ../../spec/deployment.md#the-stores-database
 [PIN-3]: ../../spec/deployment.md#6-pins
+[IMG-5]: ../../spec/deployment.md#the-pipelines-own-images
 [CRD-4]: ../../spec/deployment.md#definitions
 [CRD-5]: ../../spec/deployment.md#definitions
 [MON-3]: ../../spec/deployment.md#monitoring
@@ -613,6 +679,11 @@ revisit: whether to keep each company's `submissions` as the notice source
 [PG-12]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [PG-13]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease
+[FAKE-1]: ../../spec/deployment.md#the-fake-edgar
+[FAKE-2]: ../../spec/deployment.md#the-fake-edgar
+[FAKE-3]: ../../spec/deployment.md#the-fake-edgar
+[FAKE-4]: ../../spec/deployment.md#the-fake-edgar
+[FAKE-5]: ../../spec/deployment.md#the-fake-edgar
 [FILE-2]: ../../spec/notices.md#7-a-filings-files
 [FILE-4]: ../../spec/notices.md#7-a-filings-files
 [FILE-6]: ../../spec/notices.md#7-a-filings-files
@@ -621,3 +692,13 @@ revisit: whether to keep each company's `submissions` as the notice source
 [LAG-1]: ../../spec/notices.md#10-times-and-lags
 [METRIC-4]: ../../spec/telemetry.md#the-fetchers-clock
 [ALERT-1]: ../../spec/telemetry.md#7-alerts
+[SERVE-2]: ../../spec/fake-edgar.md#4-what-it-serves
+[SERVE-3]: ../../spec/fake-edgar.md#4-what-it-serves
+[SERVE-4]: ../../spec/fake-edgar.md#4-what-it-serves
+[SERVE-5]: ../../spec/fake-edgar.md#4-what-it-serves
+[CUE-1]: ../../spec/fake-edgar.md#5-cues
+[CUE-2]: ../../spec/fake-edgar.md#5-cues
+[REQ-1]: ../../spec/fake-edgar.md#6-the-request-log
+[REQ-2]: ../../spec/fake-edgar.md#6-the-request-log
+[ADMIN-1]: ../../spec/fake-edgar.md#7-the-admin-port
+[CHECK-1]: ../../spec/fake-edgar.md#8-the-checks

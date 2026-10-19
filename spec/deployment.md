@@ -1,14 +1,15 @@
 # Specification: deployment
 
-**Status:** Version 1.1.0, draft, October 15, 2026. This document governs
+**Status:** Version 1.2.0, draft, October 19, 2026. This document governs
 what the pipeline's Helm charts install, in which order and at which
 versions, and how they configure what they install: the charts, operators,
 and images they pin; the custom resource definitions they install; each
 component's replicas, storage, credentials, and placement; the cluster
 store's bucket, database, table, and streams, and the fetcher's Lease; the
 discoverer's streams, tables, credentials, and durable consumers, and
-Grafana's access to the record; the kind cluster they're installed on; the
-tools that install them; and the tests that check them. Where a chart and
+Grafana's access to the record; the fake EDGAR that CI installs for tests,
+and how the pipeline's images are built; the kind cluster they're
+installed on; the tools that install them; and the tests that check them. Where a chart and
 this document disagree, the chart is wrong or this document needs a new
 version; say which before changing either.
 
@@ -21,7 +22,9 @@ leaves to it ([`snapshots.md`, §13](snapshots.md#left-to-other-specifications))
 what the notices' version 0.1.0 leaves to it
 ([`notices.md`, §12](notices.md#left-to-other-specifications)), and, for
 Grafana, what the telemetry's version 0.1.0 leaves to it
-([`telemetry.md`, §11](telemetry.md#left-to-other-specifications)).
+([`telemetry.md`, §11](telemetry.md#left-to-other-specifications)). It
+installs, for CI, the fake EDGAR that the fake EDGAR's version 0.1.0
+describes ([`fake-edgar.md`](fake-edgar.md)).
 Each component's resource requests and limits, which are measured on kind,
 aren't in this version ([§9](#9-later-versions)). The pipeline it deploys
 reads filings from the U.S. Securities and Exchange Commission's EDGAR
@@ -35,7 +38,7 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
    at an exact version, every third-party image is named by its digest, and
    each of the pipeline's own images by the commit it's built from.
    [PIN-1], [PIN-2], [PIN-3], [PIN-4], [PIN-5], [PIN-6], [PIN-7], [IMG-1],
-   [IMG-3].
+   [IMG-3], [IMG-5].
 2. **An upgrade is a reviewed change** to a chart, the kind configuration,
    or CI, since nothing is resolved at install time, and nothing the charts
    render is generated as they render it. [PIN-1], [PIN-4], [PIN-6],
@@ -73,6 +76,10 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
 12. **A stream kept by interest accepts a message only once its durable
     consumers exist,** so it keeps each message it accepts for each service
     that reads it, and refuses one published sooner. [NATS-5], [NATS-6].
+13. **The tests on kind never reach the SEC.** CI installs the fake EDGAR,
+    which answers for the SEC's hosts from the stored versions, and every
+    pod that asks for those hosts reaches it. The owner's installations
+    never include it. [FAKE-1], [FAKE-2], [FAKE-3], [FAKE-4], [FAKE-5].
 
 ## 2. Terms
 
@@ -111,13 +118,17 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
   place in its stream, the messages it has delivered and those
   acknowledged, for whichever of its service's replicas reads from it, and
   across their restarts and NATS's ([0003]).
+- **The fake EDGAR:** a service for tests, which answers for the SEC's
+  hosts, `www.sec.gov` and `data.sec.gov`, from the stored versions under
+  `data/` ([`fake-edgar.md`](fake-edgar.md)). CI installs it; the owner's
+  installations don't ([FAKE-1]).
 
 ## 3. Statement IDs
 
 Every normative statement in this document has an ID, such as `PG-1`: an
 area and a number. The areas `CHART`, `PIN`, `PG`, `CRD`, `IMG`, `KIND`,
-`VOL`, `PLACE`, `NATS`, `GARAGE`, `MON`, `SECRET`, and `LEASE` belong to
-this document. An ID is assigned once and never reused or renumbered. A
+`VOL`, `PLACE`, `NATS`, `GARAGE`, `MON`, `SECRET`, `LEASE`, and `FAKE`
+belong to this document. An ID is assigned once and never reused or renumbered. A
 statement that is dropped stays in the [index](#8-index), marked retired.
 
 Each statement is one of two kinds:
@@ -145,9 +156,9 @@ both, except for a statement whose tests a later task in the
 task, and fails if the statement has a test or the plan marks the task
 done. This version's statements come before the charts they describe: T20
 builds the charts and writes their tests, apart from [IMG-1] to [IMG-3]'s,
-which T21 writes with the first of the pipeline's images, and [LEASE-1]'s
-and [LEASE-2]'s, which T23 writes with the fetcher. Until then each awaits
-its task.
+[IMG-5]'s, and [FAKE-1] to [FAKE-5]'s, which T21 writes with the first of
+the pipeline's images, the fake EDGAR's, and [LEASE-1]'s and [LEASE-2]'s,
+which T23 writes with the fetcher. Until then each awaits its task.
 
 ## 4. Layout
 
@@ -234,7 +245,7 @@ charts their own projects maintain ([0001]).
 | 1 | `deploy/prometheus-crds/` | `prometheus-crds` | `edgar` | The Prometheus operator's definitions ([0008]) |
 | 2 | `deploy/cert-manager/` | `cert-manager` | `cert-manager` | cert-manager, with its definitions, which the Barman Cloud plugin requires for its certificates |
 | 3 | `deploy/operators/` | `operators` | `cnpg-system` | The CloudNativePG operator ([0004]) and its Barman Cloud plugin, which backs the database up to Garage ([0002]), with their definitions; Garage's definition; and the pipeline's own ([`controls.md`](controls.md#4-the-resources)) |
-| 4 | `deploy/chart/` | `edgar` | `edgar` | NATS, with JetStream ([0003]); Garage ([0002]); kube-prometheus-stack ([0008]); the database ([§7](#7-postgresql)); and later the pipeline's services and controls |
+| 4 | `deploy/chart/` | `edgar` | `edgar` | NATS, with JetStream ([0003]); Garage ([0002]); kube-prometheus-stack ([0008]); the database ([§7](#7-postgresql)); the fake EDGAR, where CI installs it ([FAKE-1]); and later the pipeline's services and controls |
 
 Their dependencies:
 
@@ -576,6 +587,55 @@ starts.
   holds the Lease `fetcher` in the release namespace, with
   `leaseDurationSeconds` as the values give it.
 
+### The fake EDGAR
+
+The tests on kind fetch from the fake EDGAR, so they never reach the SEC
+([0001], [`fake-edgar.md`](fake-edgar.md)). CI installs it with the
+umbrella chart, and the owner's installations don't. It answers for the
+SEC's hosts over HTTPS, so the fetcher, which fetches only `https` URLs on
+those hosts ([FETCH-1]), sends it the requests it would send the SEC. CI
+points the cluster's DNS at it, so every pod that asks for those hosts
+reaches it instead. Its certificate comes from a certificate authority that
+the release makes for it through cert-manager, which the second release
+installs. A client in the cluster checks it against the authority's
+certificate alone, `ca.crt`, as Grafana checks the database's ([MON-5]).
+How the fetcher mounts that certificate comes with the version that deploys
+the fetcher ([§9](#9-later-versions)).
+
+- **FAKE-1** (invariant) The umbrella chart renders the fake EDGAR, and
+  what [FAKE-2] and [FAKE-3] give it, only when its value
+  `fakeEdgar.enabled` is `true`. Its default values set it to `false`, and
+  no values file committed to the repository sets it to `true`.
+- **FAKE-2** (invariant) With `fakeEdgar.enabled`, the umbrella chart
+  renders, in the release namespace, a Deployment `fake-edgar` of one
+  replica. Its container runs the fake EDGAR's image, one of the
+  pipeline's own ([IMG-1]), with the certificate and key of [FAKE-3]
+  mounted from their Secret for its server ([SERVE-5]). It claims no
+  volume, since its image holds what it serves ([IMG-5]), and mounts no
+  ServiceAccount token, since it uses no API. The chart also renders a
+  Service `fake-edgar`, whose port 443 reaches the fake EDGAR's server, and
+  port 8080 its admin port ([ADMIN-1]).
+- **FAKE-3** (invariant) With `fakeEdgar.enabled`, the umbrella chart
+  renders, in the release namespace, cert-manager's resources for a
+  certificate authority of the release's own: a self-signed issuer; the
+  authority's certificate, which that issuer issues; an issuer of the
+  authority; and the fake EDGAR's certificate, which the authority's
+  issuer issues for the names `www.sec.gov` and `data.sec.gov`. cert-manager
+  generates each key in the cluster and keeps it in a Secret, so no value
+  holds one ([SECRET-1]).
+- **FAKE-4** (rule) CI installs the umbrella chart with `fakeEdgar.enabled`
+  set to `true`, after building and loading the pipeline's images with
+  [IMG-2]'s command. Before it installs the umbrella chart, it points
+  kind's cluster DNS at the fake EDGAR: CoreDNS, which kind runs, answers a
+  pod's query for `www.sec.gov` or `data.sec.gov` with the address of the
+  Service `fake-edgar` in the release namespace. So no pod of the
+  installed charts reaches the SEC.
+- **FAKE-5** (rule) In the installed charts, the fake EDGAR's pod is ready.
+  A pod's `GET` for a stored URL, sent to that URL, reaches it over HTTPS,
+  with a certificate for the URL's host that the release's authority
+  issued, and gets the version that `data/` holds at the commit CI
+  installs ([SERVE-3]).
+
 ## 6. Pins
 
 Which version each pin names is for the charts, the kind configuration, and
@@ -640,6 +700,11 @@ owner decided ([§9](#9-later-versions)).
 - **IMG-4** (rule) The owner installs and upgrades the umbrella chart with
   `images.commit` set to the commit checked out, after building and loading
   its images with [IMG-2]'s command.
+- **IMG-5** (rule) [IMG-2]'s command builds each image from the files of
+  the commit it tags, as that commit has them, and from base images named
+  by digest, as [PIN-4] names a third-party image, so the same commit
+  builds the same software. The fake EDGAR's image holds `data/` as that
+  commit has it, which the fake EDGAR serves ([SERVE-1]).
 
 ## 7. PostgreSQL
 
@@ -829,6 +894,7 @@ keeps PostgreSQL's default, which lets every role execute it.
 | IMG-2 | rule | tests | One command builds the images from a clean commit, tags them with it, and loads them into kind. |
 | IMG-3 | rule | kind | The installed charts run the images built from the commit CI installs. |
 | IMG-4 | rule | operator | The owner installs the umbrella chart with the commit checked out, after building its images. |
+| IMG-5 | rule | tests | Each image is built from its commit's files and from base images named by digest; the fake EDGAR's holds `data/`. |
 | KIND-1 | invariant | tests | kind has one control-plane node and three workers. |
 | KIND-2 | invariant | tests | Every worker node keeps its volumes in one host directory. |
 | VOL-1 | invariant | tests | The `edgar-retained` class keeps a volume's data, at a path named by its claim. |
@@ -858,6 +924,11 @@ keeps PostgreSQL's default, which lets every role execute it.
 | SECRET-4 | rule | review, operator | CI generates credentials per cluster, and the owner commits none. |
 | LEASE-1 | invariant | tests | The fetcher's Lease, `fetcher`, takes its timings from values, 15, 10, and 2 seconds by default, and the chart refuses those client-go's leader election refuses. |
 | LEASE-2 | rule | kind | One of the fetcher's pods holds the Lease, with the values' duration. |
+| FAKE-1 | invariant | tests | The umbrella chart renders the fake EDGAR only when `fakeEdgar.enabled`, which no committed values file sets. |
+| FAKE-2 | invariant | tests | The fake EDGAR is one replica of its image, with its certificate's Secret mounted but no claim or token, behind a Service with ports 443 and 8080. |
+| FAKE-3 | invariant | tests | A certificate authority of the release's own, through cert-manager, issues the fake EDGAR's certificate for the SEC's hosts. |
+| FAKE-4 | rule | kind | CI installs the fake EDGAR, and points kind's DNS for the SEC's hosts at it first. |
+| FAKE-5 | rule | kind | The fake EDGAR is ready, and answers a pod's request for a stored URL over HTTPS, as the SEC's host. |
 
 ## 9. Later versions
 
@@ -866,7 +937,9 @@ Later versions of this document will add:
 1. **The pipeline's own services,** as each is built, with their replicas,
    credentials, and placement, such as the fetcher's two replicas ([0005]),
    and the database role and Garage key of each service after the
-   discoverer ([PG-7], [GARAGE-4]).
+   discoverer ([PG-7], [GARAGE-4]). The fetcher's version also says how
+   the fetcher trusts the fake EDGAR's certificate authority where CI
+   installs the fake EDGAR ([FAKE-3]).
 2. **The fetcher's durable consumer of `JOBS`,** with the fetcher. `JOBS`
    is a work queue, which keeps a job until it's acknowledged, so its
    consumer can come with its service. A consumer of a stream kept by
@@ -901,7 +974,11 @@ version also deploys what the snapshot store's version 1.0.0 leaves to it.
 The owner decided on October 14, 2026 that a version of its own deploys
 what the notices' version 0.1.0 leaves to this document, before the
 discoverer is built, and with it what the telemetry's version 0.1.0 leaves
-to it for Grafana: version 1.1.0.
+to it for Grafana: version 1.1.0. The owner decided on October 18, 2026
+that the fake EDGAR is specified, in [`fake-edgar.md`](fake-edgar.md) and
+in a version of this document, before it's built: version 1.2.0. The owner
+confirmed on October 19, 2026 the details that version settles, as
+[`fake-edgar.md`, §10](fake-edgar.md#10-open-questions) lists them.
 
 ## 10. Changes to this document
 
@@ -949,6 +1026,25 @@ statement's meaning changes.
 
 Nothing was installed under version 1.0.0, so nothing installed changes.
 
+### From version 1.1.0
+
+Version 1.2.0 installs the fake EDGAR for CI, and says how the pipeline's
+images are built. It adds statements, a term, and a guarantee, so it's a
+minor version: no statement's meaning changes.
+
+- **The fake EDGAR:** the umbrella chart renders it only when
+  `fakeEdgar.enabled` is `true`, as one replica of its image behind a
+  Service, with a certificate for the SEC's hosts from an authority of the
+  release's own, [FAKE-1] to [FAKE-3]; and CI installs it, pointing kind's
+  DNS for the SEC's hosts at it, [FAKE-4] and [FAKE-5]. That is guarantee
+  13.
+- **The pipeline's images:** each is built from its commit's files and
+  from base images named by digest, and the fake EDGAR's holds `data/`,
+  [IMG-5].
+
+The owner's installations don't set `fakeEdgar.enabled`, so nothing they
+install changes. Neither do CI's until T21 builds the fake EDGAR.
+
 [0001]: ../docs/decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
 [0002]: ../docs/decisions/0002-store-bodies-in-garage.md
 [0003]: ../docs/decisions/0003-queue-work-in-nats-jetstream.md
@@ -957,6 +1053,7 @@ Nothing was installed under version 1.0.0, so nothing installed changes.
 [0006]: ../docs/decisions/0006-write-the-services-in-go-and-python.md
 [0008]: ../docs/decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md
 [0011]: ../docs/decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md
+[ADMIN-1]: fake-edgar.md#7-the-admin-port
 [CHART-1]: #4-layout
 [CHART-2]: #5-dependencies
 [CHART-3]: #5-dependencies
@@ -969,6 +1066,12 @@ Nothing was installed under version 1.0.0, so nothing installed changes.
 [CRD-6]: #definitions
 [DISC-1]: notices.md#processing
 [DISC-2]: notices.md#processing
+[FAKE-1]: #the-fake-edgar
+[FAKE-2]: #the-fake-edgar
+[FAKE-3]: #the-fake-edgar
+[FAKE-4]: #the-fake-edgar
+[FAKE-5]: #the-fake-edgar
+[FETCH-1]: snapshots.md#10-fetching
 [FETCH-16]: snapshots.md#the-fetcher
 [FILE-5]: notices.md#7-a-filings-files
 [GAP-3]: notices.md#5-polls-coverage-and-gaps
@@ -980,6 +1083,7 @@ Nothing was installed under version 1.0.0, so nothing installed changes.
 [IMG-2]: #the-pipelines-own-images
 [IMG-3]: #the-pipelines-own-images
 [IMG-4]: #the-pipelines-own-images
+[IMG-5]: #the-pipelines-own-images
 [KIND-1]: #the-kind-cluster
 [KIND-2]: #the-kind-cluster
 [LEASE-1]: #the-fetchers-lease
@@ -1025,6 +1129,9 @@ Nothing was installed under version 1.0.0, so nothing installed changes.
 [SECRET-2]: #credentials
 [SECRET-3]: #credentials
 [SECRET-4]: #credentials
+[SERVE-1]: fake-edgar.md#4-what-it-serves
+[SERVE-3]: fake-edgar.md#4-what-it-serves
+[SERVE-5]: fake-edgar.md#4-what-it-serves
 [STORE-1]: snapshots.md#the-cluster-store
 [STORE-2]: snapshots.md#the-cluster-store
 [TABLE-2]: notices.md#4-the-record-of-notices
