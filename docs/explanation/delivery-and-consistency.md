@@ -1,7 +1,7 @@
 # Delivery and consistency
 
 <!-- status: NATS JetStream; Scheduler; Fetcher; Discoverer; Parse workers; Garage; PostgreSQL 18; The snapshot store in the cluster; The snapshot store in git -->
-**Status** ([status page](../status.md)): NATS JetStream: Built. Scheduler: Specified. Fetcher: Specified. Discoverer: Decided; specified in part. Parse workers: Decided. Garage: Built. PostgreSQL 18: Built. The snapshot store in the cluster: Specified; built in part. The snapshot store in git: Built.
+**Status** ([status page](../status.md)): NATS JetStream: Built. Scheduler: Decided; specified in part. Fetcher: Specified. Discoverer: Decided; specified in part. Parse workers: Decided. Garage: Built. PostgreSQL 18: Built. The snapshot store in the cluster: Specified; built in part. The snapshot store in git: Built.
 <!-- end status -->
 
 How the pipeline's services hand each other work, what each stream

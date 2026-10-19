@@ -1,7 +1,7 @@
 # The scheduler
 
 <!-- status: Scheduler; The controls -->
-**Status** ([status page](../status.md)): Scheduler: Specified. The controls: Specified.
+**Status** ([status page](../status.md)): Scheduler: Decided; specified in part. The controls: Specified.
 <!-- end status -->
 
 The scheduler is the controller that turns the owner's controls into work
@@ -211,10 +211,12 @@ controller-runtime's leader election, which holds a Lease
 ([components][design-components], [0007]). The standby serves its metrics
 too, with `edgar_scheduler_leader` at 0 ([METRIC-1], [METRIC-3]).
 
-The deployment specification's version 1.1.0 doesn't yet state the
-scheduler's replicas or its Lease, as it states the fetcher's Lease
-([LEASE-1]): a later version adds each of the pipeline's services, with its
-replicas, as it's built ([§9 of deployment][deployment-later]).
+The deployment specification doesn't yet state the scheduler's replicas or
+its Lease, as it states the fetcher's Lease ([LEASE-1]): a later version
+adds each of the pipeline's services, with its replicas
+([§9 of deployment][deployment-later]). For the scheduler, that's task T48:
+its Deployment and Lease, its ServiceAccount and grants, its access to
+NATS, and its image, specified before T22 builds it ([plan][plan-observing]).
 
 > **Analysis.** No task, decision record, or specification covers this.
 > Two active replicas would each queue every Source's polls, so each Source
@@ -324,8 +326,8 @@ EDGAR's content ([0006]).
   ([§12 of the notices][notices-left]), and no document gives it a consumer
   of `RECORDS` or a database role.
 - **Its replicas and its Lease, as statements** that chart tests check, in
-  a later version of the deployment specification
-  ([§9 of deployment][deployment-later]).
+  the version of the deployment specification that task T48 writes
+  ([§9 of deployment][deployment-later], [plan][plan-observing]).
 - **Exact gaps.** A job gives neither its due time nor its Source's
   cadence, so the record takes each poll's window as the cadence. A poll's
   due time in its job, in a minor version of the store's specification,
@@ -354,8 +356,8 @@ EDGAR's content ([0006]).
 | [METRIC-1], [METRIC-2], [METRIC-3] | Its metrics, served by each replica, with labels from small sets. |
 | [TRACE-1], [TRACE-2], [TRACE-3], [TRACE-5], [TRACE-7], [TRACE-8] | Each poll and order starts a trace, carried in NATS headers. |
 
-Task T22 builds the scheduler, with the Go types and the chart's Sources,
-and T24 builds its side of the notices: the orders, and each Source's
+Task T48 specifies the scheduler's deployment, then T22 builds the
+scheduler, with the Go types and the chart's Sources, and T24 builds its side of the notices: the orders, and each Source's
 `openGapSince` and each Backfill's status, which it sets from notices
 ([plan][plan-observing]). The schemas' statements, [JOB-1] and [MSG-1],
 have tests already. [SOURCE-4]'s tests await T23, the fetcher; those of its
