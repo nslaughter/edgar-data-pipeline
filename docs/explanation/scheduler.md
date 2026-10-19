@@ -173,7 +173,7 @@ alert reads to tell a Source that's polling from one that isn't
 | Publishes | Jobs of kind `poll` ([job.schema.json]) | `JOBS`, `edgar.jobs.poll` | [JOB-2] |
 | Publishes | Orders ([order.schema.json]) | `ORDERS`, `edgar.orders.backfill` | [ORDER-1] |
 | Reads | Gap and backfill notices ([notice.schema.json]) | `NOTICES`, `edgar.notices.gap` and `edgar.notices.backfill`, through `scheduler-notices` | [NOTICE-1], [NOTICE-2], [MSG-2], [NATS-5] |
-| Reads | The records of its Sources' polls | Not yet specified | [SOURCE-4] |
+| Reads | The records of its Sources' polls | Not yet specified; task T48 gives it a durable consumer of `edgar.records.poll` on `RECORDS` | [SOURCE-4] |
 | Serves | Its metrics | `/metrics`, on its port `metrics` | [METRIC-1], [METRIC-3] |
 | Exports | Its spans, by OTLP | The endpoint `OTEL_EXPORTER_OTLP_ENDPOINT` gives | [TRACE-7] |
 
@@ -324,8 +324,10 @@ EDGAR's content ([0006]).
   status from the events the other services publish ([0007]). The
   deployment gives it one durable consumer, of gap and backfill notices
   ([NATS-5]), as the notices specification asks
-  ([§12 of the notices][notices-left]), and no document gives it a consumer
-  of `RECORDS` or a database role.
+  ([§12 of the notices][notices-left]), and no specification yet gives it a
+  consumer of `RECORDS` or a database role. The owner decided that task T48
+  gives it a durable consumer of poll events on `RECORDS`, made before the
+  fetcher publishes them ([plan][plan-observing]).
 - **Its replicas and its Lease, as statements** that chart tests check, in
   the version of the deployment specification that task T48 writes
   ([§9 of deployment][deployment-later], [plan][plan-observing]).
