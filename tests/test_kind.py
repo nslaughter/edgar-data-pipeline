@@ -282,6 +282,15 @@ def checked_out() -> str:
     ).stdout.strip()
 
 
+def release_value(*keys: str) -> Any:
+    """One value the umbrella chart's release was given, and nothing else of
+    them, since they hold its credentials, which a failure would show."""
+    found = helm_json("get", "values", "edgar", "-n", NAMESPACE)
+    for key in keys:
+        found = found.get(key) if isinstance(found, dict) else None
+    return found
+
+
 def own_containers() -> list[tuple[str, dict[str, Any]]]:
     """Each container of the charts' pods that runs one of the pipeline's images."""
     namespaces = sorted({namespace for _, namespace in RELEASES})
@@ -299,7 +308,7 @@ def test_each_of_the_pipelines_images_runs_as_built_from_the_commit_installed() 
     commit = checked_out()
     found = own_containers()
 
-    assert helm_json("get", "values", "edgar", "-n", NAMESPACE)["images"]["commit"] == commit
+    assert release_value("images", "commit") == commit
     if FAKE_EDGAR:
         assert found
     for pod, container in found:
@@ -898,9 +907,7 @@ def service_address() -> str:
 @pytest.mark.spec("FAKE-4")
 @fake_edgar_installed
 def test_ci_installs_the_fake_edgar() -> None:
-    given = helm_json("get", "values", "edgar", "-n", NAMESPACE)
-
-    assert given["fakeEdgar"] == {"enabled": True}
+    assert release_value("fakeEdgar", "enabled") is True
 
 
 @pytest.mark.spec("FAKE-4")
