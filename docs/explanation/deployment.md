@@ -339,9 +339,9 @@ hosts from the stored versions under `data/`, so they never reach the SEC
 when its value `fakeEdgar.enabled` is `true`, which CI sets and no
 committed values file does, so the owner's installations never include it
 ([FAKE-1]). It's one replica of its image, which holds `data/` as the
-commit it's built from has it, without a volume or a ServiceAccount token,
-behind a Service with its server's port, 443, and its admin port, 8080
-([FAKE-2], [IMG-5]).
+commit it's built from has it, so it has no claim. It mounts its
+certificate from a Secret, and no ServiceAccount token. A Service gives its
+server's port, 443, and its admin port, 8080 ([FAKE-2], [IMG-5]).
 
 It answers over HTTPS, with a certificate for `www.sec.gov` and
 `data.sec.gov` from a certificate authority the release makes for it

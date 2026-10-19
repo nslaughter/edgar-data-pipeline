@@ -925,7 +925,7 @@ keeps PostgreSQL's default, which lets every role execute it.
 | LEASE-1 | invariant | tests | The fetcher's Lease, `fetcher`, takes its timings from values, 15, 10, and 2 seconds by default, and the chart refuses those client-go's leader election refuses. |
 | LEASE-2 | rule | kind | One of the fetcher's pods holds the Lease, with the values' duration. |
 | FAKE-1 | invariant | tests | The umbrella chart renders the fake EDGAR only when `fakeEdgar.enabled`, which no committed values file sets. |
-| FAKE-2 | invariant | tests | The fake EDGAR is one replica of its image, without a volume or a token, behind a Service with ports 443 and 8080. |
+| FAKE-2 | invariant | tests | The fake EDGAR is one replica of its image, with its certificate's Secret mounted but no claim or token, behind a Service with ports 443 and 8080. |
 | FAKE-3 | invariant | tests | A certificate authority of the release's own, through cert-manager, issues the fake EDGAR's certificate for the SEC's hosts. |
 | FAKE-4 | rule | kind | CI installs the fake EDGAR, and points kind's DNS for the SEC's hosts at it first. |
 | FAKE-5 | rule | kind | The fake EDGAR is ready, and answers a pod's request for a stored URL over HTTPS, as the SEC's host. |
