@@ -226,7 +226,7 @@ NATS's streams, and Prometheus's and Alertmanager's data ([deployment,
 | Grafana | 1 | — | None | [MON-4] |
 | The operators | 1 each | — | — | [deployment, §5][dependencies] |
 | The fetcher | 2, one active through a Lease | — | — | [components], [0005] |
-| The scheduler | 2, one active through leader election | — | — | [components], [0007] |
+| The scheduler | 2, one active through its Lease | Each on a worker node of its own | — | [SCHED-1], [SCHED-2] |
 
 The three components with three replicas each need a worker node of their
 own for each replica: NATS's and Garage's pods by a required anti-affinity,
@@ -237,7 +237,8 @@ by CloudNativePG's required anti-affinity, each on the node's host name
 node is lost ([deployment, §1][dep-guarantees]): the reason for three, so
 the loss of a node can be shown ([the kind cluster][KIND-1], [0002]).
 
-The services' rows come from the design: the deployment adds each service,
+The scheduler's row is specified ([the scheduler](#the-scheduler)). The
+fetcher's comes from the design: the deployment adds each other service,
 with its replicas, credentials, and placement, in a later version, as it's
 built ([deployment, §9][later]). The discoverer, the parse workers, the
 exporter, and the query API are a Deployment, a Deployment scaled by queue
@@ -412,6 +413,35 @@ specification and decision 0005 record as a gap ([lease], [0005]); the
 notices' specification gives a gap only where the handover misses a poll
 ([§5 of the notices][notices-gaps]).
 
+## The scheduler
+
+The scheduler is the controller that reconciles the controls, and the first
+of the pipeline's services the deployment specifies
+([the scheduler][scheduler-spec], [0007]). It explains itself on
+[its own page](scheduler.md).
+
+- **Its Deployment:** two replicas of its image, `edgar/scheduler`, as the
+  ServiceAccount `scheduler`, each needing a worker node of its own. It
+  claims no volume and holds no credential but its ServiceAccount's token:
+  it uses neither Garage nor the database ([SCHED-1], [SCHED-2]).
+- **Its Lease:** `scheduler`, with timings from values, 15, 10, and 2
+  seconds by default, as the fetcher's, refused as the fetcher's are
+  ([SCHED-3]). Only the replica that holds it acts. Unlike the fetcher, a
+  replica that Kubernetes stops releases the Lease once it has stopped
+  acting, so an upgrade or a drain hands over without waiting out the
+  duration, which at the cadence the Sources start at could leave a gap
+  ([SCHED-4], [SCHED-5]).
+- **Its grants:** [RBAC-1]'s, by a Role in the release namespace for
+  Sources and Backfills and a ClusterRole for the SecAccess, which is
+  cluster-scoped, and its Lease's, as the fetcher's ([LEASE-1]). It's bound
+  to no other role, so it records no Kubernetes Events ([SCHED-6]).
+- **Its access to NATS:** NATS's address, without a credential, since NATS
+  asks none in this version ([SCHED-7]). It reads poll events through a
+  durable consumer of its own, `scheduler-polls`, which the Job makes with
+  the discoverer's, before `RECORDS` takes its subjects, so it exists
+  before the fetcher publishes ([SCHED-8]). It makes no stream or consumer
+  itself ([SCHED-9]).
+
 ## How the charts are checked
 
 Each statement of the deployment's specification is one of two kinds
@@ -422,14 +452,17 @@ Each statement of the deployment's specification is one of two kinds
   `helm template`, with the values CI installs it with, apart from the
   credentials and the archive's server name, for which tests give values of
   their own. They need Helm, but no cluster or network.
-- **A rule** is how the installed charts, or the tools around them, behave.
-  Tests check it in the CI job that installs the charts on kind, and skip
-  it where no cluster is installed.
+- **A rule** is how the installed charts, or the tools around them, behave,
+  or how a service uses what the charts give it, such as the scheduler its
+  Lease. Tests check the installed charts in the CI job that installs them
+  on kind, and skip it where no cluster is installed, and a service's use
+  in the service's tests.
 
 The statements came before the charts they describe. Task T20 built the
 charts and wrote their tests. Task T21 wrote those of the pipeline's images
 and the fake EDGAR's installation, [IMG-1] to [IMG-3], [IMG-5], and
 [FAKE-1] to [FAKE-5], with the first of the pipeline's images. Those of
+[SCHED-1] to [SCHED-9] await T22, which builds the scheduler, and those of
 [LEASE-1] and [LEASE-2] await T23, which builds the fetcher ([deployment,
 §3][ids]). The tests on kind, the fake EDGAR they run against, and the
 drills are on [Testing and verification](testing-and-verification.md).
@@ -456,13 +489,14 @@ built, and what Grafana needs to read the record ([deployment, from version
 
 Version 1.2.0 installs the fake EDGAR for CI ([FAKE-1] to [FAKE-5]), and
 says how the pipeline's images are built ([IMG-5]) ([deployment, from
-version 1.1.0][from-1.1.0]).
+version 1.1.0][from-1.1.0]). Version 1.3.0 deploys the scheduler
+([SCHED-1] to [SCHED-9]; [deployment, from version 1.2.0][from-1.2.0]).
 
 Later versions add ([deployment, §9][later]):
 
-1. **The pipeline's services,** as each is built, with their replicas,
-   credentials, and placement, and the database role and Garage key of each
-   service after the discoverer.
+1. **The pipeline's other services,** as each is built, with their
+   replicas, credentials, and placement, and the database role and Garage
+   key of each service after the discoverer.
 2. **The fetcher's durable consumer of `JOBS`,** with the fetcher. `JOBS`
    is a work queue, which keeps a job until it's acknowledged, so its
    consumer can come with its service.
@@ -477,6 +511,8 @@ Later versions add ([deployment, §9][later]):
    to.
 6. **kube-state-metrics' access to the definitions** of the pipeline's
    resources, beside its access to the resources themselves ([RBAC-3]).
+7. **NATS's credentials,** each service's own, with permissions that limit
+   it to the subjects it publishes and the consumers it reads.
 
 ## Where it's specified
 
@@ -489,6 +525,7 @@ Later versions add ([deployment, §9][later]):
 | `IMG` | [IMG-1] to [IMG-5] | The pipeline's images, tagged by commit, built from its files, and loaded into kind. | This page |
 | `SECRET` | [SECRET-1] to [SECRET-4] | Credentials as required values, only in Secrets. | This page |
 | `LEASE` | [LEASE-1], [LEASE-2] | The fetcher's Lease and its timings. | This page |
+| `SCHED` | [SCHED-1] to [SCHED-9] | The scheduler's Deployment, its Lease and the active replica's use of it, its grants, NATS's address, and its consumer of poll events. | This page, and [The scheduler](scheduler.md#replicas) |
 | `FAKE` | [FAKE-1] to [FAKE-5] | The fake EDGAR, installed only by CI, as the SEC's hosts. | This page, and [Testing and verification](testing-and-verification.md#the-fake-edgar) |
 | `NATS` | [NATS-1] to [NATS-6] | Three servers, the streams, and their durable consumers. | [NATS JetStream](nats-jetstream.md) |
 | `GARAGE` | [GARAGE-1] to [GARAGE-4] | Three nodes, the setup Job, the buckets, and the keys. | [Garage](garage.md) |
@@ -510,6 +547,7 @@ Later versions add ([deployment, §9][later]):
 [asof-plan]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/docs/plan.md#the-first-release
 [README]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/README.md
 [API-2]: ../../spec/controls.md#4-the-resources
+[RBAC-1]: ../../spec/controls.md#9-who-may-change-what
 [RBAC-3]: ../../spec/controls.md#9-who-may-change-what
 [RBAC-6]: ../../spec/controls.md#9-who-may-change-what
 [VAL-1]: ../../spec/controls.md#5-the-charts-values
@@ -528,6 +566,7 @@ Later versions add ([deployment, §9][later]):
 [dependencies]: ../../spec/deployment.md#5-dependencies
 [from-1.0.0]: ../../spec/deployment.md#from-version-100
 [from-1.1.0]: ../../spec/deployment.md#from-version-110
+[from-1.2.0]: ../../spec/deployment.md#from-version-120
 [GARAGE-1]: ../../spec/deployment.md#garage
 [GARAGE-2]: ../../spec/deployment.md#garage
 [GARAGE-4]: ../../spec/deployment.md#garage
@@ -548,6 +587,16 @@ Later versions add ([deployment, §9][later]):
 [later]: ../../spec/deployment.md#9-later-versions
 [lease]: ../../spec/deployment.md#the-fetchers-lease
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease
+[scheduler-spec]: ../../spec/deployment.md#the-scheduler
+[SCHED-1]: ../../spec/deployment.md#the-scheduler
+[SCHED-2]: ../../spec/deployment.md#the-scheduler
+[SCHED-3]: ../../spec/deployment.md#its-lease
+[SCHED-4]: ../../spec/deployment.md#its-lease
+[SCHED-5]: ../../spec/deployment.md#its-lease
+[SCHED-6]: ../../spec/deployment.md#its-grants
+[SCHED-7]: ../../spec/deployment.md#its-access-to-nats
+[SCHED-8]: ../../spec/deployment.md#its-access-to-nats
+[SCHED-9]: ../../spec/deployment.md#its-access-to-nats
 [LEASE-2]: ../../spec/deployment.md#the-fetchers-lease
 [MON-1]: ../../spec/deployment.md#monitoring
 [MON-4]: ../../spec/deployment.md#monitoring

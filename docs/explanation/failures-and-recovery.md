@@ -145,9 +145,13 @@ sequenceDiagram
 
 ## Losing the active scheduler
 
-The scheduler runs two replicas, one active through controller-runtime's
-leader election, which also uses a Lease ([0007],
-[the design's components]).
+The scheduler runs two replicas, each on a worker node of its own, one
+active through controller-runtime's leader election, which holds the Lease
+`scheduler` ([0007], [SCHED-1], [SCHED-2]). A replica that Kubernetes
+stops, as in an upgrade or a drain, releases the Lease once it has stopped
+acting, so the other takes it over at its next try. One lost with its node
+can't, so the other takes it over once the Lease's duration, 15 seconds by
+default, has passed without a renewal ([SCHED-3], [SCHED-4]).
 
 - **What stops:** queuing polls and orders, and setting the resources'
   status. Polls due while no replica is active are neither queued nor
@@ -537,3 +541,7 @@ blocks the SEC with a NetworkPolicy ([the design's outages and recovery],
 [ALERT-3]: ../../spec/telemetry.md#7-alerts
 [telemetry's open questions]: ../../spec/telemetry.md#11-open-questions
 [telemetry, left to other specifications]: ../../spec/telemetry.md#left-to-other-specifications
+[SCHED-1]: ../../spec/deployment.md#the-scheduler
+[SCHED-2]: ../../spec/deployment.md#the-scheduler
+[SCHED-3]: ../../spec/deployment.md#its-lease
+[SCHED-4]: ../../spec/deployment.md#its-lease

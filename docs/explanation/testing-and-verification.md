@@ -70,7 +70,7 @@ without the behavior it covers ([doing the next item][agents-next], step
 | Specification | Statements with tests now | Statements awaiting a task |
 | --- | --- | --- |
 | [`snapshots.md`][snapshots] 1.0.0 | Those `verify.py` checks, and `snapshot.py`'s rules, brought to this version by [T35], done October 13, 2026; and the schemas': [STORE-1], [REC-13], [JOB-1] | [T22], the scheduler's jobs; [T23], the fetcher and the cluster store; [T24], the discoverer's jobs and its use of `edgar-asof` ([FETCH-18]); [T36], the transfer ([XFER-1] to [XFER-3]) |
-| [`deployment.md`][deployment] 1.2.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind; and the pipeline's images' and the fake EDGAR's installation, written by [T21] ([IMG-1] to [IMG-3], [IMG-5], [FAKE-1] to [FAKE-5]) | [T23], the fetcher's Lease ([LEASE-1], [LEASE-2]) ([§3][deployment-ids]) |
+| [`deployment.md`][deployment] 1.3.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind; and the pipeline's images' and the fake EDGAR's installation, written by [T21] ([IMG-1] to [IMG-3], [IMG-5], [FAKE-1] to [FAKE-5]) | [T22], the scheduler's Deployment, Lease, grants, and consumer ([SCHED-1] to [SCHED-9]); [T23], the fetcher's Lease ([LEASE-1], [LEASE-2]) ([§3][deployment-ids]) |
 | [`controls.md`][controls] 1.0.0 | [API-1] | [T22], [T23], [T24], and [T28] ([§3][controls-ids]) |
 | [`notices.md`][notices] 0.1.0 | [TABLE-1], [MSG-1] | [T24], the discoverer, with the scheduler's side of the Backfills ([§3][notices-ids]) |
 | [`telemetry.md`][telemetry] 0.1.0 | [VIEW-1] | [T28], the monitoring of observing filings; [T29], the traces ([§3][telemetry-ids]) |
@@ -270,7 +270,11 @@ refuses ([API-3]), are tested against a real API server with envtest
 `Polling` condition's reasons ([SOURCE-1]) or of a poll's due time
 ([SOURCE-2]) runs against the same API machinery the cluster uses, without
 installing the charts. The same task checks that the definitions generated
-from the scheduler's Go types are the ones in `spec/schemas/` ([API-2]).
+from the scheduler's Go types are the ones in `spec/schemas/` ([API-2]),
+and that only the replica that holds the scheduler's Lease acts, and
+releases the Lease when it stops ([SCHED-4]). On kind, it checks that the
+other replica takes the Lease over before its duration when the active
+one's pod is deleted ([SCHED-5]).
 
 ### The alert rules, under `promtool`
 
@@ -530,3 +534,7 @@ clock check relies on, waits on a finding
 [SRC-4]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far
 [SRC-22]: ../../investigation/edgar.md#findings-so-far
+[SCHED-1]: ../../spec/deployment.md#the-scheduler
+[SCHED-4]: ../../spec/deployment.md#its-lease
+[SCHED-5]: ../../spec/deployment.md#its-lease
+[SCHED-9]: ../../spec/deployment.md#its-access-to-nats

@@ -255,6 +255,10 @@ poll's job stays until it's taken, though it has expired ([JOB-5]):
 | A larger feed | 51,840 × 400 to 500 = 21 to 26 MB a day | 51,840 × 1,100 to 1,400 = 57 to 73 MB a day |
 | All filers | That feed's polls', which this page doesn't estimate | That feed's polls', which this page doesn't estimate |
 
+The poll events, most of the events, also wait while the scheduler is down,
+for its consumer of them, `scheduler-polls` ([SCHED-8]): the same sizes,
+for as long as no scheduler replica reads them.
+
 New filings' fetches add nothing meanwhile: the discoverer queues them as
 it reads the polls' events ([FILE-2]), so none is queued while no poll is
 made or no event read. A Backfill's jobs wait behind the polls and new
@@ -473,3 +477,4 @@ so its cost grows with the polls' rate and with time
 [VAL-3]: ../../spec/controls.md#5-the-charts-values
 [VAL-4]: ../../spec/controls.md#5-the-charts-values
 [VER-1]: ../../spec/snapshots.md#7-versions
+[SCHED-8]: ../../spec/deployment.md#its-access-to-nats

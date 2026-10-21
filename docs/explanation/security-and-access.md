@@ -105,6 +105,13 @@ none needs to change a resource itself ([who may change what]). The
 discoverer has no row: it can't read Backfills, which is why the scheduler
 hands each one to it in an order ([the notices' Backfills]).
 
+The scheduler's row is granted by a Role in the release namespace, for the
+Sources and Backfills there, and by a ClusterRole for the `SecAccess`,
+which is cluster-scoped. Beside it, its ServiceAccount may create Leases,
+and read and renew only its own, `scheduler`, as the fetcher's may only its
+own ([SCHED-3], [SCHED-6], [LEASE-1]). It's bound to no other role, so the
+scheduler can't even record a Kubernetes Event ([SCHED-6]).
+
 The chart checks the owner's values before anything reaches the cluster. It
 refuses values from which it would render a resource that the API server
 would refuse, apart from a change to a Backfill's `spec`, which the chart
@@ -151,6 +158,7 @@ Beyond the three resources:
 | Who | The cluster store's bucket, `snapshots` | The pipeline's database, `edgar` | The SEC |
 | --- | --- | --- | --- |
 | The fetcher | Reads and writes, with its own key. It stores an object only if none has its name, and never deletes or replaces one ([GARAGE-4], [OBJ-4], [LOG-4]) | Inserts and selects records, as its own role, and changes none ([LOG-3], [PG-8]) | Sends every request from the cluster, while it holds the Lease and requests are allowed ([FETCH-16], [FETCH-18], [ACCESS-1]) |
+| The scheduler | Nothing: it has no key ([SCHED-1]) | Nothing: it has no role, and reads its polls' records in their events ([SCHED-1], [SCHED-8]) | Nothing ([FETCH-18]) |
 | The discoverer | Reads only, with its own key ([GARAGE-4]) | Inserts and selects the notices' tables, and selects records and the notices' views, as its own role, `discoverer`, and changes none ([PG-7], [PG-12], [TABLE-3], [LOG-3]) | Nothing ([FETCH-18]) |
 | Each other service of the pipeline | If it uses the bucket, reads only, with a key of its own ([GARAGE-4], [LOG-4]) | If it uses the database, selects records and the discoverer's tables and views, as a role of its own, and changes none ([PG-7], [LOG-3], [TABLE-3], [PG-9], [PG-12], [PG-14]) | Nothing ([FETCH-18]) |
 | Grafana | — | Uses the schema `dashboards` and selects its views, as its own role, `grafana`, and can neither read nor change a table or view of the record ([PG-11], [PG-13], [VIEW-3]) | Nothing ([FETCH-18]) |
@@ -173,16 +181,20 @@ so the pipeline makes none, and a check of the objects finds any other
 ([store guarantees][store-guarantees], [0002]).
 
 The scheduler doesn't read EDGAR's content ([0006]): it never fetches and
-never writes the record, and no controller is in the data path ([0007]). The
-database role and Garage key of each service after the discoverer come with
-that service, in later versions of the deployment specification
-([later versions][deployment-later]).
+never writes the record, and no controller is in the data path ([0007]). It
+holds no credential but its ServiceAccount's token: it mounts no Secret
+([SCHED-1]). The database role and Garage key of each service after the
+discoverer come with that service, in later versions of the deployment
+specification ([later versions][deployment-later]).
 
-Two boundaries inside the cluster have no statement yet. NATS has no
-credential among those that [SECRET-1] lists, and no statement limits which
-service publishes or reads which subjects. Nor does any statement give a
-NetworkPolicy, which would limit which pods reach the SEC, NATS, Garage, or
-the database.
+Two boundaries inside the cluster have no statement yet. NATS asks no
+credential: [SECRET-1] lists none for it, so any pod that reaches NATS may
+publish to any subject and read from any consumer ([SCHED-7]). A later
+version of the deployment gives each service NATS credentials of its own,
+with permissions that limit it to the subjects it publishes and the
+consumers it reads ([later versions][deployment-later]). Nor does any
+statement give a NetworkPolicy, which would limit which pods reach the SEC,
+NATS, Garage, or the database.
 
 ## What runs
 
@@ -198,13 +210,9 @@ and loaded into kind's nodes, never pushed to or pulled from a registry
 
 > **Analysis.** No task, decision record, or specification covers this.
 >
-> The two boundaries that have no statement could be drawn in a later
-> version of the deployment specification. NATS's own accounts or keys, kept
-> as Secrets rendered from required values like the other credentials, could
-> limit each service to the subjects it publishes and reads, so that only
-> the scheduler and the discoverer could queue a job. And NetworkPolicies
-> could let only the fetcher's pods reach the SEC, so that what [FETCH-18]
-> has as a rule of the services would also hold of the network.
+> NetworkPolicies could let only the fetcher's pods reach the SEC, so that
+> what [FETCH-18] has as a rule of the services would also hold of the
+> network.
 
 [0002]: ../decisions/0002-store-bodies-in-garage.md
 [0005]: ../decisions/0005-send-sec-requests-through-one-active-fetcher.md
@@ -242,6 +250,11 @@ and loaded into kind's nodes, never pushed to or pulled from a registry
 [SECRET-3]: ../../spec/deployment.md#credentials
 [SECRET-4]: ../../spec/deployment.md#credentials
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease
+[SCHED-1]: ../../spec/deployment.md#the-scheduler
+[SCHED-3]: ../../spec/deployment.md#its-lease
+[SCHED-6]: ../../spec/deployment.md#its-grants
+[SCHED-7]: ../../spec/deployment.md#its-access-to-nats
+[SCHED-8]: ../../spec/deployment.md#its-access-to-nats
 [PIN-1]: ../../spec/deployment.md#6-pins
 [PIN-2]: ../../spec/deployment.md#6-pins
 [PIN-4]: ../../spec/deployment.md#6-pins

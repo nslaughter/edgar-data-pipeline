@@ -19,7 +19,7 @@ streams, acknowledgements, redelivery, and work-queue retention ([0003]):
 | Stream | Subjects | Published by | Read by | Kept |
 | --- | --- | --- | --- | --- |
 | `JOBS` | `edgar.jobs.poll`, `edgar.jobs.filing`, `edgar.jobs.backfill` | The scheduler, a job for each Source's poll ([JOB-2]); the discoverer, a job for each fetch of a filing's or a Backfill's ([JOB-3]) | The fetcher | As a work queue: until the fetcher acknowledges the job |
-| `RECORDS` | `edgar.records.poll`, `edgar.records.filing`, `edgar.records.backfill` | The fetcher, an event for each record it adds ([JOB-6]) | The discoverer ([DISC-1]) | Until each of the stream's consumers acknowledges the event |
+| `RECORDS` | `edgar.records.poll`, `edgar.records.filing`, `edgar.records.backfill` | The fetcher, an event for each record it adds ([JOB-6]) | The discoverer ([DISC-1]); the scheduler, poll events, whose records set each Source's poll times ([SOURCE-4], [SCHED-8]) | Until each of the stream's consumers acknowledges the event |
 | `ORDERS` | `edgar.orders.backfill` | The scheduler, an order handing the discoverer each Backfill ([ORDER-1]) | The discoverer ([DISC-1]) | As a work queue: until the discoverer acknowledges the order |
 | `NOTICES` | `edgar.notices.filing`, `edgar.notices.gap`, `edgar.notices.backfill` | The discoverer, a notice of each filing, gap, and Backfill's progress ([FILE-5], [GAP-3], [LIST-5]) | The scheduler, gap and backfill notices ([NOTICE-1], [NOTICE-2]); the parse workers, filing notices | Until each of the stream's consumers acknowledges the notice |
 
@@ -34,6 +34,7 @@ flowchart LR
     JOBS --> FET["Fetcher"]
     FET -- "an event per record" --> REC[("RECORDS")]
     REC --> DIS
+    REC -- "poll events" --> SCH
     SCH -- "orders" --> ORD[("ORDERS")]
     ORD --> DIS
     DIS -- "notices" --> NOT[("NOTICES")]
@@ -55,8 +56,11 @@ the host, where a cluster recreated with it finds them ([VOL-2], [VOL-3],
 [KIND-2]). The Job that makes the streams also makes the durable consumers
 of the discoverer, the scheduler, and the parse workers, each with three
 replicas, so each keeps its place in its stream through the loss of a node
-too ([NATS-5]); the fetcher's consumer of `JOBS` comes with the fetcher
-([later versions][deployment-later]).
+too ([NATS-5]). The scheduler's consumer of poll events, `scheduler-polls`,
+comes with the scheduler, which is built before the fetcher publishes any
+([SCHED-8]), and the fetcher's consumer of `JOBS` comes with the fetcher
+([later versions][deployment-later]). No service makes a stream or a
+consumer itself; the scheduler waits for those it reads ([SCHED-9]).
 
 The two retentions differ in what a missing consumer costs. A work queue
 keeps each job until the fetcher acknowledges it, so jobs wait while no
@@ -76,8 +80,13 @@ it starts. The notices don't yet say that the discoverer publishes a
 refused notice again, and it publishes the gap's notice again only when
 the gap changes or it starts again ([GAP-3]). Until then, the scheduler
 doesn't set the Source's `openGapSince` from it ([NOTICE-1],
-[durable consumers][deployment-consumers]). The Job also makes `NOTICES`
-first, then `RECORDS`, `ORDERS`, and `JOBS` last. An event follows a job,
+[durable consumers][deployment-consumers]). An order the scheduler
+publishes before `ORDERS` exists, on a new install whose values allow
+requests from the start, is refused too, and the notices don't yet say that
+the scheduler publishes it again: [ORDER-1] does only when it next becomes
+the active replica or requests are allowed again
+([the scheduler's access to NATS][deployment-scheduler-nats]). The Job also
+makes `NOTICES` first, then `RECORDS`, `ORDERS`, and `JOBS` last. An event follows a job,
 and a notice follows an event or an order, so no event, and no notice that
 follows a message, is published before its stream takes it ([NATS-5]).
 
@@ -346,6 +355,9 @@ the same `tool` commit reads the same bytes ([IMP-1], [IMP-2], [IMP-3]).
 [PG-13]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [PG-14]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [deployment-later]: ../../spec/deployment.md#9-later-versions
+[deployment-scheduler-nats]: ../../spec/deployment.md#its-access-to-nats
+[SCHED-8]: ../../spec/deployment.md#its-access-to-nats
+[SCHED-9]: ../../spec/deployment.md#its-access-to-nats
 [deployment-consumers]: ../../spec/deployment.md#durable-consumers
 [VAL-3]: ../../spec/controls.md#5-the-charts-values
 [SOURCE-4]: ../../spec/controls.md#6-source
