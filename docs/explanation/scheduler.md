@@ -1,7 +1,7 @@
 # The scheduler
 
 <!-- status: Scheduler; The controls -->
-**Status** ([status page](../status.md)): Scheduler: Decided; specified in part. The controls: Specified.
+**Status** ([status page](../status.md)): Scheduler: Specified. The controls: Specified.
 <!-- end status -->
 
 The scheduler is the controller that turns the owner's controls into work

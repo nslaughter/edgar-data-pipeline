@@ -1,17 +1,19 @@
 # Specification: deployment
 
-**Status:** Version 1.2.0, draft, October 19, 2026. This document governs
+**Status:** Version 1.3.0, draft, October 21, 2026. This document governs
 what the pipeline's Helm charts install, in which order and at which
 versions, and how they configure what they install: the charts, operators,
 and images they pin; the custom resource definitions they install; each
 component's replicas, storage, credentials, and placement; the cluster
 store's bucket, database, table, and streams, and the fetcher's Lease; the
 discoverer's streams, tables, credentials, and durable consumers, and
-Grafana's access to the record; the fake EDGAR that CI installs for tests,
-and how the pipeline's images are built; the kind cluster they're
-installed on; the tools that install them; and the tests that check them. Where a chart and
-this document disagree, the chart is wrong or this document needs a new
-version; say which before changing either.
+Grafana's access to the record; the scheduler's Deployment, Lease,
+ServiceAccount, access to NATS, and durable consumers; the fake EDGAR that
+CI installs for tests, and how the pipeline's images are built; the kind
+cluster they're installed on; the tools that install them; and the tests
+that check them. Where a chart and this document disagree, the chart is
+wrong or this document needs a new version; say which before changing
+either.
 
 It rests on the decisions to deploy on Kubernetes with Helm, on kind
 ([0001]); to install the definitions and the operators before the umbrella
@@ -23,8 +25,10 @@ what the notices' version 0.1.0 leaves to it
 ([`notices.md`, §12](notices.md#left-to-other-specifications)), and, for
 Grafana, what the telemetry's version 0.1.0 leaves to it
 ([`telemetry.md`, §11](telemetry.md#left-to-other-specifications)). It
-installs, for CI, the fake EDGAR that the fake EDGAR's version 0.1.0
-describes ([`fake-edgar.md`](fake-edgar.md)).
+deploys the scheduler, the controller that the controls' version 1.0.0
+describes ([`controls.md`](controls.md)), on the decision to reconcile the
+controls with it ([0007]). It installs, for CI, the fake EDGAR that the fake
+EDGAR's version 0.1.0 describes ([`fake-edgar.md`](fake-edgar.md)).
 Each component's resource requests and limits, which are measured on kind,
 aren't in this version ([§9](#9-later-versions)). The pipeline it deploys
 reads filings from the U.S. Securities and Exchange Commission's EDGAR
@@ -75,11 +79,18 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
     [PG-12], [PG-13], [PG-14], [MON-5].
 12. **A stream kept by interest accepts a message only once its durable
     consumers exist,** so it keeps each message it accepts for each service
-    that reads it, and refuses one published sooner. [NATS-5], [NATS-6].
+    that reads it, and refuses one published sooner. [NATS-5], [NATS-6],
+    [SCHED-8].
 13. **The tests on kind never reach the SEC.** CI installs the fake EDGAR,
     which answers for the SEC's hosts from the stored versions, and every
     pod that asks for those hosts reaches it. The owner's installations
     never include it. [FAKE-1], [FAKE-2], [FAKE-3], [FAKE-4], [FAKE-5].
+14. **One scheduler replica at a time acts, and the other is on another
+    worker node,** ready to take the Lease over. A replica that Kubernetes
+    stops hands the Lease over without waiting out its duration. The
+    scheduler can do with the API server only what the controls grant it
+    and its Lease needs. [SCHED-1], [SCHED-2], [SCHED-3], [SCHED-4],
+    [SCHED-5], [SCHED-6], [RBAC-1].
 
 ## 2. Terms
 
@@ -107,6 +118,9 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
   interface.
 - **Service:** one of the pipeline's own programs that runs in the cluster,
   such as the fetcher, from one of its own images.
+- **Active replica:** of a service whose replicas act one at a time, the
+  replica that holds the service's Lease, and so does its work, such as
+  the scheduler's ([SCHED-4]).
 - **The cluster store:** the store's objects in Garage and records in
   PostgreSQL, as the snapshot store's specification describes it
   ([`snapshots.md`](snapshots.md#the-cluster-store)).
@@ -127,8 +141,8 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
 
 Every normative statement in this document has an ID, such as `PG-1`: an
 area and a number. The areas `CHART`, `PIN`, `PG`, `CRD`, `IMG`, `KIND`,
-`VOL`, `PLACE`, `NATS`, `GARAGE`, `MON`, `SECRET`, `LEASE`, and `FAKE`
-belong to this document. An ID is assigned once and never reused or renumbered. A
+`VOL`, `PLACE`, `NATS`, `GARAGE`, `MON`, `SECRET`, `LEASE`, `SCHED`, and
+`FAKE` belong to this document. An ID is assigned once and never reused or renumbered. A
 statement that is dropped stays in the [index](#8-index), marked retired.
 
 Each statement is one of two kinds:
@@ -140,25 +154,29 @@ Each statement is one of two kinds:
   CI sets for each cluster, and for which tests give values of their own
   ([SECRET-4], [PG-10]). They run without a cluster or the network, with
   the other tests, wherever those run, and need Helm.
-- A **rule** is how the installed charts, or the tools around them, behave.
-  Tests check the installed charts in the CI job that installs them on
-  kind, and are skipped where no cluster is installed. A rule on a tool,
-  such as [IMG-2]'s command, is checked by tests of that tool.
+- A **rule** is how the installed charts, or the tools around them, behave,
+  or how a service uses what the charts give it, such as the scheduler its
+  Lease ([SCHED-4]). Tests check the installed charts in the CI job that
+  installs them on kind, and are skipped where no cluster is installed. A
+  rule on a tool, such as [IMG-2]'s command, is checked by tests of that
+  tool, and one on a service by the service's tests.
 
 The index says how each statement is checked: by `tests`, by tests on
 `kind`, in `review` of the pull request that changes what it covers, or by
 the `operator`, the owner, who keeps it. Every statement checked by `tests`
 or `kind` has at least one test marked with its ID, as
-`@pytest.mark.spec("PG-1")`, and every marker names an ID in a
-specification's index. A test, `tests/test_spec_coverage.py`, enforces
+`@pytest.mark.spec("PG-1")`, or, in a Go test, in the form the first Go
+test sets ([0006]), and every marker names an ID in a specification's
+index. A test, `tests/test_spec_coverage.py`, enforces
 both, except for a statement whose tests a later task in the
 [plan](../docs/plan.md) writes. It lists such a statement as awaiting that
 task, and fails if the statement has a test or the plan marks the task
 done. This version's statements come before the charts they describe: T20
 builds the charts and writes their tests, apart from [IMG-1] to [IMG-3]'s,
 [IMG-5]'s, and [FAKE-1] to [FAKE-5]'s, which T21 writes with the first of
-the pipeline's images, the fake EDGAR's, and [LEASE-1]'s and [LEASE-2]'s,
-which T23 writes with the fetcher. Until then each awaits its task.
+the pipeline's images, the fake EDGAR's; [LEASE-1]'s and [LEASE-2]'s,
+which T23 writes with the fetcher; and [SCHED-1] to [SCHED-9]'s, which T22
+writes with the scheduler. Until then each awaits its task.
 
 ## 4. Layout
 
@@ -245,7 +263,7 @@ charts their own projects maintain ([0001]).
 | 1 | `deploy/prometheus-crds/` | `prometheus-crds` | `edgar` | The Prometheus operator's definitions ([0008]) |
 | 2 | `deploy/cert-manager/` | `cert-manager` | `cert-manager` | cert-manager, with its definitions, which the Barman Cloud plugin requires for its certificates |
 | 3 | `deploy/operators/` | `operators` | `cnpg-system` | The CloudNativePG operator ([0004]) and its Barman Cloud plugin, which backs the database up to Garage ([0002]), with their definitions; Garage's definition; and the pipeline's own ([`controls.md`](controls.md#4-the-resources)) |
-| 4 | `deploy/chart/` | `edgar` | `edgar` | NATS, with JetStream ([0003]); Garage ([0002]); kube-prometheus-stack ([0008]); the database ([§7](#7-postgresql)); the fake EDGAR, where CI installs it ([FAKE-1]); and later the pipeline's services and controls |
+| 4 | `deploy/chart/` | `edgar` | `edgar` | NATS, with JetStream ([0003]); Garage ([0002]); kube-prometheus-stack ([0008]); the database ([§7](#7-postgresql)); the scheduler ([SCHED-1]); the fake EDGAR, where CI installs it ([FAKE-1]); and later the pipeline's other services and its controls |
 
 Their dependencies:
 
@@ -260,8 +278,9 @@ Their dependencies:
 | `deploy/chart/` | `kube-prometheus-stack` | `oci://ghcr.io/prometheus-community/charts` |
 
 The database itself, a CloudNativePG `Cluster` and its `ImageCatalog`, is
-in the umbrella chart's own templates ([§7](#7-postgresql)). Tempo, Loki,
-Alloy, and the pipeline's own services arrive in later versions. The
+in the umbrella chart's own templates ([§7](#7-postgresql)), as is the
+scheduler ([SCHED-1]). Tempo, Loki, Alloy, and the pipeline's other services
+arrive in later versions. The
 operators run as their charts deploy them by default, one replica each:
 while one restarts, its resources wait in the API server.
 
@@ -383,12 +402,14 @@ message on, until they read it:
 | `scheduler-notices` | `NOTICES` | `edgar.notices.gap`, `edgar.notices.backfill` | The scheduler: gap and backfill notices ([NOTICE-1], [NOTICE-2]) | JetStream's default |
 | `parse-workers-notices` | `NOTICES` | `edgar.notices.filing` | The parse workers: filing notices, as the facts specification will say | JetStream's default |
 
-Each is a pull consumer, which every replica of its service reads from. A
-message it delivers is acknowledged one by one. One not acknowledged within
-JetStream's default of 30 seconds is delivered again, with no limit on how
-often, so a service that stops partway through a message gets it again
-([DISC-1]). It may go to another replica while the first is still at work
-on it, which [DISC-2] makes harmless: a message delivered again adds
+Each is a pull consumer, which any replica of its service may read from,
+though only the scheduler's active replica reads the scheduler's
+([SCHED-4]). A message it delivers is acknowledged one by one. One not
+acknowledged within JetStream's default of 30 seconds is delivered again,
+with no limit on how often, so a service that stops partway through a
+message gets it again ([DISC-1]). It may go to another replica while the
+first is still at work on it, which [DISC-2] makes harmless: a message
+delivered again adds
 nothing twice. With one unacknowledged at most, each of the discoverer's
 consumers of `RECORDS` delivers an event only once the one before it is
 acknowledged, which the discoverer does only once the event's transaction
@@ -401,6 +422,9 @@ default isolation neither transaction would see the other's reading, so
 neither would find it complete. Delivery begins at the stream's first
 message. Each consumer has three replicas, as its stream has, so its place
 in the stream survives the loss of a node.
+
+The scheduler's consumer of poll events, `scheduler-polls`, comes with the
+scheduler, and is configured and made as these are ([SCHED-8]).
 
 Helm creates the umbrella chart's services, and waits for them to be ready,
 before its hook Jobs run ([CHART-4]), so a service may publish before the
@@ -586,6 +610,160 @@ starts.
 - **LEASE-2** (rule) In the installed charts, one of the fetcher's pods
   holds the Lease `fetcher` in the release namespace, with
   `leaseDurationSeconds` as the values give it.
+
+### The scheduler
+
+The scheduler is the controller that reconciles the controls
+([`controls.md`](controls.md), [0007]). It runs as two replicas, of which
+one at a time acts: the one that holds its Lease, through
+controller-runtime's leader election ([0006], [0007]). So each Source's
+polls are queued once a cadence ([SOURCE-2]), not once by each replica. The
+other waits on another worker node, to take the Lease over when the first
+is lost. The scheduler uses the API server, for the controls and its Lease,
+and NATS, for its jobs, orders, notices, and poll events. It never fetches
+and writes nothing to the record ([0007]), so it has neither a Garage key
+nor a database role.
+
+- **SCHED-1** (invariant) The umbrella chart renders, in the release
+  namespace, a Deployment `scheduler` of two replicas, whose pods run as
+  the ServiceAccount `scheduler`, which the chart also renders. Its
+  container runs the scheduler's image, one of the pipeline's own, from
+  the value `scheduler.image`, `edgar/scheduler` by default ([IMG-1]), and
+  names the port it serves its metrics on `metrics` ([METRIC-1]). It claims
+  no volume. In this version it mounts no Secret and reads none in its
+  environment, so it holds no credential but its ServiceAccount's token.
+- **SCHED-2** (invariant) The scheduler's pods each need a worker node of
+  their own: they carry, against each other, a required pod anti-affinity,
+  or a topology spread constraint with `whenUnsatisfiable: DoNotSchedule`,
+  on `kubernetes.io/hostname`, as NATS's and Garage's do ([PLACE-1]).
+
+#### Its Lease
+
+The scheduler's Lease is its own, apart from the fetcher's ([LEASE-1]).
+Its timings by default are the fetcher's, which are those of
+controller-runtime's leader election. That leader election is client-go's
+([0006]), so the chart refuses the timings client-go refuses, as it does
+the fetcher's.
+
+controller-runtime runs a controller's work only on the replica that holds
+the Lease, and stops it there when the replica can't renew the Lease. A
+replica that Kubernetes stops while it holds the Lease, as in an upgrade or
+a drain, would otherwise keep it until its duration passed without a
+renewal, 15 seconds by default, before the other could take it over. At the
+10 seconds each company's Source starts at ([0010]), a poll queued that
+late can leave a gap in the Source's coverage
+([§5 of the notices](notices.md#5-polls-coverage-and-gaps)), at each
+upgrade that restarts the scheduler. So a replica that stops releases the
+Lease once it has stopped acting, and the other takes it over at its next
+try, and queues each Source's first poll then ([SOURCE-2]). A replica lost without stopping, as when its node is, still
+holds the Lease until its duration passes.
+
+- **SCHED-3** (invariant) The umbrella chart gives the scheduler its
+  Lease's name, `scheduler`, in the release namespace, and its timings,
+  from the values `scheduler.lease.durationSeconds`, 15 by default,
+  `scheduler.lease.renewDeadlineSeconds`, 10, and
+  `scheduler.lease.retryPeriodSeconds`, 2. It fails to render values where
+  any of the three is below 1, where the renewal deadline isn't shorter
+  than the duration, where the retry period isn't shorter than the renewal
+  deadline, or where the renewal deadline isn't greater than 1.2 times the
+  retry period, so it refuses what client-go's leader election refuses
+  ([0006]).
+- **SCHED-4** (rule) Only the scheduler's active replica, the one that
+  holds the Lease `scheduler`, queues polls, publishes orders, reads the
+  scheduler's consumers, and sets the resources' `status`; the other does
+  none of these. A replica stops acting when it can't renew the Lease
+  within the renewal deadline, before the other can take the Lease over. A
+  replica that stops while it holds the Lease releases it once it has
+  stopped acting, so the other takes it over without waiting out the
+  Lease's duration.
+- **SCHED-5** (rule) In the installed charts, the scheduler's two pods run
+  on two worker nodes, and one of them holds the Lease `scheduler` in the
+  release namespace, with `leaseDurationSeconds` as the values give it.
+  When that pod is deleted, the other holds the Lease before the Lease's
+  duration has passed since its last renewal.
+
+#### Its grants
+
+The scheduler's grants on the controls are [RBAC-1]'s. It reconciles only
+the Sources and Backfills in the release namespace ([SOURCE-1],
+[BACKFILL-1], [ORDER-1]), so a Role there grants its verbs on them, and
+the scheduler watches them there alone. The SecAccess is cluster-scoped
+([§4 of the controls](controls.md#4-the-resources)), so a ClusterRole
+grants its verbs on it. Its Lease needs what the fetcher's does
+([LEASE-1]): to create it, and then to read and renew it. It's granted
+nothing else, so it records no Kubernetes Events: what it did with the
+controls is in their `status` ([0007]), and whether a replica is the
+active one is in its metrics ([METRIC-3]) and in the Lease.
+
+- **SCHED-6** (invariant) The umbrella chart grants the scheduler's
+  ServiceAccount [RBAC-1]'s verbs: those on Sources, Backfills, and their
+  `status` by a Role in the release namespace, and those on the SecAccess
+  by a ClusterRole. It grants it, in the release namespace, `create` on
+  Leases, and `get` and `update` on the Lease `scheduler` only. No
+  RoleBinding or ClusterRoleBinding the charts render binds the
+  ServiceAccount to any other role.
+
+#### Its access to NATS
+
+NATS asks no credential in this version: any pod that reaches its Service
+may publish to any subject and read from any consumer
+([§9](#9-later-versions)). So the scheduler's access to NATS is NATS's
+address, and the streams and consumers the Job makes for what it
+publishes and reads. It publishes jobs on `edgar.jobs.poll`, which `JOBS`
+takes ([JOB-2]), and orders on `edgar.orders.backfill`, which `ORDERS`
+takes ([ORDER-1]). It reads gap and backfill notices through
+`scheduler-notices` ([NATS-5], [NOTICE-1], [NOTICE-2]), and poll events
+through `scheduler-polls` ([SCHED-8]).
+
+The scheduler sets each Source's `lastPollTime` and
+`lastSuccessfulPollTime` from the records of its polls ([SOURCE-4]). It
+reads them in their events, as it reads what the other services publish
+([0007]), and not in the database, where it has no role. `RECORDS` is kept
+by interest, so the scheduler's consumer must exist before the fetcher
+publishes the first poll event it should see, as the discoverer's must
+([NATS-5]). The consumer comes with the scheduler, which is built before
+the fetcher ([plan](../docs/plan.md)). An event is published again when
+its job is delivered again ([JOB-6]), after events of later polls, so
+handling the events one at a time, in the stream's order, wouldn't put the
+polls in order. The consumer delivers as many unacknowledged events at once
+as JetStream's default allows, as `scheduler-notices` does. While no replica reads it, as while the
+scheduler is scaled to zero, `RECORDS` keeps each poll event for it until
+it does.
+
+The Job makes the streams and consumers only once the release's resources
+are ready ([CHART-4]), so a new install's scheduler starts before they
+exist. JetStream refuses a job or an order published before its stream
+exists, and the publisher knows it wasn't kept
+([durable consumers](#durable-consumers)): a poll that can't be queued
+before the next is due is skipped ([SOURCE-2]). The notices' version 0.1.0
+doesn't say that the scheduler publishes a refused order again, and
+[ORDER-1] publishes a Backfill's order again only when the scheduler
+becomes the active replica or requests are allowed again. The chart's
+default values pause the SecAccess ([VAL-4]), so a new install with them
+publishes no order before the Job has made `ORDERS`. A new install whose
+values allow requests from the start can have an order refused, and its
+Backfill then waits until the scheduler next becomes the active replica.
+
+- **SCHED-7** (invariant) The umbrella chart gives the scheduler NATS's
+  address, `nats://nats:4222`: the client port of the Service `nats` in the
+  release namespace. In this version it gives it no credential for NATS,
+  which asks none.
+- **SCHED-8** (invariant) The umbrella chart's values list, on `RECORDS`,
+  the scheduler's durable consumer `scheduler-polls`, with the filter
+  subject `edgar.records.poll` and JetStream's default for its most
+  unacknowledged messages. It's configured as [NATS-5] configures each
+  consumer the values list: a pull consumer with `ack_policy: explicit`,
+  `deliver_policy: all`, `max_deliver: -1`, and three replicas. So
+  [NATS-3]'s Job makes it with `RECORDS`'s other consumers, before
+  `RECORDS` takes its subjects.
+- **SCHED-9** (rule) The scheduler creates, changes, and deletes no stream
+  and no consumer, which [NATS-3]'s Job alone makes, from the values. Until
+  a consumer it reads exists, it waits for it, and reads from it once it
+  does.
+
+How the chart gives the scheduler its Lease's name and timings, NATS's
+address, and the release namespace, as arguments or in its environment, is
+for the chart and the scheduler to agree.
 
 ### The fake EDGAR
 
@@ -924,6 +1102,15 @@ keeps PostgreSQL's default, which lets every role execute it.
 | SECRET-4 | rule | review, operator | CI generates credentials per cluster, and the owner commits none. |
 | LEASE-1 | invariant | tests | The fetcher's Lease, `fetcher`, takes its timings from values, 15, 10, and 2 seconds by default, and the chart refuses those client-go's leader election refuses. |
 | LEASE-2 | rule | kind | One of the fetcher's pods holds the Lease, with the values' duration. |
+| SCHED-1 | invariant | tests | The scheduler is a Deployment of two replicas of its image, as its own ServiceAccount, with its port `metrics`, and no claim or Secret. |
+| SCHED-2 | invariant | tests | The scheduler's pods each need a worker node of their own. |
+| SCHED-3 | invariant | tests | The scheduler's Lease, `scheduler`, takes its timings from values, 15, 10, and 2 seconds by default, and the chart refuses those client-go's leader election refuses. |
+| SCHED-4 | rule | tests | Only the scheduler's replica that holds the Lease acts, and it releases the Lease when it stops. |
+| SCHED-5 | rule | kind | The scheduler's pods are on two worker nodes, one holds the Lease, and the other takes it over before its duration when that pod is deleted. |
+| SCHED-6 | invariant | tests | The scheduler's ServiceAccount has RBAC-1's grants and its Lease's, and is bound to no other role. |
+| SCHED-7 | invariant | tests | The scheduler is given NATS's address, and no NATS credential. |
+| SCHED-8 | invariant | tests | The values list the scheduler's durable consumer of poll events, `scheduler-polls`, on `RECORDS`, as NATS-5 configures each consumer. |
+| SCHED-9 | rule | tests | The scheduler makes no stream or consumer, and waits for those it reads. |
 | FAKE-1 | invariant | tests | The umbrella chart renders the fake EDGAR only when `fakeEdgar.enabled`, which no committed values file sets. |
 | FAKE-2 | invariant | tests | The fake EDGAR is one replica of its image, with its certificate's Secret mounted but no claim or token, behind a Service with ports 443 and 8080. |
 | FAKE-3 | invariant | tests | A certificate authority of the release's own, through cert-manager, issues the fake EDGAR's certificate for the SEC's hosts. |
@@ -934,10 +1121,11 @@ keeps PostgreSQL's default, which lets every role execute it.
 
 Later versions of this document will add:
 
-1. **The pipeline's own services,** as each is built, with their replicas,
-   credentials, and placement, such as the fetcher's two replicas ([0005]),
-   and the database role and Garage key of each service after the
-   discoverer ([PG-7], [GARAGE-4]). The fetcher's version also says how
+1. **The pipeline's other services,** as each is built, with their
+   replicas, credentials, and placement, such as the fetcher's two replicas
+   ([0005]), and the database role and Garage key of each service after the
+   discoverer ([PG-7], [GARAGE-4]). The scheduler's are this version's
+   ([the scheduler](#the-scheduler)). The fetcher's version also says how
    the fetcher trusts the fake EDGAR's certificate authority where CI
    installs the fake EDGAR ([FAKE-3]).
 2. **The fetcher's durable consumer of `JOBS`,** with the fetcher. `JOBS`
@@ -961,6 +1149,11 @@ Later versions of this document will add:
    resources, beside its access to the resources themselves ([RBAC-3]),
    which the telemetry also leaves to this document
    ([`telemetry.md`, §11](telemetry.md#left-to-other-specifications)).
+7. **NATS's credentials,** each service's own, kept in Secrets rendered
+   from required values like the others ([SECRET-1]), with permissions
+   that limit each service to the subjects it publishes and the consumers
+   it reads, such as the scheduler's ([SCHED-7]). NATS asks no credential
+   in this version, so any pod that reaches it may publish to any subject.
 
 The owner decided on October 11, 2026 that each image built from this
 repository is tagged with the commit it's built from and loaded into kind
@@ -978,7 +1171,12 @@ to it for Grafana: version 1.1.0. The owner decided on October 18, 2026
 that the fake EDGAR is specified, in [`fake-edgar.md`](fake-edgar.md) and
 in a version of this document, before it's built: version 1.2.0. The owner
 confirmed on October 19, 2026 the details that version settles, as
-[`fake-edgar.md`, §10](fake-edgar.md#10-open-questions) lists them.
+[`fake-edgar.md`, §10](fake-edgar.md#10-open-questions) lists them. The
+owner decided on October 19, 2026 that the scheduler's deployment is
+specified in a version of this document before it's built, and that the
+scheduler reads the records of its polls through a durable consumer of
+`edgar.records.poll` on `RECORDS`, rather than as a database role: version
+1.3.0.
 
 ## 10. Changes to this document
 
@@ -1045,15 +1243,40 @@ minor version: no statement's meaning changes.
 The owner's installations don't set `fakeEdgar.enabled`, so nothing they
 install changes. Neither do CI's until T21 builds the fake EDGAR.
 
+### From version 1.2.0
+
+Version 1.3.0 deploys the scheduler. It adds statements, a term, and a
+guarantee, so it's a minor version: no statement's meaning changes.
+
+- **The scheduler:** a Deployment of two replicas of its image, as a
+  ServiceAccount of its own, which claims no volume and holds no credential
+  but its token, [SCHED-1]; each replica on a worker node of its own,
+  [SCHED-2]; its Lease, `scheduler`, with its timings from the values, and
+  the active replica's use of it, [SCHED-3] and [SCHED-4], and on kind
+  [SCHED-5]; [RBAC-1]'s grants and its Lease's, and no others, [SCHED-6];
+  NATS's address, without a credential, [SCHED-7]; and its durable
+  consumer of poll events, `scheduler-polls`, on `RECORDS`, which it waits
+  for but never makes, [SCHED-8] and [SCHED-9]. That is guarantee 14, and
+  the consumer joins guarantee 12.
+- **NATS's credentials:** a later version, [§9](#9-later-versions), item 7.
+
+Nothing changes on a cluster until T22 builds the scheduler, which adds
+`scheduler-polls` to the values. On a cluster that already has `RECORDS`,
+[NATS-3]'s Job then makes the consumer on a stream that already takes its
+subjects, before the fetcher, which T23 builds, publishes any poll event.
+
 [0001]: ../docs/decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
 [0002]: ../docs/decisions/0002-store-bodies-in-garage.md
 [0003]: ../docs/decisions/0003-queue-work-in-nats-jetstream.md
 [0004]: ../docs/decisions/0004-keep-the-record-in-postgresql-18.md
 [0005]: ../docs/decisions/0005-send-sec-requests-through-one-active-fetcher.md
 [0006]: ../docs/decisions/0006-write-the-services-in-go-and-python.md
+[0007]: ../docs/decisions/0007-control-the-pipeline-through-custom-resources.md
 [0008]: ../docs/decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md
+[0010]: ../docs/decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
 [0011]: ../docs/decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md
 [ADMIN-1]: fake-edgar.md#7-the-admin-port
+[BACKFILL-1]: controls.md#7-backfill
 [CHART-1]: #4-layout
 [CHART-2]: #5-dependencies
 [CHART-3]: #5-dependencies
@@ -1084,6 +1307,8 @@ install changes. Neither do CI's until T21 builds the fake EDGAR.
 [IMG-3]: #the-pipelines-own-images
 [IMG-4]: #the-pipelines-own-images
 [IMG-5]: #the-pipelines-own-images
+[JOB-2]: snapshots.md#jobs-and-events
+[JOB-6]: snapshots.md#jobs-and-events
 [KIND-1]: #the-kind-cluster
 [KIND-2]: #the-kind-cluster
 [LEASE-1]: #the-fetchers-lease
@@ -1092,6 +1317,8 @@ install changes. Neither do CI's until T21 builds the fake EDGAR.
 [LIST-3]: notices.md#8-backfills
 [LOG-3]: snapshots.md#8-history
 [LOG-4]: snapshots.md#8-history
+[METRIC-1]: telemetry.md#4-metrics
+[METRIC-3]: telemetry.md#the-scheduler
 [MON-5]: #monitoring
 [MON-6]: #monitoring
 [NATS-1]: #nats
@@ -1101,6 +1328,7 @@ install changes. Neither do CI's until T21 builds the fake EDGAR.
 [NATS-6]: #durable-consumers
 [NOTICE-1]: notices.md#8-backfills
 [NOTICE-2]: notices.md#8-backfills
+[ORDER-1]: notices.md#8-backfills
 [PG-1]: #7-postgresql
 [PG-2]: #7-postgresql
 [PG-3]: #instances-and-backups
@@ -1124,7 +1352,17 @@ install changes. Neither do CI's until T21 builds the fake EDGAR.
 [PIN-7]: #6-pins
 [PLACE-1]: #placement
 [PLACE-2]: #placement
+[RBAC-1]: controls.md#9-who-may-change-what
 [RBAC-3]: controls.md#9-who-may-change-what
+[SCHED-1]: #the-scheduler
+[SCHED-2]: #the-scheduler
+[SCHED-3]: #its-lease
+[SCHED-4]: #its-lease
+[SCHED-5]: #its-lease
+[SCHED-6]: #its-grants
+[SCHED-7]: #its-access-to-nats
+[SCHED-8]: #its-access-to-nats
+[SCHED-9]: #its-access-to-nats
 [SECRET-1]: #credentials
 [SECRET-2]: #credentials
 [SECRET-3]: #credentials
@@ -1132,10 +1370,14 @@ install changes. Neither do CI's until T21 builds the fake EDGAR.
 [SERVE-1]: fake-edgar.md#4-what-it-serves
 [SERVE-3]: fake-edgar.md#4-what-it-serves
 [SERVE-5]: fake-edgar.md#4-what-it-serves
+[SOURCE-1]: controls.md#6-source
+[SOURCE-2]: controls.md#6-source
+[SOURCE-4]: controls.md#6-source
 [STORE-1]: snapshots.md#the-cluster-store
 [STORE-2]: snapshots.md#the-cluster-store
 [TABLE-2]: notices.md#4-the-record-of-notices
 [TABLE-3]: notices.md#4-the-record-of-notices
+[VAL-4]: controls.md#5-the-charts-values
 [VIEW-2]: telemetry.md#8-the-views-grafana-reads
 [VIEW-3]: telemetry.md#8-the-views-grafana-reads
 [VOL-1]: #volumes
