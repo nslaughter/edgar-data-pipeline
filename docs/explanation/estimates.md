@@ -255,9 +255,14 @@ poll's job stays until it's taken, though it has expired ([JOB-5]):
 | A larger feed | 51,840 × 400 to 500 = 21 to 26 MB a day | 51,840 × 1,100 to 1,400 = 57 to 73 MB a day |
 | All filers | That feed's polls', which this page doesn't estimate | That feed's polls', which this page doesn't estimate |
 
-The poll events, most of the events, also wait while the scheduler is down,
-for its consumer of them, `scheduler-polls` ([SCHED-8]): the same sizes,
-for as long as no scheduler replica reads them.
+The poll events, most of the events, also wait for the scheduler's
+consumer of them, `scheduler-polls` ([SCHED-8]), while the scheduler still
+queues polls but reads none of their events: the same sizes, for as long as
+that lasts. While no scheduler replica is active, no poll is queued
+([JOB-2], [SCHED-4]), and a poll's job that expires before the fetcher
+takes it adds no event ([JOB-5]). So the events waiting for
+`scheduler-polls` then grow by about one a Source, from the last poll each
+was queued before the scheduler stopped.
 
 New filings' fetches add nothing meanwhile: the discoverer queues them as
 it reads the polls' events ([FILE-2]), so none is queued while no poll is
@@ -477,4 +482,5 @@ so its cost grows with the polls' rate and with time
 [VAL-3]: ../../spec/controls.md#5-the-charts-values
 [VAL-4]: ../../spec/controls.md#5-the-charts-values
 [VER-1]: ../../spec/snapshots.md#7-versions
+[SCHED-4]: ../../spec/deployment.md#its-lease
 [SCHED-8]: ../../spec/deployment.md#its-access-to-nats
