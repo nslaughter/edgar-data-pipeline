@@ -1,0 +1,48 @@
+{{- /*
+The pipeline's controls (spec/controls.md, section 5): a Source for each entry
+of controls.sources and a Backfill for each of controls.backfills, each named
+by its key, in the release namespace, with the entry as its spec; and the
+SecAccess cluster, with controls.secAccess as its spec. No status, and no
+other Source, Backfill, or SecAccess (VAL-1). Their definitions come from the
+operators' chart, released before this one (CRD-3). Before any is rendered,
+the checks that values.schema.json can't make: that each date's day is in its
+month (VAL-2), and that the Sources not paused poll within the budget (VAL-3).
+*/}}
+{{- $controls := .Values.controls }}
+{{- with $controls.secAccess.acknowledgedStopAt }}
+{{- include "edgar.checkDay" (list "controls.secAccess.acknowledgedStopAt" .) }}
+{{- end }}
+{{- range $name, $backfill := $controls.backfills }}
+{{- include "edgar.checkDay" (list (printf "controls.backfills.%s.filingDateFrom" $name) $backfill.filingDateFrom) }}
+{{- include "edgar.checkDay" (list (printf "controls.backfills.%s.filingDateTo" $name) $backfill.filingDateTo) }}
+{{- if gt $backfill.filingDateFrom $backfill.filingDateTo }}
+{{- fail (printf "controls.backfills.%s: its range ends, %s, before it starts, %s (VAL-2)" $name $backfill.filingDateTo $backfill.filingDateFrom) }}
+{{- end }}
+{{- end }}
+{{- include "edgar.checkBudget" $controls }}
+apiVersion: edgar.nathanslaughter.com/v1alpha1
+kind: SecAccess
+metadata:
+  name: cluster
+spec:
+  {{- toYaml $controls.secAccess | nindent 2 }}
+{{- range $name, $spec := $controls.sources }}
+---
+apiVersion: edgar.nathanslaughter.com/v1alpha1
+kind: Source
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+spec:
+  {{- toYaml $spec | nindent 2 }}
+{{- end }}
+{{- range $name, $spec := $controls.backfills }}
+---
+apiVersion: edgar.nathanslaughter.com/v1alpha1
+kind: Backfill
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+spec:
+  {{- toYaml $spec | nindent 2 }}
+{{- end }}

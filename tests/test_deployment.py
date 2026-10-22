@@ -1207,7 +1207,7 @@ def test_garages_definition_is_of_its_charts_tag() -> None:
     assert image.split("@")[0] == garage["appVersion"]
 
 
-@pytest.mark.spec("CRD-5")
+@pytest.mark.spec("CRD-5", "API-2")
 @pytest.mark.parametrize("name", ["sources.yaml", "backfills.yaml", "secaccesses.yaml"])
 def test_the_pipelines_definitions_are_those_in_the_spec(name: str) -> None:
     copied = DEPLOY / "operators" / "files" / name

@@ -3,7 +3,7 @@
   "title": "The umbrella chart's values",
   "description": "What the umbrella chart's values must hold (spec/deployment.md). Every credential, the database archive's server name, and the commit of the pipeline's own images are required, and no committed values file sets them, so the chart renders only once they're given (SECRET-1, PG-4, IMG-1).",
   "type": "object",
-  "required": ["credentials", "database", "jetstream", "garageSetup", "images", "fakeEdgar"],
+  "required": ["credentials", "database", "jetstream", "garageSetup", "images", "fakeEdgar", "controls"],
   "properties": {
     "images": {
       "type": "object",
@@ -27,6 +27,59 @@
         "image": {
           "description": "The repository of its image, one of the pipeline's own, which images.commit tags (IMG-1).",
           "type": "string"
+        }
+      }
+    },
+    "controls": {
+      "description": "The pipeline's controls, each rendered as a resource (spec/controls.md, section 5). They refuse what each resource's definition refuses, and the templates check what a schema can't, so the chart renders nothing the API server would refuse (VAL-2).",
+      "type": "object",
+      "required": ["secAccess", "sources", "backfills"],
+      "additionalProperties": false,
+      "properties": {
+        "secAccess": {
+          "description": "The SecAccess cluster's spec (spec/controls.md, section 8).",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "paused": {"type": "boolean"},
+            "acknowledgedStopAt": {"$ref": "#/definitions/timestamp"}
+          }
+        },
+        "sources": {
+          "description": "Each Source's spec, by its name (spec/controls.md, section 6).",
+          "type": "object",
+          "propertyNames": {"$ref": "#/definitions/name"},
+          "additionalProperties": {
+            "type": "object",
+            "required": ["feed", "url", "cadenceSeconds"],
+            "additionalProperties": false,
+            "properties": {
+              "feed": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+              "url": {"type": "string", "pattern": "^https://(www|data)\\.sec\\.gov/"},
+              "cadenceSeconds": {
+                "description": "The seconds from one poll to the next: an integer of at least 1 (VAL-2).",
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2147483647
+              },
+              "paused": {"type": "boolean"}
+            }
+          }
+        },
+        "backfills": {
+          "description": "Each Backfill's spec, by its name (spec/controls.md, section 7).",
+          "type": "object",
+          "propertyNames": {"$ref": "#/definitions/name"},
+          "additionalProperties": {
+            "type": "object",
+            "required": ["cik", "filingDateFrom", "filingDateTo"],
+            "additionalProperties": false,
+            "properties": {
+              "cik": {"type": "integer", "minimum": 1, "maximum": 9999999999},
+              "filingDateFrom": {"$ref": "#/definitions/date"},
+              "filingDateTo": {"$ref": "#/definitions/date"}
+            }
+          }
         }
       }
     },
@@ -187,6 +240,22 @@
     "password": {
       "type": "string",
       "minLength": 16
+    },
+    "name": {
+      "description": "A Kubernetes object's name, as a Source's and a Backfill's are: a DNS subdomain.",
+      "type": "string",
+      "maxLength": 253,
+      "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
+    },
+    "date": {
+      "description": "A date, YYYY-MM-DD. A template checks that its day is in its month.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$"
+    },
+    "timestamp": {
+      "description": "A time in UTC, RFC 3339 with milliseconds and Z (spec/controls.md, section 2). A template checks that its day is in its month.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]\\.[0-9]{3}Z$"
     }
   }
 }
