@@ -100,8 +100,8 @@ files and replicated on all three servers ([NATS-3]):
 | `ORDERS` | Work queue | File | 3 |
 | `NOTICES` | Interest | File | 3 |
 
-It also specifies five durable consumers, which the same Job makes
-([NATS-5]):
+It also specifies six durable consumers, which the same Job makes
+([NATS-5], [SCHED-8]):
 
 | Consumer | Stream | Subjects | Read by | Unacknowledged at most |
 | --- | --- | --- | --- | --- |
@@ -110,8 +110,15 @@ It also specifies five durable consumers, which the same Job makes
 | `discoverer-orders` | `ORDERS` | `edgar.orders.backfill` | The discoverer, the scheduler's orders ([LIST-1]) | JetStream's default |
 | `scheduler-notices` | `NOTICES` | `edgar.notices.gap`, `edgar.notices.backfill` | The scheduler, gap and backfill notices ([NOTICE-1], [NOTICE-2]) | JetStream's default |
 | `parse-workers-notices` | `NOTICES` | `edgar.notices.filing` | The parse workers, filing notices, as the facts specification will say | JetStream's default |
+| `scheduler-polls` | `RECORDS` | `edgar.records.poll` | The scheduler, poll events, whose records set each Source's poll times ([SOURCE-4]) | JetStream's default |
 
-Each is a pull consumer, which every replica of its service reads from.
+The scheduler's consumer of poll events comes with the scheduler, which
+[T22] builds, before the fetcher publishes any ([SCHED-8]).
+
+Each is a pull consumer, which any replica of its service may read from,
+though only the scheduler's active replica reads the scheduler's
+([SCHED-4]). The scheduler makes no stream or consumer itself, and waits
+for those it reads ([SCHED-9]).
 Each message it delivers is acknowledged on its own, and one not
 acknowledged in time is delivered again, with no limit on how often, so a
 service that stops partway through a message gets it again. Delivery
@@ -345,8 +352,9 @@ take a record.
 | [NATS-2] | The three form one JetStream cluster, with a leader. | kind |
 | [NATS-3] | A hook Job creates or updates `JOBS`, `RECORDS`, `ORDERS`, and `NOTICES`, each in files with three replicas. | tests |
 | [NATS-4] | Each stream is as the values say, on all three servers, and the Job can run again. | kind |
-| [NATS-5] | The Job creates or updates the five durable consumers, each right after its stream and before a stream kept by interest takes its subjects, with `NOTICES` first and `JOBS` last. | tests |
+| [NATS-5] | The Job creates or updates the durable consumers the values list, each right after its stream and before a stream kept by interest takes its subjects, with `NOTICES` first and `JOBS` last. | tests |
 | [NATS-6] | Each consumer is as the values say, on all three servers, and the Job can run again; a stream kept by interest refuses a message, or keeps it for each consumer, while the Job makes it. | kind |
+| [SCHED-8], [SCHED-9] | The values list the scheduler's consumer of poll events, made as the others are; the scheduler makes no stream or consumer. | tests |
 | [PLACE-1], [PLACE-2] | Each server needs a worker node of its own, and runs on one. | tests, kind |
 | [VOL-2], [VOL-3] | Its claims are of `edgar-retained`, whose data a new claim of the same name finds. | tests, kind |
 | [CHART-2], [PIN-1], [PIN-2], [PIN-4] | NATS's chart, from its project's repository, at an exact version, committed, with its images by digest. | tests |
@@ -448,3 +456,8 @@ metrics workers scale by, and steps that are safe to repeat ([0003]).
 [METRIC-4]: ../../spec/telemetry.md#the-fetchers-clock
 [telemetry-left]: ../../spec/telemetry.md#left-to-other-specifications
 [TRACE-1]: ../../spec/telemetry.md#9-traces
+[SCHED-4]: ../../spec/deployment.md#its-lease
+[SCHED-8]: ../../spec/deployment.md#its-access-to-nats
+[SCHED-9]: ../../spec/deployment.md#its-access-to-nats
+[T22]: ../plan.md#observing-filings
+[SOURCE-4]: ../../spec/controls.md#6-source

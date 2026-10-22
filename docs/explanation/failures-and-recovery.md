@@ -1,7 +1,7 @@
 # Failures and recovery
 
 <!-- status: Scheduler; Fetcher; Discoverer; NATS JetStream; Garage; PostgreSQL 18; The controls; Monitoring: metrics, alerts, and dashboards; The drills -->
-**Status** ([status page](../status.md)): Scheduler: Decided; specified in part. Fetcher: Specified. Discoverer: Decided; specified in part. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The drills: Planned.
+**Status** ([status page](../status.md)): Scheduler: Specified. Fetcher: Specified. Discoverer: Decided; specified in part. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The drills: Planned.
 <!-- end status -->
 
 For each failure that the design and the specifications consider: what
@@ -145,9 +145,14 @@ sequenceDiagram
 
 ## Losing the active scheduler
 
-The scheduler runs two replicas, one active through controller-runtime's
-leader election, which also uses a Lease ([0007],
-[the design's components]).
+The scheduler runs two replicas, each on a worker node of its own, one
+active through controller-runtime's leader election, which holds the Lease
+`scheduler` ([0007], [SCHED-1], [SCHED-2]). A replica that Kubernetes
+stops, as in an upgrade or a drain, releases the Lease once it has stopped
+acting, within its pod's termination grace period, so another replica
+takes it over at its next try. One lost with its node, or one that crashes,
+can't, so another takes it over once the Lease's duration, 15 seconds by
+default, has passed without a renewal ([SCHED-3], [SCHED-4]).
 
 - **What stops:** queuing polls and orders, and setting the resources'
   status. Polls due while no replica is active are neither queued nor
@@ -537,3 +542,7 @@ blocks the SEC with a NetworkPolicy ([the design's outages and recovery],
 [ALERT-3]: ../../spec/telemetry.md#7-alerts
 [telemetry's open questions]: ../../spec/telemetry.md#11-open-questions
 [telemetry, left to other specifications]: ../../spec/telemetry.md#left-to-other-specifications
+[SCHED-1]: ../../spec/deployment.md#the-scheduler
+[SCHED-2]: ../../spec/deployment.md#the-scheduler
+[SCHED-3]: ../../spec/deployment.md#its-lease
+[SCHED-4]: ../../spec/deployment.md#its-lease

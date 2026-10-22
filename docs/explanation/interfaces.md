@@ -1,7 +1,7 @@
 # The interfaces
 
 <!-- status: The controls; Scheduler; Fetcher; Discoverer; Parse workers; NATS JetStream; Query API; `edgar-asof` -->
-**Status** ([status page](../status.md)): The controls: Specified. Scheduler: Decided; specified in part. Fetcher: Specified. Discoverer: Decided; specified in part. Parse workers: Decided. NATS JetStream: Built. Query API: Decided. `edgar-asof`: Decided.
+**Status** ([status page](../status.md)): The controls: Specified. Scheduler: Specified. Fetcher: Specified. Discoverer: Decided; specified in part. Parse workers: Decided. NATS JetStream: Built. Query API: Decided. `edgar-asof`: Decided.
 <!-- end status -->
 
 This page covers the pipeline's three interfaces: the custom resources the
@@ -86,9 +86,10 @@ it's paused and polling, and its last successful poll
 
 The scheduler sets `lastPollTime` and `lastSuccessfulPollTime` from the
 polls' records ([SOURCE-4]), and `openGapSince` from the discoverer's gap
-notices ([NOTICE-1], [SOURCE-5]). The specifications don't name the path by
-which the scheduler reads the polls' records: its one durable consumer,
-`scheduler-notices`, is of gap and backfill notices ([NATS-5]).
+notices ([NOTICE-1], [SOURCE-5]). It reads the polls' records in their
+events, through a durable consumer of its own, `scheduler-polls`, of
+`edgar.records.poll` on `RECORDS`, and the notices through
+`scheduler-notices` ([SCHED-8], [NATS-5]).
 
 ### `Backfill`
 
@@ -435,3 +436,4 @@ What the library's specification already fixes, for an answer of its own
 [VAL-3]: ../../spec/controls.md#5-the-charts-values
 [VAL-4]: ../../spec/controls.md#5-the-charts-values
 [VIEW-3]: ../../spec/telemetry.md#8-the-views-grafana-reads
+[SCHED-8]: ../../spec/deployment.md#its-access-to-nats

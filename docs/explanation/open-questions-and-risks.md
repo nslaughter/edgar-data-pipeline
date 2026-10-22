@@ -4,8 +4,8 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The charts; The fake EDGAR.
-- **Specified:** Fetcher; Monitoring: traces; The snapshot store in the cluster (built in part); The transfer from the cluster to git; The controls; The documentation site (built in part).
-- **Decided:** Scheduler (specified in part); Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Specified:** Scheduler; Fetcher; Monitoring: traces; The snapshot store in the cluster (built in part); The transfer from the cluster to git; The controls; The documentation site (built in part).
+- **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The drills.
 <!-- end status -->
 
@@ -309,15 +309,60 @@ fake EDGAR's holding `data/` ([IMG-5]). The details it settles are listed
 with the fake EDGAR's, and the owner confirmed them
 ([below](#the-fake-edgar)).
 
+Its version 1.3.0 deploys the scheduler, before [T22] builds it
+([§10][deployment-from-1.2.0]): two replicas, each on a worker node of its
+own, one active through its Lease, `scheduler`; [RBAC-1]'s grants and its
+Lease's, and no others; NATS's address, without a credential; and a durable
+consumer of poll events of its own, `scheduler-polls`, on `RECORDS`, made
+before the fetcher publishes any ([SCHED-1] to [SCHED-9]). The owner
+confirmed on October 22, 2026 each of the details it settles, keeping each
+default; these are listed with their alternatives:
+
+1. **A stopped replica releases the Lease** once it has stopped acting,
+   within its pod's termination grace period, so an upgrade or a drain
+   hands over at another replica's next try ([SCHED-4]).
+   Waiting out the Lease's duration, as the fetcher does, would take up to
+   15 seconds by default, longer than the cadence the Sources start at, and
+   could leave a gap at each upgrade.
+2. **Its two replicas on two worker nodes** ([SCHED-2]), so the loss of a
+   node leaves the standby running. Without it, both could share a node.
+3. **No grant but [RBAC-1]'s and its Lease's** ([SCHED-6]), so it records
+   no Kubernetes Events. A grant to create Events would let
+   controller-runtime record each change of leader, which the Lease and
+   `edgar_scheduler_leader` already show.
+4. **No NATS credential** ([SCHED-7]). NATS asks none of any service yet,
+   and a later version gives each its own
+   ([§9][deployment-later], item 7). Credentials now would be the first,
+   and every other client of NATS would need its own at once.
+5. **JetStream's default for `scheduler-polls`' unacknowledged events**
+   ([SCHED-8]). An event can arrive after a later poll's ([JOB-6]), so one
+   at a time, in the stream's order, wouldn't put the polls in order.
+6. **The scheduler makes no stream or consumer, and waits for those it
+   reads** ([SCHED-9]), since the Job makes them only once the release's
+   resources are ready. Making its own would leave two places that set a
+   consumer's configuration.
+
+One gap remains, like the gap notice's above. On a new install whose
+values allow requests from the start, an order the scheduler publishes
+before the Job has made `ORDERS` is refused, and [ORDER-1] publishes it
+again only when the scheduler next becomes the active replica or requests
+are allowed again
+([the scheduler's access to NATS][deployment-scheduler-nats]). The chart's
+default values pause requests, so an install with them has no such order
+([VAL-4]). The owner decided on October 22, 2026 that the version of the
+notices that publishes a refused notice again also has the scheduler
+publish a refused order again until JetStream accepts it ([T48]).
+
 Its [§9][deployment-later] lists what later versions add: the pipeline's
-own services, with their replicas, credentials, and placement, and, with
+other services, with their replicas, credentials, and placement, and, with
 the fetcher, how the fetcher trusts the fake EDGAR's certificate authority
 where CI installs the fake EDGAR ([FAKE-3]); the fetcher's durable consumer
 of `JOBS`, a work queue, which keeps a job until it's acknowledged;
 migrations for later versions of the record's tables and views; each
 component's requests, limits, and probes, measured on kind; Tempo, Loki,
-and Alloy; and kube-state-metrics' access to the definitions of the
-pipeline's resources.
+and Alloy; kube-state-metrics' access to the definitions of the
+pipeline's resources; and NATS's credentials, each service's own, limited
+to its subjects.
 
 ### Controls
 
@@ -592,6 +637,7 @@ revisit: whether to keep each company's `submissions` as the notice source
 [T32]: ../plan.md#facts
 [T38]: ../plan.md#observing-filings
 [T44]: ../plan.md#observing-filings
+[T48]: ../plan.md#observing-filings
 [agents-rules]: ../../AGENTS.md#rules
 [agents-where]: ../../AGENTS.md#where-documents-go
 [inv-questions]: ../../investigation/edgar.md#questions
@@ -606,6 +652,8 @@ revisit: whether to keep each company's `submissions` as the notice source
 [deployment-dependencies]: ../../spec/deployment.md#5-dependencies
 [deployment-later]: ../../spec/deployment.md#9-later-versions
 [deployment-consumers]: ../../spec/deployment.md#durable-consumers
+[deployment-from-1.2.0]: ../../spec/deployment.md#from-version-120
+[deployment-scheduler-nats]: ../../spec/deployment.md#its-access-to-nats
 [deployment-from-1.1.0]: ../../spec/deployment.md#from-version-110
 [controls]: ../../spec/controls.md
 [controls-other]: ../../spec/controls.md#11-other-specifications
@@ -702,3 +750,15 @@ revisit: whether to keep each company's `submissions` as the notice source
 [REQ-2]: ../../spec/fake-edgar.md#6-the-request-log
 [ADMIN-1]: ../../spec/fake-edgar.md#7-the-admin-port
 [CHECK-1]: ../../spec/fake-edgar.md#8-the-checks
+[T22]: ../plan.md#observing-filings
+[JOB-6]: ../../spec/snapshots.md#jobs-and-events
+[ORDER-1]: ../../spec/notices.md#8-backfills
+[RBAC-1]: ../../spec/controls.md#9-who-may-change-what
+[VAL-4]: ../../spec/controls.md#5-the-charts-values
+[SCHED-1]: ../../spec/deployment.md#the-scheduler
+[SCHED-2]: ../../spec/deployment.md#the-scheduler
+[SCHED-4]: ../../spec/deployment.md#its-lease
+[SCHED-6]: ../../spec/deployment.md#its-grants
+[SCHED-7]: ../../spec/deployment.md#its-access-to-nats
+[SCHED-8]: ../../spec/deployment.md#its-access-to-nats
+[SCHED-9]: ../../spec/deployment.md#its-access-to-nats

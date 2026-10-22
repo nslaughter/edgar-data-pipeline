@@ -568,8 +568,10 @@ A Kubernetes object that one of several replicas holds, and renews, to be
 the one that acts. The fetcher's Lease, `fetcher`, decides which of its two
 replicas sends requests; another replica takes it over only once its
 duration, 15 seconds by default, has passed without a renewal ([0005],
-[FETCH-16], [LEASE-1]). The scheduler's leader election uses a Lease too
-([0007]).
+[FETCH-16], [LEASE-1]). The scheduler's leader election uses a Lease of its
+own, `scheduler`, which a replica that Kubernetes stops releases, so
+another takes it over without waiting out its duration ([0007], [SCHED-3],
+[SCHED-4]).
 
 ### NATS JetStream
 
@@ -798,3 +800,5 @@ open. A statement checked by `operator` is the owner's to keep
 [STATUS-1]: ../spec/site.md#6-status
 [STATUS-2]: ../spec/site.md#6-status
 [PAGE-7]: ../spec/site.md#7-the-pages-written-for-the-site
+[SCHED-3]: ../spec/deployment.md#its-lease
+[SCHED-4]: ../spec/deployment.md#its-lease
