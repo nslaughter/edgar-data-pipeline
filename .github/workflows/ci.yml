@@ -182,6 +182,8 @@ jobs:
           kubectl get issuers.cert-manager.io,certificates.cert-manager.io --namespace edgar
           # The fake EDGAR writes no request header to its output (REQ-2).
           kubectl logs --namespace edgar deployment/fake-edgar --tail=100 || true
+          kubectl logs --namespace edgar --selector app.kubernetes.io/name=scheduler --prefix --tail=100 || true
+          kubectl get sources.edgar.nathanslaughter.com,secaccesses.edgar.nathanslaughter.com,leases --namespace edgar -o wide || true
           for job in garage-setup jetstream-setup database-setup; do
             echo "--- $job"
             kubectl logs --namespace edgar "job/$job" --tail=100 || true

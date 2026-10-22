@@ -1,6 +1,6 @@
 """spec/controls.md's invariants: the definitions in spec/schemas/ against its
-table of resources, and the controls the umbrella chart renders from its
-values.
+table of resources, and what the charts render from the umbrella chart's
+values, the controls and the grants on them.
 
 The charts are rendered with `helm template`, with values of these tests' own
 for what the umbrella chart requires, so the tests need Helm, but neither a
@@ -394,3 +394,136 @@ def test_the_default_values_pause_the_secaccess() -> None:
 
     assert default_values()["controls"]["secAccess"]["paused"] is True
     assert secaccess["spec"]["paused"] is True
+
+
+# RBAC
+
+
+GROUP_OF_CONTROLS = "edgar.nathanslaughter.com"
+RESOURCES = ["sources", "backfills", "secaccesses"]
+SUBRESOURCES = [*RESOURCES, *(f"{r}/status" for r in RESOURCES)]
+# Section 9's table: each ServiceAccount's verbs on each resource and its
+# status, of those this version's charts render.
+TABLE = {
+    ("edgar", "scheduler"): {
+        "sources": {"get", "list", "watch"},
+        "backfills": {"get", "list", "watch"},
+        "sources/status": {"update", "patch"},
+        "backfills/status": {"update", "patch"},
+        "secaccesses": {"get", "list", "watch"},
+    },
+}
+
+
+def all_rendered() -> list[tuple[str, dict[str, Any]]]:
+    return [(release, doc) for chart, release, _ in RELEASES for doc in rendered(chart)]
+
+
+def grants(rule: dict[str, Any]) -> dict[str, set[str]]:
+    """The verbs a rule grants on each of the controls and their status."""
+    groups = rule.get("apiGroups", [])
+    if GROUP_OF_CONTROLS not in groups and "*" not in groups:
+        return {}
+    found: dict[str, set[str]] = {}
+    for resource in SUBRESOURCES:
+        status = resource.endswith("/status")
+        if any(
+            given in (resource, "*") or (status and given == "*/status")
+            for given in rule.get("resources", [])
+        ):
+            found[resource] = set(rule.get("verbs", []))
+    return found
+
+
+def roles() -> dict[tuple[str, str, str], dict[str, Any]]:
+    """Each Role and ClusterRole the charts render, by kind, namespace, and name."""
+    found = {}
+    for chart, _, namespace in RELEASES:
+        for doc in rendered(chart):
+            if doc["kind"] in ("Role", "ClusterRole"):
+                where = doc["metadata"].get("namespace", namespace) if doc["kind"] == "Role" else ""
+                found[(doc["kind"], where, doc["metadata"]["name"])] = doc
+    return found
+
+
+def bound(account: tuple[str, str]) -> list[tuple[str, str, str]]:
+    """The roles the charts' bindings bind a ServiceAccount to."""
+    found = []
+    for chart, _, namespace in RELEASES:
+        for doc in rendered(chart):
+            if doc["kind"] not in ("RoleBinding", "ClusterRoleBinding"):
+                continue
+            here = doc["metadata"].get("namespace", namespace)
+            subjects = {
+                (s.get("namespace", here), s["name"])
+                for s in doc.get("subjects", [])
+                if s["kind"] == "ServiceAccount"
+            }
+            if account in subjects:
+                ref = doc["roleRef"]
+                where = here if ref["kind"] == "Role" else ""
+                found.append((ref["kind"], where, ref["name"]))
+    return found
+
+
+def granted(account: tuple[str, str]) -> dict[str, set[str]]:
+    """What the charts' roles grant a ServiceAccount on the controls."""
+    found: dict[str, set[str]] = {}
+    all_roles = roles()
+    for key in bound(account):
+        for rule in all_roles[key].get("rules", []):
+            for resource, verbs in grants(rule).items():
+                found.setdefault(resource, set()).update(verbs)
+    return found
+
+
+@pytest.mark.spec("RBAC-1")
+def test_the_scheduler_may_read_the_controls_and_change_only_their_status() -> None:
+    assert granted(("edgar", "scheduler")) == TABLE[("edgar", "scheduler")]
+
+
+@pytest.mark.spec("RBAC-4")
+def test_no_role_grants_anything_on_the_controls_but_the_tables_grants() -> None:
+    bindings: dict[tuple[str, str, str], set[tuple[str, str]]] = {}
+    for chart, _, namespace in RELEASES:
+        for doc in rendered(chart):
+            if doc["kind"] in ("RoleBinding", "ClusterRoleBinding"):
+                here = doc["metadata"].get("namespace", namespace)
+                ref = doc["roleRef"]
+                key = (ref["kind"], here if ref["kind"] == "Role" else "", ref["name"])
+                bindings.setdefault(key, set()).update(
+                    (s.get("namespace", here), s["name"])
+                    for s in doc.get("subjects", [])
+                    if s["kind"] == "ServiceAccount"
+                )
+    for key, role in roles().items():
+        for rule in role.get("rules", []):
+            for resource, verbs in grants(rule).items():
+                accounts = bindings.get(key, set())
+                assert accounts, (key, rule)
+                for account in accounts:
+                    assert verbs <= TABLE.get(account, {}).get(resource, set()), (
+                        key,
+                        account,
+                        rule,
+                    )
+                if "/" not in resource:
+                    assert not verbs & {
+                        "create",
+                        "update",
+                        "patch",
+                        "delete",
+                        "deletecollection",
+                        "*",
+                    }
+
+
+@pytest.mark.spec("RBAC-4")
+def test_a_wildcard_on_the_controls_counts_as_a_grant() -> None:
+    assert grants({"apiGroups": ["*"], "resources": ["*"], "verbs": ["*"]}) == {
+        resource: {"*"} for resource in SUBRESOURCES
+    }
+    assert set(
+        grants({"apiGroups": [GROUP_OF_CONTROLS], "resources": ["*/status"], "verbs": ["patch"]})
+    ) == {f"{resource}/status" for resource in RESOURCES}
+    assert grants({"apiGroups": ["apps"], "resources": ["*"], "verbs": ["*"]}) == {}

@@ -59,6 +59,18 @@ controls:
       cadenceSeconds: 10
   backfills: {}
 
+# The scheduler, the controller that reconciles the controls: two replicas of
+# its image, the pipeline's own, tagged with images.commit, of which the one
+# that holds its Lease acts (SCHED-1, SCHED-4). The Lease's timings are
+# client-go's leader election's, which the chart checks as it does
+# (SCHED-3).
+scheduler:
+  image: edgar/scheduler
+  lease:
+    durationSeconds: 15
+    renewDeadlineSeconds: 10
+    retryPeriodSeconds: 2
+
 # The pipeline's database: one CloudNativePG Cluster, whose Services and
 # Secrets are named after it (spec/deployment.md, section 7).
 database:
@@ -106,6 +118,10 @@ jetstream:
         - name: discoverer-jobs
           filterSubjects: [edgar.records.filing, edgar.records.backfill]
           maxAckPending: 1
+        # The scheduler's, whose poll events set each Source's poll times
+        # (SCHED-8).
+        - name: scheduler-polls
+          filterSubjects: [edgar.records.poll]
     - name: ORDERS
       subjects: [edgar.orders.backfill]
       retention: workqueue

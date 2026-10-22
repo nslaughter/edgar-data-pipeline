@@ -3,7 +3,7 @@
   "title": "The umbrella chart's values",
   "description": "What the umbrella chart's values must hold (spec/deployment.md). Every credential, the database archive's server name, and the commit of the pipeline's own images are required, and no committed values file sets them, so the chart renders only once they're given (SECRET-1, PG-4, IMG-1).",
   "type": "object",
-  "required": ["credentials", "database", "jetstream", "garageSetup", "images", "fakeEdgar", "controls"],
+  "required": ["credentials", "database", "jetstream", "garageSetup", "images", "fakeEdgar", "controls", "scheduler"],
   "properties": {
     "images": {
       "type": "object",
@@ -79,6 +79,29 @@
               "filingDateFrom": {"$ref": "#/definitions/date"},
               "filingDateTo": {"$ref": "#/definitions/date"}
             }
+          }
+        }
+      }
+    },
+    "scheduler": {
+      "description": "The scheduler (SCHED-1, SCHED-3).",
+      "type": "object",
+      "required": ["image", "lease"],
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "description": "The repository of its image, one of the pipeline's own, which images.commit tags (IMG-1).",
+          "type": "string"
+        },
+        "lease": {
+          "description": "Its Lease's timings, in seconds, each at least 1; the templates check them against each other as client-go's leader election does (SCHED-3).",
+          "type": "object",
+          "required": ["durationSeconds", "renewDeadlineSeconds", "retryPeriodSeconds"],
+          "additionalProperties": false,
+          "properties": {
+            "durationSeconds": {"type": "integer", "minimum": 1},
+            "renewDeadlineSeconds": {"type": "integer", "minimum": 1},
+            "retryPeriodSeconds": {"type": "integer", "minimum": 1}
           }
         }
       }
