@@ -59,8 +59,8 @@ replicas, so each keeps its place in its stream through the loss of a node
 too ([NATS-5]). The scheduler's consumer of poll events, `scheduler-polls`,
 comes with the scheduler, which is built before the fetcher publishes any
 ([SCHED-8]), and the fetcher's consumer of `JOBS` comes with the fetcher
-([later versions][deployment-later]). No service makes a stream or a
-consumer itself; the scheduler waits for those it reads ([SCHED-9]).
+([later versions][deployment-later]). The scheduler makes no stream or
+consumer itself, and waits for those it reads ([SCHED-9]).
 
 The two retentions differ in what a missing consumer costs. A work queue
 keeps each job until the fetcher acknowledges it, so jobs wait while no

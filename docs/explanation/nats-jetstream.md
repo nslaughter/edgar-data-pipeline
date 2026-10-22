@@ -117,8 +117,8 @@ The scheduler's consumer of poll events comes with the scheduler, which
 
 Each is a pull consumer, which any replica of its service may read from,
 though only the scheduler's active replica reads the scheduler's
-([SCHED-4]). No service makes a stream or a consumer itself; the scheduler
-waits for those it reads ([SCHED-9]).
+([SCHED-4]). The scheduler makes no stream or consumer itself, and waits
+for those it reads ([SCHED-9]).
 Each message it delivers is acknowledged on its own, and one not
 acknowledged in time is delivered again, with no limit on how often, so a
 service that stops partway through a message gets it again. Delivery
@@ -352,7 +352,7 @@ take a record.
 | [NATS-2] | The three form one JetStream cluster, with a leader. | kind |
 | [NATS-3] | A hook Job creates or updates `JOBS`, `RECORDS`, `ORDERS`, and `NOTICES`, each in files with three replicas. | tests |
 | [NATS-4] | Each stream is as the values say, on all three servers, and the Job can run again. | kind |
-| [NATS-5] | The Job creates or updates the five durable consumers, each right after its stream and before a stream kept by interest takes its subjects, with `NOTICES` first and `JOBS` last. | tests |
+| [NATS-5] | The Job creates or updates the durable consumers the values list, each right after its stream and before a stream kept by interest takes its subjects, with `NOTICES` first and `JOBS` last. | tests |
 | [NATS-6] | Each consumer is as the values say, on all three servers, and the Job can run again; a stream kept by interest refuses a message, or keeps it for each consumer, while the Job makes it. | kind |
 | [SCHED-8], [SCHED-9] | The values list the scheduler's consumer of poll events, made as the others are; the scheduler makes no stream or consumer. | tests |
 | [PLACE-1], [PLACE-2] | Each server needs a worker node of its own, and runs on one. | tests, kind |

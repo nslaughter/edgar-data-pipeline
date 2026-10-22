@@ -515,7 +515,8 @@ takes it, and no notice that follows a message before `NOTICES` does.
 
 - **MON-1** (invariant) kube-prometheus-stack scrapes nothing kind doesn't
   expose: it renders no monitor or rule group for the controller manager,
-  the scheduler, etcd, or kube-proxy ([0008]).
+  Kubernetes's own scheduler (`kube-scheduler`), etcd, or kube-proxy
+  ([0008]).
 - **MON-2** (invariant) Grafana is read-only ([0008]). It admits anonymous
   viewers with the `Viewer` role only, with its login form, basic
   authentication, and sign-up turned off, so no one signs in to change
@@ -1091,7 +1092,7 @@ keeps PostgreSQL's default, which lets every role execute it.
 | NATS-2 | rule | kind | The three servers form one JetStream cluster, with a leader. |
 | NATS-3 | invariant | tests | A hook Job creates or updates the streams `JOBS`, `RECORDS`, `ORDERS`, and `NOTICES`, each in files with three replicas. |
 | NATS-4 | rule | kind | Each stream is as the values say, on all three servers, and the Job can run again. |
-| NATS-5 | invariant | tests | The Job creates or updates the five durable consumers, each right after its stream and before a stream kept by interest takes its subjects, with `NOTICES` first and `JOBS` last. |
+| NATS-5 | invariant | tests | The Job creates or updates the durable consumers the values list, each right after its stream and before a stream kept by interest takes its subjects, with `NOTICES` first and `JOBS` last. |
 | NATS-6 | rule | kind | Each consumer is as the values say, on all three servers, and the Job can run again; a stream kept by interest refuses a message, or keeps it for each consumer, while the Job makes it. |
 | GARAGE-1 | invariant | tests | Garage is three nodes, replication factor 3, on claims, with no definition or ClusterRole of its own. |
 | GARAGE-2 | invariant | tests | A hook Job sets the layout, keys, buckets, and grants, and can run again. |
@@ -1266,6 +1267,10 @@ guarantee, so it's a minor version: no statement's meaning changes.
   for but never makes, [SCHED-8] and [SCHED-9]. That is guarantee 14, and
   the consumer joins guarantee 12.
 - **NATS's credentials:** a later version, [§9](#9-later-versions), item 7.
+- **Wording:** [MON-1] names Kubernetes's own scheduler, `kube-scheduler`,
+  now that this document has a section on the pipeline's, and [NATS-5]'s
+  row in the index no longer counts the consumers the values list. Neither
+  statement's meaning changes.
 
 Nothing changes on a cluster until T22 builds the scheduler, which adds
 `scheduler-polls` to the values. On a cluster that already has `RECORDS`,
@@ -1326,6 +1331,7 @@ subjects, before the fetcher, which T23 builds, publishes any poll event.
 [LOG-4]: snapshots.md#8-history
 [METRIC-1]: telemetry.md#4-metrics
 [METRIC-3]: telemetry.md#the-scheduler
+[MON-1]: #monitoring
 [MON-5]: #monitoring
 [MON-6]: #monitoring
 [NATS-1]: #nats
