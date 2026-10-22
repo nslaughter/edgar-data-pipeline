@@ -428,9 +428,9 @@ of the pipeline's services the deployment specifies
   seconds by default, as the fetcher's, refused as the fetcher's are
   ([SCHED-3]). Only the replica that holds it acts. Unlike the fetcher, a
   replica that Kubernetes stops releases the Lease once it has stopped
-  acting, so an upgrade or a drain hands over without waiting out the
-  duration, which at the cadence the Sources start at could leave a gap
-  ([SCHED-4], [SCHED-5]).
+  acting, within its pod's termination grace period, so an upgrade or a
+  drain hands over without waiting out the duration, which at the cadence
+  the Sources start at could leave a gap ([SCHED-4], [SCHED-5]).
 - **Its grants:** [RBAC-1]'s, by a Role in the release namespace for
   Sources and Backfills and a ClusterRole for the SecAccess, which is
   cluster-scoped, and its Lease's, as the fetcher's ([LEASE-1]). It's bound

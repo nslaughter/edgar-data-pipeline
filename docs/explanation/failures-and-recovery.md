@@ -149,8 +149,9 @@ The scheduler runs two replicas, each on a worker node of its own, one
 active through controller-runtime's leader election, which holds the Lease
 `scheduler` ([0007], [SCHED-1], [SCHED-2]). A replica that Kubernetes
 stops, as in an upgrade or a drain, releases the Lease once it has stopped
-acting, so the other takes it over at its next try. One lost with its node
-can't, so the other takes it over once the Lease's duration, 15 seconds by
+acting, within its pod's termination grace period, so another replica
+takes it over at its next try. One lost with its node, or one that crashes,
+can't, so another takes it over once the Lease's duration, 15 seconds by
 default, has passed without a renewal ([SCHED-3], [SCHED-4]).
 
 - **What stops:** queuing polls and orders, and setting the resources'

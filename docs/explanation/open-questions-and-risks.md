@@ -317,8 +317,9 @@ consumer of poll events of its own, `scheduler-polls`, on `RECORDS`, made
 before the fetcher publishes any ([SCHED-1] to [SCHED-9]). It settles these
 details, each with its alternative:
 
-1. **A stopped replica releases the Lease** once it has stopped acting, so
-   an upgrade or a drain hands over at the standby's next try ([SCHED-4]).
+1. **A stopped replica releases the Lease** once it has stopped acting,
+   within its pod's termination grace period, so an upgrade or a drain
+   hands over at another replica's next try ([SCHED-4]).
    Waiting out the Lease's duration, as the fetcher does, would take up to
    15 seconds by default, longer than the cadence the Sources start at, and
    could leave a gap at each upgrade.

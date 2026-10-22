@@ -569,8 +569,8 @@ the one that acts. The fetcher's Lease, `fetcher`, decides which of its two
 replicas sends requests; another replica takes it over only once its
 duration, 15 seconds by default, has passed without a renewal ([0005],
 [FETCH-16], [LEASE-1]). The scheduler's leader election uses a Lease of its
-own, `scheduler`, which a replica that Kubernetes stops releases, so the
-other takes it over without waiting out its duration ([0007], [SCHED-3],
+own, `scheduler`, which a replica that Kubernetes stops releases, so
+another takes it over without waiting out its duration ([0007], [SCHED-3],
 [SCHED-4]).
 
 ### NATS JetStream

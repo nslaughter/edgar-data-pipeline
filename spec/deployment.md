@@ -649,14 +649,19 @@ controller-runtime runs a controller's work only on the replica that holds
 the Lease, and stops it there when the replica can't renew the Lease. A
 replica that Kubernetes stops while it holds the Lease, as in an upgrade or
 a drain, would otherwise keep it until its duration passed without a
-renewal, 15 seconds by default, before the other could take it over. At the
+renewal, 15 seconds by default, before another could take it over. At the
 10 seconds each company's Source starts at ([0010]), a poll queued that
 late can leave a gap in the Source's coverage
 ([§5 of the notices](notices.md#5-polls-coverage-and-gaps)), at each
-upgrade that restarts the scheduler. So a replica that stops releases the
-Lease once it has stopped acting, and the other takes it over at its next
-try, and queues each Source's first poll then ([SOURCE-2]). A replica lost without stopping, as when its node is, still
-holds the Lease until its duration passes.
+upgrade that restarts the scheduler. So a replica that Kubernetes stops
+releases the Lease once it has stopped acting, and another replica takes it
+over at its next try, and queues each Source's first poll then
+([SOURCE-2]). That replica is the other, or the one that replaces the
+stopped replica, whichever tries first. A replica can release the Lease
+only if it stops acting within its pod's termination grace period. One
+that doesn't is killed first, and one that crashes, or is lost without
+stopping, as when its node is, still holds the Lease until its duration
+passes.
 
 - **SCHED-3** (invariant) The umbrella chart gives the scheduler its
   Lease's name, `scheduler`, in the release namespace, and its timings,
@@ -670,17 +675,19 @@ holds the Lease until its duration passes.
   ([0006]).
 - **SCHED-4** (rule) Only the scheduler's active replica, the one that
   holds the Lease `scheduler`, queues polls, publishes orders, reads the
-  scheduler's consumers, and sets the resources' `status`; the other does
-  none of these. A replica stops acting when it can't renew the Lease
-  within the renewal deadline, before the other can take the Lease over. A
-  replica that stops while it holds the Lease releases it once it has
-  stopped acting, so the other takes it over without waiting out the
-  Lease's duration.
+  scheduler's consumers, and sets the resources' `status`; no other
+  replica does any of these. A replica stops acting when it can't renew
+  the Lease within the renewal deadline, before another can take the Lease
+  over. A replica that Kubernetes stops while it holds the Lease, and that
+  stops acting within its pod's termination grace period, releases the
+  Lease once it has stopped acting, so another replica takes it over
+  without waiting out the Lease's duration.
 - **SCHED-5** (rule) In the installed charts, the scheduler's two pods run
   on two worker nodes, and one of them holds the Lease `scheduler` in the
   release namespace, with `leaseDurationSeconds` as the values give it.
-  When that pod is deleted, the other holds the Lease before the Lease's
-  duration has passed since its last renewal.
+  When that pod is deleted, a scheduler pod other than the deleted one
+  holds the Lease before the Lease's duration has passed since its last
+  renewal.
 
 #### Its grants
 
@@ -1105,8 +1112,8 @@ keeps PostgreSQL's default, which lets every role execute it.
 | SCHED-1 | invariant | tests | The scheduler is a Deployment of two replicas of its image, as its own ServiceAccount, with its port `metrics`, and no claim or Secret. |
 | SCHED-2 | invariant | tests | The scheduler's pods each need a worker node of their own. |
 | SCHED-3 | invariant | tests | The scheduler's Lease, `scheduler`, takes its timings from values, 15, 10, and 2 seconds by default, and the chart refuses those client-go's leader election refuses. |
-| SCHED-4 | rule | tests | Only the scheduler's replica that holds the Lease acts, and it releases the Lease when it stops. |
-| SCHED-5 | rule | kind | The scheduler's pods are on two worker nodes, one holds the Lease, and the other takes it over before its duration when that pod is deleted. |
+| SCHED-4 | rule | tests | Only the scheduler's replica that holds the Lease acts, and one that Kubernetes stops releases the Lease once it has stopped acting, within its grace period. |
+| SCHED-5 | rule | kind | The scheduler's pods are on two worker nodes, one holds the Lease, and another pod holds it before its duration when that pod is deleted. |
 | SCHED-6 | invariant | tests | The scheduler's ServiceAccount has RBAC-1's grants and its Lease's, and is bound to no other role. |
 | SCHED-7 | invariant | tests | The scheduler is given NATS's address, and no NATS credential. |
 | SCHED-8 | invariant | tests | The values list the scheduler's durable consumer of poll events, `scheduler-polls`, on `RECORDS`, as NATS-5 configures each consumer. |

@@ -272,9 +272,9 @@ refuses ([API-3]), are tested against a real API server with envtest
 installing the charts. The same task checks that the definitions generated
 from the scheduler's Go types are the ones in `spec/schemas/` ([API-2]),
 and that only the replica that holds the scheduler's Lease acts, and
-releases the Lease when it stops ([SCHED-4]). On kind, it checks that the
-other replica takes the Lease over before its duration when the active
-one's pod is deleted ([SCHED-5]).
+releases the Lease when Kubernetes stops it ([SCHED-4]). On kind, it checks
+that a pod other than the deleted one takes the Lease over before its
+duration when the active one's pod is deleted ([SCHED-5]).
 
 ### The alert rules, under `promtool`
 

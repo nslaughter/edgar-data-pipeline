@@ -223,18 +223,21 @@ The Lease's timings come from the chart's values, 15, 10, and 2 seconds by
 default for its duration, renewal deadline, and retry period, as the
 fetcher's do, and the chart refuses those client-go's leader election
 refuses ([SCHED-3], [LEASE-1]). A replica that can't renew the Lease within
-its renewal deadline stops acting before the other can take it over
+its renewal deadline stops acting before another can take it over
 ([SCHED-4]).
 
 A replica that Kubernetes stops while it holds the Lease, as in an upgrade
-or a drain, releases it once it has stopped acting, so the other takes it
-over at its next try, without waiting out the Lease's duration ([SCHED-4],
-[SCHED-5]). Waiting it out, 15 seconds by default, is longer than the 10
-seconds each company's Source starts at, so a poll queued that late can
-leave a gap in the Source's coverage at each upgrade
-([the scheduler's Lease][deployment-lease]). A replica lost with its node
-can't release the Lease, which its standby then takes over once the
-duration has passed.
+or a drain, releases it once it has stopped acting, so another replica, the
+standby or the one that replaces the stopped one, takes it over at its next
+try, without waiting out the Lease's duration ([SCHED-4], [SCHED-5]).
+Waiting it out, 15 seconds by default, is longer than the 10 seconds each
+company's Source starts at, so a poll queued that late can leave a gap in
+the Source's coverage at each upgrade
+([the scheduler's Lease][deployment-lease]). A replica releases the Lease
+only if it stops acting within its pod's termination grace period. One
+killed when that runs out, one that crashes, and one lost with its node
+can't release it, and another replica takes it over once the duration has
+passed.
 
 ```mermaid
 sequenceDiagram
@@ -400,7 +403,7 @@ EDGAR's content ([0006]).
 | [NOTICE-1], [NOTICE-2] | It sets `openGapSince` and each Backfill's status from the latest notices. |
 | [NATS-5], [NATS-6] | Its durable consumer of gap and backfill notices, made as soon as `NOTICES` is, before `NOTICES` takes its subjects. |
 | [SCHED-1], [SCHED-2] | Its Deployment of two replicas, as its own ServiceAccount, each on a worker node of its own, with no claim or credential but its token. |
-| [SCHED-3], [SCHED-4], [SCHED-5] | Its Lease and its timings; only the replica that holds it acts, and one that stops releases it. |
+| [SCHED-3], [SCHED-4], [SCHED-5] | Its Lease and its timings; only the replica that holds it acts, and one that Kubernetes stops releases it. |
 | [SCHED-6] | Its grants: [RBAC-1]'s and its Lease's, and no others. |
 | [SCHED-7], [SCHED-8], [SCHED-9] | NATS's address, without a credential; its consumer of poll events on `RECORDS`; and that it makes no stream or consumer. |
 | [MSG-1], [MSG-2] | Orders and notices validate against their schemas; it ignores unknown fields and refuses malformed notices. |
