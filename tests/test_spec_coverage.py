@@ -6,6 +6,11 @@ every statement checked by `verify`, `tests`, or `kind` has a test marked
 with its ID, unless a later task in docs/plan.md, not yet done, writes it;
 every marker names a statement; and every problem verify.py reports names
 an invariant it checks.
+
+A Python test carries its IDs as @pytest.mark.spec("REC-5", ...). A Go test
+carries them in a line of its doc comment, `// spec: SOURCE-1, SOURCE-2`,
+the IDs separated by a comma and a space, directly above its
+`func TestName(t *testing.T)`.
 """
 
 from __future__ import annotations
@@ -28,14 +33,12 @@ CHECKS = {"verify", "tests", "kind", "review", "operator", "first import"}
 # The checks a statement can't pass without a test that carries its ID.
 TESTED_BY = {"verify", "tests", "kind"}
 # Statements whose tests a later task in docs/plan.md writes, with that task:
-# of spec/deployment.md's, T22 the scheduler, with its Deployment, Lease,
-# grants, and consumer, and T23 the fetcher, with its Lease; of
-# spec/fake-edgar.md's, T23 the checks of the fetcher's requests to the fake
-# EDGAR on kind; of spec/controls.md's, T22 the Go
-# types that generate the definitions, the chart's resources, and the
-# scheduler, T23 the fetcher, T24 the discoverer, and T28 the monitoring,
-# after which each ServiceAccount in RBAC-5's table has its grants on kind; of
-# spec/snapshots.md's, T22 the scheduler's jobs, T23 the fetcher and the
+# of T22's, the chart's controls and the scheduler's Deployment, Lease,
+# grants, and consumer; of spec/deployment.md's, T23 the fetcher, with its
+# Lease; of spec/fake-edgar.md's, T23 the checks of the fetcher's requests to the fake
+# EDGAR on kind; of spec/controls.md's, T23 the fetcher, T24 the discoverer,
+# and T28 the monitoring, after which each ServiceAccount in RBAC-5's table
+# has its grants on kind; of spec/snapshots.md's, T23 the fetcher and the
 # cluster store, T24 the discoverer's jobs and its use of edgar-asof, and T36
 # the transfer; of spec/notices.md's, T24 the discoverer, with the scheduler's
 # orders and the status it sets from notices; and of spec/telemetry.md's, T28
@@ -45,29 +48,27 @@ TESTED_BY = {"verify", "tests", "kind"}
 # verify that verify.py already reports.
 AWAITING = {
     **dict.fromkeys(["CHECK-3"], "T23"),
-    **dict.fromkeys(["LEASE-1", "LEASE-2"], "T23"),
-    **dict.fromkeys([f"SCHED-{n}" for n in range(1, 10)], "T22"),
     **dict.fromkeys(
         [
-            "API-2",
-            "API-3",
+            "SCHED-1",
+            "SCHED-2",
+            "SCHED-3",
+            "SCHED-5",
+            "SCHED-6",
+            "SCHED-7",
+            "SCHED-8",
             "VAL-1",
             "VAL-2",
             "VAL-3",
             "VAL-4",
-            "SOURCE-1",
-            "SOURCE-2",
-            "SOURCE-3",
-            "ACCESS-2",
             "RBAC-1",
             "RBAC-4",
         ],
         "T22",
     ),
-    **dict.fromkeys(["JOB-2"], "T22"),
+    **dict.fromkeys(["LEASE-1", "LEASE-2"], "T23"),
     **dict.fromkeys(
         [
-            "SOURCE-4",
             "BACKFILL-2",
             "ACCESS-1",
             "ACCESS-3",
@@ -174,9 +175,37 @@ def area(id: str) -> str:
     return id.rsplit("-", 1)[0]
 
 
-def markers() -> dict[str, list[str]]:
-    """Each ID named by @pytest.mark.spec(...), with the tests that carry it."""
+# A Go test function with its doc comment, and a line of that comment that
+# names the IDs the test checks.
+GO_TEST = re.compile(r"((?:^//.*\n)+)^func (Test\w+)\(t \*testing\.T\)", re.M)
+GO_MARKER = re.compile(r"^// spec: ([A-Z]+-\d+(?:, [A-Z]+-\d+)*)$", re.M)
+GO_MARKER_LINE = re.compile(r"^[ \t]*//[ \t]*spec:.*$", re.M)
+
+
+def go_test_files() -> list[Path]:
+    """Each Go test file in the repository, outside the directories git ignores."""
+    return sorted(
+        path
+        for path in ROOT.rglob("*_test.go")
+        if not any(part.startswith(".") or part == "site" for part in path.relative_to(ROOT).parts)
+    )
+
+
+def go_markers() -> dict[str, list[str]]:
+    """Each ID a Go test's `// spec:` line names, with the tests that carry it."""
     found: dict[str, list[str]] = {}
+    for path in go_test_files():
+        for comment, name in GO_TEST.findall(path.read_text(encoding="utf-8")):
+            for ids in GO_MARKER.findall(comment):
+                for id in ids.split(", "):
+                    found.setdefault(id, []).append(f"{path.relative_to(ROOT)}:{name}")
+    return found
+
+
+def markers() -> dict[str, list[str]]:
+    """Each ID named by @pytest.mark.spec(...), or by a Go test's `// spec:`
+    line, with the tests that carry it."""
+    found: dict[str, list[str]] = go_markers()
     for path in sorted((ROOT / "tests").glob("test_*.py")):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if not isinstance(node, ast.FunctionDef):
@@ -252,6 +281,27 @@ def test_a_statement_awaits_only_a_task_the_plan_has_not_done() -> None:
 
 def test_every_marker_names_a_statement() -> None:
     assert sorted(set(markers()) - set(index())) == []
+
+
+def test_every_go_spec_line_is_in_a_tests_doc_comment_in_its_form() -> None:
+    """A `// spec:` line elsewhere, or in another form, would mark no test."""
+    stray = []
+    for path in go_test_files():
+        text = path.read_text(encoding="utf-8")
+        attached = [
+            line for comment, _ in GO_TEST.findall(text) for line in GO_MARKER.findall(comment)
+        ]
+        lines = GO_MARKER_LINE.findall(text)
+        well_formed = [line for line in lines if GO_MARKER.fullmatch(line)]
+        if len(attached) != len(lines) or len(well_formed) != len(lines):
+            stray.append(str(path.relative_to(ROOT)))
+
+    assert stray == []
+
+
+def test_the_go_tests_carry_markers() -> None:
+    assert go_test_files()
+    assert go_markers()
 
 
 def test_every_problem_verify_reports_names_an_invariant_it_checks() -> None:
