@@ -371,7 +371,9 @@ EDGAR's content ([0006]).
   the active replica or requests are allowed again ([ORDER-1],
   [the scheduler's access to NATS][deployment-nats]). The chart's default
   values pause requests, so an install with them has no such order
-  ([VAL-4]).
+  ([VAL-4]). The owner decided on October 22, 2026 that a later version of
+  the notices has the scheduler publish a refused order again until
+  JetStream accepts it ([T48][plan-observing]).
 - **NATS's credentials.** Any pod that reaches NATS may publish to any
   subject; a later version of the deployment gives each service
   credentials of its own, limited to the subjects it publishes and reads

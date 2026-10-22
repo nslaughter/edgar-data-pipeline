@@ -1,6 +1,6 @@
 # Specification: deployment
 
-**Status:** Version 1.3.0, draft, October 21, 2026. This document governs
+**Status:** Version 1.3.0, draft, October 22, 2026. This document governs
 what the pipeline's Helm charts install, in which order and at which
 versions, and how they configure what they install: the charts, operators,
 and images they pin; the custom resource definitions they install; each
@@ -1184,7 +1184,8 @@ owner decided on October 19, 2026 that the scheduler's deployment is
 specified in a version of this document before it's built, and that the
 scheduler reads the records of its polls through a durable consumer of
 `edgar.records.poll` on `RECORDS`, rather than as a database role: version
-1.3.0.
+1.3.0. The owner confirmed on October 22, 2026 the details that version
+settles.
 
 ## 10. Changes to this document
 

@@ -314,8 +314,9 @@ Its version 1.3.0 deploys the scheduler, before [T22] builds it
 own, one active through its Lease, `scheduler`; [RBAC-1]'s grants and its
 Lease's, and no others; NATS's address, without a credential; and a durable
 consumer of poll events of its own, `scheduler-polls`, on `RECORDS`, made
-before the fetcher publishes any ([SCHED-1] to [SCHED-9]). It settles these
-details, each with its alternative:
+before the fetcher publishes any ([SCHED-1] to [SCHED-9]). The owner
+confirmed on October 22, 2026 each of the details it settles, keeping each
+default; these are listed with their alternatives:
 
 1. **A stopped replica releases the Lease** once it has stopped acting,
    within its pod's termination grace period, so an upgrade or a drain
@@ -348,7 +349,9 @@ again only when the scheduler next becomes the active replica or requests
 are allowed again
 ([the scheduler's access to NATS][deployment-scheduler-nats]). The chart's
 default values pause requests, so an install with them has no such order
-([VAL-4]).
+([VAL-4]). The owner decided on October 22, 2026 that the version of the
+notices that publishes a refused notice again also has the scheduler
+publish a refused order again until JetStream accepts it ([T48]).
 
 Its [§9][deployment-later] lists what later versions add: the pipeline's
 other services, with their replicas, credentials, and placement, and, with
@@ -634,6 +637,7 @@ revisit: whether to keep each company's `submissions` as the notice source
 [T32]: ../plan.md#facts
 [T38]: ../plan.md#observing-filings
 [T44]: ../plan.md#observing-filings
+[T48]: ../plan.md#observing-filings
 [agents-rules]: ../../AGENTS.md#rules
 [agents-where]: ../../AGENTS.md#where-documents-go
 [inv-questions]: ../../investigation/edgar.md#questions
