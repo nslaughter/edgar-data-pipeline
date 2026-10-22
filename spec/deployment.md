@@ -1266,6 +1266,9 @@ guarantee, so it's a minor version: no statement's meaning changes.
   consumer of poll events, `scheduler-polls`, on `RECORDS`, which it waits
   for but never makes, [SCHED-8] and [SCHED-9]. That is guarantee 14, and
   the consumer joins guarantee 12.
+- **Statement kinds:** a rule may also be how a service uses what the
+  charts give it, checked by the service's tests, Go tests among them, in
+  the form the first Go test sets, [§3](#3-statement-ids).
 - **NATS's credentials:** a later version, [§9](#9-later-versions), item 7.
 - **Wording:** [MON-1] names Kubernetes's own scheduler, `kube-scheduler`,
   now that this document has a section on the pipeline's, and [NATS-5]'s
