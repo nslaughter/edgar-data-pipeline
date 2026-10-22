@@ -112,8 +112,8 @@ It also specifies six durable consumers, which the same Job makes
 | `parse-workers-notices` | `NOTICES` | `edgar.notices.filing` | The parse workers, filing notices, as the facts specification will say | JetStream's default |
 | `scheduler-polls` | `RECORDS` | `edgar.records.poll` | The scheduler, poll events, whose records set each Source's poll times ([SOURCE-4]) | JetStream's default |
 
-The scheduler's consumer of poll events comes with the scheduler, which
-[T22] builds, before the fetcher publishes any ([SCHED-8]).
+The scheduler's consumer of poll events came with the scheduler, which
+[T22] built, before the fetcher publishes any ([SCHED-8]).
 
 Each is a pull consumer, which any replica of its service may read from,
 though only the scheduler's active replica reads the scheduler's

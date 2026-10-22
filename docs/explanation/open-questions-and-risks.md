@@ -4,7 +4,7 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The charts; The fake EDGAR.
-- **Specified:** Scheduler; Fetcher; Monitoring: traces; The snapshot store in the cluster (built in part); The transfer from the cluster to git; The controls; The documentation site (built in part).
+- **Specified:** Scheduler (built in part); Fetcher; Monitoring: traces; The snapshot store in the cluster (built in part); The transfer from the cluster to git; The controls (built in part); The documentation site (built in part).
 - **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The drills.
 <!-- end status -->
@@ -309,7 +309,7 @@ fake EDGAR's holding `data/` ([IMG-5]). The details it settles are listed
 with the fake EDGAR's, and the owner confirmed them
 ([below](#the-fake-edgar)).
 
-Its version 1.3.0 deploys the scheduler, before [T22] builds it
+Its version 1.3.0 deploys the scheduler, before [T22] built it
 ([§10][deployment-from-1.2.0]): two replicas, each on a worker node of its
 own, one active through its Lease, `scheduler`; [RBAC-1]'s grants and its
 Lease's, and no others; NATS's address, without a credential; and a durable
