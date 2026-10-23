@@ -461,8 +461,8 @@ Each statement of the deployment's specification is one of two kinds
 The statements came before the charts they describe. Task T20 built the
 charts and wrote their tests. Task T21 wrote those of the pipeline's images
 and the fake EDGAR's installation, [IMG-1] to [IMG-3], [IMG-5], and
-[FAKE-1] to [FAKE-5], with the first of the pipeline's images. Those of
-[SCHED-1] to [SCHED-9] await T22, which builds the scheduler, and those of
+[FAKE-1] to [FAKE-5], with the first of the pipeline's images. Task T22
+wrote those of [SCHED-1] to [SCHED-9] with the scheduler, and those of
 [LEASE-1] and [LEASE-2] await T23, which builds the fetcher ([deployment,
 §3][ids]). The tests on kind, the fake EDGAR they run against, and the
 drills are on [Testing and verification](testing-and-verification.md).

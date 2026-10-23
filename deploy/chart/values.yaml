@@ -28,6 +28,49 @@ fakeEdgar:
   enabled: false
   image: edgar/fake-edgar
 
+# The pipeline's controls, which the chart renders as resources: a Source
+# for each entry of sources and a Backfill for each of backfills, each named
+# by its key, and the SecAccess cluster, each with its entry as its spec
+# (spec/controls.md, section 5; VAL-1). The chart refuses values the API
+# server would refuse (VAL-2), and Sources not paused that would together
+# poll faster than half the fetcher's limit, 2.5 requests a second (VAL-3).
+# The owner changes a control here, with helm upgrade, and nowhere else
+# (RBAC-6).
+controls:
+  # Paused, so the chart installed with these values sends nothing to the
+  # SEC until the owner's values allow it (VAL-4). The owner acknowledges a
+  # stop after a 403 by copying its at here, as acknowledgedStopAt.
+  secAccess:
+    paused: true
+  # Each company's submissions, its notice source, at 10 seconds (decision
+  # record 0010).
+  sources:
+    apple-submissions:
+      feed: submissions
+      url: https://data.sec.gov/submissions/CIK0000320193.json
+      cadenceSeconds: 10
+    microsoft-submissions:
+      feed: submissions
+      url: https://data.sec.gov/submissions/CIK0000789019.json
+      cadenceSeconds: 10
+    walmart-submissions:
+      feed: submissions
+      url: https://data.sec.gov/submissions/CIK0000104169.json
+      cadenceSeconds: 10
+  backfills: {}
+
+# The scheduler, the controller that reconciles the controls: two replicas of
+# its image, the pipeline's own, tagged with images.commit, of which the one
+# that holds its Lease acts (SCHED-1, SCHED-4). The Lease's timings are
+# client-go's leader election's, which the chart checks as it does
+# (SCHED-3).
+scheduler:
+  image: edgar/scheduler
+  lease:
+    durationSeconds: 15
+    renewDeadlineSeconds: 10
+    retryPeriodSeconds: 2
+
 # The pipeline's database: one CloudNativePG Cluster, whose Services and
 # Secrets are named after it (spec/deployment.md, section 7).
 database:
@@ -75,6 +118,10 @@ jetstream:
         - name: discoverer-jobs
           filterSubjects: [edgar.records.filing, edgar.records.backfill]
           maxAckPending: 1
+        # The scheduler's, whose poll events set each Source's poll times
+        # (SCHED-8).
+        - name: scheduler-polls
+          filterSubjects: [edgar.records.poll]
     - name: ORDERS
       subjects: [edgar.orders.backfill]
       retention: workqueue

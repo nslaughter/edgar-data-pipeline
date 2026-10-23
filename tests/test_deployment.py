@@ -1207,7 +1207,7 @@ def test_garages_definition_is_of_its_charts_tag() -> None:
     assert image.split("@")[0] == garage["appVersion"]
 
 
-@pytest.mark.spec("CRD-5")
+@pytest.mark.spec("CRD-5", "API-2")
 @pytest.mark.parametrize("name", ["sources.yaml", "backfills.yaml", "secaccesses.yaml"])
 def test_the_pipelines_definitions_are_those_in_the_spec(name: str) -> None:
     copied = DEPLOY / "operators" / "files" / name
@@ -1392,6 +1392,8 @@ CONSUMERS = {
     "scheduler-notices": ("NOTICES", ["edgar.notices.gap", "edgar.notices.backfill"], None),
     "parse-workers-notices": ("NOTICES", ["edgar.notices.filing"], None),
 }
+# The scheduler's consumer of poll events, which comes with it (SCHED-8).
+SCHEDULER_CONSUMERS = {"scheduler-polls": ("RECORDS", ["edgar.records.poll"], None)}
 
 
 def jetstream_files() -> dict[str, str]:
@@ -1437,7 +1439,8 @@ def test_the_values_list_the_tables_durable_consumers() -> None:
         for consumer in files[f"consumers-{stream['name']}"].split()
     }
 
-    assert listed == {name: stream for name, (stream, _, _) in CONSUMERS.items()}
+    every = {**CONSUMERS, **SCHEDULER_CONSUMERS}
+    assert listed == {name: stream for name, (stream, _, _) in every.items()}
     for name, (stream, subjects, most) in CONSUMERS.items():
         request = json.loads(files[f"consumer-{stream}-{name}.json"])
         expected = {
@@ -1452,6 +1455,28 @@ def test_the_values_list_the_tables_durable_consumers() -> None:
         if most is not None:
             expected["max_ack_pending"] = most
         assert request == {"stream_name": stream, "config": expected}
+
+
+@pytest.mark.spec("SCHED-8")
+def test_the_values_list_the_schedulers_consumer_of_poll_events_as_nats_5_configures_each() -> None:
+    files = jetstream_files()
+    [records] = [stream for stream in streams() if stream["name"] == "RECORDS"]
+    [consumer] = [c for c in records["consumers"] if c["name"] == "scheduler-polls"]
+
+    assert consumer == {"name": "scheduler-polls", "filterSubjects": ["edgar.records.poll"]}
+    assert "scheduler-polls" in files["consumers-RECORDS"].split()
+    assert json.loads(files["consumer-RECORDS-scheduler-polls.json"]) == {
+        "stream_name": "RECORDS",
+        "config": {
+            "durable_name": "scheduler-polls",
+            "name": "scheduler-polls",
+            "filter_subjects": ["edgar.records.poll"],
+            "ack_policy": "explicit",
+            "deliver_policy": "all",
+            "max_deliver": -1,
+            "num_replicas": 3,
+        },
+    }
 
 
 # A fake of the `nats` command, as the JetStream Job runs it: a request to
@@ -1612,7 +1637,7 @@ def test_the_job_waits_until_jetstream_accepts_its_requests(
     assert set(state["streams"]) == set(STREAMS)
 
 
-@pytest.mark.spec("NATS-5")
+@pytest.mark.spec("NATS-5", "SCHED-8")
 def test_each_stream_by_interest_takes_its_subjects_only_once_its_consumers_exist(
     jetstream: dict[str, Any],
 ) -> None:
@@ -1626,6 +1651,7 @@ def test_each_stream_by_interest_takes_its_subjects_only_once_its_consumers_exis
         ("CREATE", "RECORDS", ""),
         ("CONSUMER", "RECORDS", "discoverer-polls"),
         ("CONSUMER", "RECORDS", "discoverer-jobs"),
+        ("CONSUMER", "RECORDS", "scheduler-polls"),
         ("UPDATE", "RECORDS", ",".join(STREAMS["RECORDS"][0])),
         ("CREATE", "ORDERS", ",".join(STREAMS["ORDERS"][0])),
         ("CONSUMER", "ORDERS", "discoverer-orders"),
@@ -2135,6 +2161,242 @@ def test_grafana_verifies_the_server_against_the_clusters_authority_alone() -> N
     assert source["jsonData"]["sslmode"] == "verify-full"
     assert volume["secret"]["secretName"] == f"{the_cluster()['metadata']['name']}-ca"
     assert volume["secret"]["items"] == [{"key": "ca.crt", "path": root.name}]
+
+
+# SCHED
+
+
+def scheduler() -> dict[str, Any]:
+    return named(UMBRELLA, "Deployment", "scheduler")
+
+
+def scheduler_arguments(given: dict[str, Any] | None = None) -> dict[str, str]:
+    """The scheduler's arguments, each --NAME=VALUE, by name."""
+    docs = rendered(UMBRELLA) if given is None else documents(render(UMBRELLA, given).stdout)
+    [deployment] = [
+        d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "scheduler"
+    ]
+    [container] = containers(deployment)
+    found = {}
+    for argument in container["args"]:
+        name, _, value = argument.partition("=")
+        assert name.startswith("--"), argument
+        assert value, argument
+        found[name[2:]] = value
+    return found
+
+
+@pytest.mark.spec("SCHED-1")
+def test_the_scheduler_is_two_replicas_of_its_image_as_its_own_service_account() -> None:
+    deployment = scheduler()
+    spec = pod_spec(deployment)
+    [container] = containers(deployment)
+
+    assert deployment["spec"]["replicas"] == 2
+    assert "namespace" not in deployment["metadata"]
+    assert spec["serviceAccountName"] == "scheduler"
+    assert named(UMBRELLA, "ServiceAccount", "scheduler")
+    assert spec.get("automountServiceAccountToken", True) is True
+    assert values(UMBRELLA)["scheduler"]["image"] == "edgar/scheduler"
+    assert container["image"] == f"edgar/scheduler:{COMMIT}"
+    assert container["imagePullPolicy"] == "Never"
+    assert "metrics" in {port["name"] for port in container["ports"]}
+
+
+@pytest.mark.spec("SCHED-1")
+def test_the_scheduler_claims_no_volume_and_reads_no_secret() -> None:
+    deployment = scheduler()
+    spec = pod_spec(deployment)
+
+    assert "volumes" not in spec
+    for container in containers(deployment):
+        assert "volumeMounts" not in container
+        assert "envFrom" not in container
+        for variable in container.get("env", []):
+            assert "secretKeyRef" not in variable.get("valueFrom", {}), variable
+
+
+@pytest.mark.spec("SCHED-1")
+def test_the_schedulers_image_is_given_by_its_value() -> None:
+    given = copy.deepcopy(TEST_VALUES)
+    given["scheduler"] = {"image": "edgar/another"}
+    docs = documents(render(UMBRELLA, given).stdout)
+    [deployment] = [
+        d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "scheduler"
+    ]
+
+    assert containers(deployment)[0]["image"] == f"edgar/another:{COMMIT}"
+
+
+@pytest.mark.spec("SCHED-1")
+def test_the_schedulers_image_holds_its_command() -> None:
+    lines = (IMAGES / "scheduler" / "Dockerfile").read_text().splitlines()
+    [entrypoint] = [
+        json.loads(line[len("ENTRYPOINT ") :]) for line in lines if line.startswith("ENTRYPOINT ")
+    ]
+
+    assert entrypoint == ["/scheduler"]
+    assert any(line.startswith("RUN go build") and "./cmd/scheduler" in line for line in lines)
+
+
+@pytest.mark.spec("SCHED-2")
+def test_the_schedulers_pods_each_need_a_worker_node_of_their_own() -> None:
+    deployment = scheduler()
+    labels = deployment["spec"]["template"]["metadata"]["labels"]
+    [term] = pod_spec(deployment)["affinity"]["podAntiAffinity"][
+        "requiredDuringSchedulingIgnoredDuringExecution"
+    ]
+
+    assert term["topologyKey"] == "kubernetes.io/hostname"
+    assert term["labelSelector"] == {"matchLabels": labels}
+    assert labels == deployment["spec"]["selector"]["matchLabels"]
+
+
+@pytest.mark.spec("SCHED-3")
+def test_the_scheduler_is_given_its_lease_and_its_timings_15_10_and_2_seconds() -> None:
+    lease = values(UMBRELLA)["scheduler"]["lease"]
+    arguments = scheduler_arguments()
+
+    assert lease == {"durationSeconds": 15, "renewDeadlineSeconds": 10, "retryPeriodSeconds": 2}
+    assert arguments["namespace"] == "edgar"
+    assert arguments["lease-name"] == "scheduler"
+    assert arguments["lease-duration"] == "15s"
+    assert arguments["lease-renew-deadline"] == "10s"
+    assert arguments["lease-retry-period"] == "2s"
+
+
+@pytest.mark.spec("SCHED-3")
+def test_the_schedulers_lease_takes_its_timings_from_the_values() -> None:
+    given = copy.deepcopy(TEST_VALUES)
+    given["scheduler"] = {
+        "lease": {"durationSeconds": 30, "renewDeadlineSeconds": 20, "retryPeriodSeconds": 4}
+    }
+    arguments = scheduler_arguments(given)
+
+    assert (arguments["lease-duration"], arguments["lease-renew-deadline"]) == ("30s", "20s")
+    assert arguments["lease-retry-period"] == "4s"
+
+
+@pytest.mark.spec("SCHED-3")
+@pytest.mark.parametrize(
+    ("duration", "renew", "retry"),
+    [
+        (0, 10, 2),
+        (15, 0, 2),
+        (15, 10, 0),
+        (15, -10, 2),
+        (15, 15, 2),
+        (15, 20, 2),
+        (15, 10, 10),
+        (15, 10, 12),
+        # The renewal deadline must be more than 1.2 times the retry period.
+        (15, 6, 5),
+        (15, 12, 10),
+        (15, 10, 1.5),
+    ],
+)
+def test_the_chart_refuses_lease_timings_client_go_refuses(
+    duration: Any, renew: Any, retry: Any
+) -> None:
+    given = copy.deepcopy(TEST_VALUES)
+    given["scheduler"] = {
+        "lease": {
+            "durationSeconds": duration,
+            "renewDeadlineSeconds": renew,
+            "retryPeriodSeconds": retry,
+        }
+    }
+
+    assert render(UMBRELLA, given, check=False).returncode != 0
+
+
+@pytest.mark.spec("SCHED-3")
+@pytest.mark.parametrize(("duration", "renew", "retry"), [(15, 7, 5), (3, 2, 1), (60, 59, 49)])
+def test_the_chart_renders_lease_timings_client_go_accepts(
+    duration: int, renew: int, retry: int
+) -> None:
+    given = copy.deepcopy(TEST_VALUES)
+    given["scheduler"] = {
+        "lease": {
+            "durationSeconds": duration,
+            "renewDeadlineSeconds": renew,
+            "retryPeriodSeconds": retry,
+        }
+    }
+
+    assert render(UMBRELLA, given, check=False).returncode == 0
+
+
+def rbac(kind: str, name: str) -> list[dict[str, Any]]:
+    rules = named(UMBRELLA, kind, name)["rules"]
+    assert isinstance(rules, list)
+    return rules
+
+
+@pytest.mark.spec("SCHED-6")
+def test_the_schedulers_role_grants_the_controls_verbs_and_its_leases() -> None:
+    assert rbac("Role", "scheduler") == [
+        {
+            "apiGroups": ["edgar.nathanslaughter.com"],
+            "resources": ["sources", "backfills"],
+            "verbs": ["get", "list", "watch"],
+        },
+        {
+            "apiGroups": ["edgar.nathanslaughter.com"],
+            "resources": ["sources/status", "backfills/status"],
+            "verbs": ["update", "patch"],
+        },
+        {"apiGroups": ["coordination.k8s.io"], "resources": ["leases"], "verbs": ["create"]},
+        {
+            "apiGroups": ["coordination.k8s.io"],
+            "resources": ["leases"],
+            "resourceNames": ["scheduler"],
+            "verbs": ["get", "update"],
+        },
+    ]
+    assert "namespace" not in named(UMBRELLA, "Role", "scheduler")["metadata"]
+
+
+@pytest.mark.spec("SCHED-6")
+def test_the_schedulers_cluster_role_grants_reading_the_secaccess() -> None:
+    assert rbac("ClusterRole", "edgar-scheduler") == [
+        {
+            "apiGroups": ["edgar.nathanslaughter.com"],
+            "resources": ["secaccesses"],
+            "verbs": ["get", "list", "watch"],
+        }
+    ]
+
+
+@pytest.mark.spec("SCHED-6")
+def test_the_schedulers_service_account_is_bound_to_its_roles_and_no_other() -> None:
+    found = set()
+    for chart, _, namespace in RELEASES:
+        for doc in rendered(chart):
+            if doc["kind"] not in ("RoleBinding", "ClusterRoleBinding"):
+                continue
+            here = doc["metadata"].get("namespace", namespace)
+            for subject in doc.get("subjects", []):
+                if subject["kind"] == "ServiceAccount" and subject["name"] == "scheduler":
+                    assert subject.get("namespace", here) == "edgar"
+                    found.add((doc["kind"], doc["roleRef"]["kind"], doc["roleRef"]["name"]))
+
+    assert found == {
+        ("RoleBinding", "Role", "scheduler"),
+        ("ClusterRoleBinding", "ClusterRole", "edgar-scheduler"),
+    }
+
+
+@pytest.mark.spec("SCHED-7")
+def test_the_scheduler_is_given_natss_address_and_no_credential_for_it() -> None:
+    arguments = scheduler_arguments()
+    [container] = containers(scheduler())
+
+    assert arguments["nats-url"] == "nats://nats:4222"
+    assert named(UMBRELLA, "Service", "nats")
+    assert [name for name in arguments if "nats" in name] == ["nats-url"]
+    assert "env" not in container
+    assert "@" not in arguments["nats-url"]
 
 
 # FAKE

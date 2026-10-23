@@ -1,7 +1,7 @@
 # Security and access
 
 <!-- status: The controls; The charts; Fetcher; Scheduler; Discoverer; Garage; PostgreSQL 18; Monitoring: metrics, alerts, and dashboards; The snapshot store in git -->
-**Status** ([status page](../status.md)): The controls: Specified. The charts: Built. Fetcher: Specified. Scheduler: Specified. Discoverer: Decided; specified in part. Garage: Built. PostgreSQL 18: Built. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The snapshot store in git: Built.
+**Status** ([status page](../status.md)): The controls: Specified; built in part. The charts: Built. Fetcher: Specified. Scheduler: Specified; built in part. Discoverer: Decided; specified in part. Garage: Built. PostgreSQL 18: Built. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The snapshot store in git: Built.
 <!-- end status -->
 
 Each credential the pipeline uses and where it's kept, how the user agent

@@ -47,11 +47,11 @@ is marked with the IDs of the statements it checks, as
 `@pytest.mark.spec("REC-5")`. A test,
 [`tests/test_spec_coverage.py`](../../tests/test_spec_coverage.py), reads
 every specification, and fails if a statement checked by `verify`, `tests`,
-or `kind` has no test, or if a marker names no statement. Go tests will
-carry IDs too: the pull request with the first Go test sets their form,
-such as a `// spec: FETCH-6` comment above the test, and extends the
-coverage test and `AGENTS.md` to match ([0006]). That's [T22], the
-scheduler.
+or `kind` has no test, or if a marker names no statement. A Go test
+carries its IDs in a line of its doc comment, such as
+`// spec: SOURCE-1, ACCESS-2`, directly above the test, and the coverage
+test reads those too, and fails on such a line anywhere else ([0006],
+[T22]).
 
 A statement is written before the part it describes is built
 ([where documents go][agents-where]), so the coverage test allows one
@@ -69,9 +69,9 @@ without the behavior it covers ([doing the next item][agents-next], step
 
 | Specification | Statements with tests now | Statements awaiting a task |
 | --- | --- | --- |
-| [`snapshots.md`][snapshots] 1.0.0 | Those `verify.py` checks, and `snapshot.py`'s rules, brought to this version by [T35], done October 13, 2026; and the schemas': [STORE-1], [REC-13], [JOB-1] | [T22], the scheduler's jobs; [T23], the fetcher and the cluster store; [T24], the discoverer's jobs and its use of `edgar-asof` ([FETCH-18]); [T36], the transfer ([XFER-1] to [XFER-3]) |
-| [`deployment.md`][deployment] 1.3.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind; and the pipeline's images' and the fake EDGAR's installation, written by [T21] ([IMG-1] to [IMG-3], [IMG-5], [FAKE-1] to [FAKE-5]) | [T22], the scheduler's Deployment, Lease, grants, and consumer ([SCHED-1] to [SCHED-9]); [T23], the fetcher's Lease ([LEASE-1], [LEASE-2]) ([§3][deployment-ids]) |
-| [`controls.md`][controls] 1.0.0 | [API-1] | [T22], [T23], [T24], and [T28] ([§3][controls-ids]) |
+| [`snapshots.md`][snapshots] 1.0.0 | Those `verify.py` checks, and `snapshot.py`'s rules, brought to this version by [T35], done October 13, 2026; the schemas': [STORE-1], [REC-13], [JOB-1]; and the scheduler's jobs, [JOB-2], written by [T22] | [T23], the fetcher and the cluster store; [T24], the discoverer's jobs and its use of `edgar-asof` ([FETCH-18]); [T36], the transfer ([XFER-1] to [XFER-3]) |
+| [`deployment.md`][deployment] 1.3.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind; and the pipeline's images' and the fake EDGAR's installation, written by [T21] ([IMG-1] to [IMG-3], [IMG-5], [FAKE-1] to [FAKE-5]); and the scheduler's Deployment, Lease, grants, and consumer, written by [T22] ([SCHED-1] to [SCHED-9]) | [T23], the fetcher's Lease ([LEASE-1], [LEASE-2]) ([§3][deployment-ids]) |
+| [`controls.md`][controls] 1.0.0 | [API-1]; and, written by [T22], the generated definitions and the API server's refusals ([API-2], [API-3]), the chart's controls ([VAL-1] to [VAL-4]), the scheduler's polls and Sources' status ([SOURCE-1] to [SOURCE-4], [ACCESS-2]), and its grants ([RBAC-1], [RBAC-4]), [SOURCE-4]'s ahead of [T23] | [T23], [T24], and [T28] ([§3][controls-ids]) |
 | [`notices.md`][notices] 0.1.0 | [TABLE-1], [MSG-1] | [T24], the discoverer, with the scheduler's side of the Backfills ([§3][notices-ids]) |
 | [`telemetry.md`][telemetry] 0.1.0 | [VIEW-1] | [T28], the monitoring of observing filings; [T29], the traces ([§3][telemetry-ids]) |
 | [`site.md`][site] 0.1.0 | The site's statements checked by `tests`, written by [T40], and [PAGE-4]'s, written by [T42] once every topic had its page | None |
@@ -80,7 +80,7 @@ without the behavior it covers ([doing the next item][agents-next], step
 ## What the tests check today
 
 The status block above says which of the parts this page describes are
-built. The tests that run today check six things.
+built. The tests that run today check seven things.
 
 **The git store's invariants, with `verify.py`.** `verify.py` checks every
 invariant of the git store, each of which holds whenever `data/` is at
@@ -133,6 +133,29 @@ The checks of the fetching rules report what breaks them ([CHECK-1]), and
 short, a `429`, and no response, each retried, and a stop on a `403`
 ([CHECK-2], [T21]).
 
+**The scheduler, against a real API server.** The Go tests start an API
+server with envtest, with the definitions in `spec/schemas/` installed, and
+a NATS server with JetStream on the machine they run on ([T22]). They check
+that the definitions generated from the scheduler's Go types are those in
+`spec/schemas/` ([API-2]), and that the API server refuses what those
+refuse ([API-3]). They run the scheduler against them: each Source's
+conditions, and its polls only while it's polling ([SOURCE-1],
+[SOURCE-3], [ACCESS-2]); its polls' timing, on a clock the tests step,
+and that a poll it gave up while NATS was lost isn't queued once NATS is
+back ([SOURCE-2]); each poll as a job of its Source's feed and URL, kept in
+`JOBS` ([JOB-2]); two replicas, of which only the one that holds the Lease
+acts, the standby setting no status, reading no poll events, and queuing
+no polls, and of which one stopped releases the Lease, and one cut off
+from the API server, its connections closed or its requests unanswered,
+stops before the other could take it over, at timings whose retry period
+and renewal deadline together pass the Lease's duration ([SCHED-4]); and
+poll events, read through `scheduler-polls` once it exists, setting each
+Source's poll times ([SOURCE-4], [SCHED-9]). Rendering the umbrella chart
+checks the controls it renders from its values, and the values it refuses,
+the budget summed exactly however many digits the sum needs ([VAL-1] to
+[VAL-4]), and the grants on them across the four charts ([RBAC-1],
+[RBAC-4]).
+
 **The charts, rendered and installed.** The deployment's invariants are
 checked by rendering each of the four charts with `helm template`; the
 hook Jobs' scripts, against fakes of `nats`, of `psql`, and of Garage's
@@ -144,7 +167,9 @@ on a kind cluster the charts are installed on
 CI runs these checks in three jobs, one for each of Python 3.12, 3.13, and
 3.14: the format check, the lint, the type check, the tests, and
 `uv run scripts/verify.py --since origin/main` ([commands][agents-commands],
-[doing the next item][agents-next], step 9). A fourth job, `kind`, creates
+[doing the next item][agents-next], step 9). A fourth job, `Go`, checks
+that the Go module and its generated code are current, and runs `go vet`,
+golangci-lint, and the Go tests ([0006], [T22]). A fifth job, `kind`, creates
 a kind cluster, builds the pipeline's images and loads them into it, points
 its DNS for the SEC's hosts at the fake EDGAR, installs the four charts,
 the fake EDGAR among them, and upgrades them, and runs the tests of the
@@ -163,7 +188,6 @@ rebuild of the facts. Each comes with the task that builds what it tests.
 | --- | --- | --- |
 | Tests on kind | The `kind` statements of each service, against the installed charts, as [T20]'s are of the charts | Each task that builds a service |
 | The fake EDGAR | The fetching rules, from every request the fetcher sends | [T23] |
-| envtest | The scheduler's controller, and the API server's rules for the resources, against a real API server | [T22] |
 | `promtool test rules` | The alert rules | [T28], [T33] |
 | The drills | Recovery from outages caused on purpose, and the restore of the database | [T31] |
 | The rebuild | The facts, imported again from stored bodies | [T31] |
@@ -196,7 +220,9 @@ the notices' views, and lets Grafana's role read only its views
 the SEC's hosts resolve to the fake EDGAR, and a pod's request for a
 stored URL reaches it over HTTPS and gets the version `data/` holds
 ([FAKE-4], [FAKE-5]); that the pipeline's images run as built from the
-commit installed ([IMG-3]); that one fetcher pod holds the Lease ([LEASE-2]); that each ServiceAccount can
+commit installed ([IMG-3]); that the scheduler's two pods run on two
+worker nodes, one holding its Lease, which another takes over before its
+duration when that pod is deleted ([SCHED-5]); that one fetcher pod holds the Lease ([LEASE-2]); that each ServiceAccount can
 do exactly what the table of grants allows ([RBAC-5]); and that the
 notices' and dashboards' views give what their sections define ([GAP-2],
 [LAG-1], [VIEW-4]). The cluster store's own invariants, that every object
@@ -439,10 +465,17 @@ clock check relies on, waits on a finding
 [API-1]: ../../spec/controls.md#4-the-resources
 [API-2]: ../../spec/controls.md#4-the-resources
 [API-3]: ../../spec/controls.md#4-the-resources
+[VAL-1]: ../../spec/controls.md#5-the-charts-values
 [VAL-3]: ../../spec/controls.md#5-the-charts-values
+[VAL-4]: ../../spec/controls.md#5-the-charts-values
 [SOURCE-1]: ../../spec/controls.md#6-source
 [SOURCE-2]: ../../spec/controls.md#6-source
+[SOURCE-3]: ../../spec/controls.md#6-source
+[SOURCE-4]: ../../spec/controls.md#6-source
+[ACCESS-2]: ../../spec/controls.md#8-secaccess
 [ACCESS-3]: ../../spec/controls.md#8-secaccess
+[RBAC-1]: ../../spec/controls.md#9-who-may-change-what
+[RBAC-4]: ../../spec/controls.md#9-who-may-change-what
 [RBAC-5]: ../../spec/controls.md#9-who-may-change-what
 [RBAC-6]: ../../spec/controls.md#9-who-may-change-what
 [OBJ-1]: ../../spec/snapshots.md#5-objects
@@ -475,6 +508,7 @@ clock check relies on, waits on a finding
 [STORE-2]: ../../spec/snapshots.md#the-cluster-store
 [STORE-3]: ../../spec/snapshots.md#the-cluster-store
 [JOB-1]: ../../spec/snapshots.md#jobs-and-events
+[JOB-2]: ../../spec/snapshots.md#jobs-and-events
 [IMP-1]: ../../spec/snapshots.md#11-imports
 [IMP-3]: ../../spec/snapshots.md#11-imports
 [PIN-2]: ../../spec/deployment.md#6-pins

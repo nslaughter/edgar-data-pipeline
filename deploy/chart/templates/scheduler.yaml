@@ -1,0 +1,176 @@
+{{- /*
+The scheduler, the controller that reconciles the controls (spec/deployment.md,
+section 5, the scheduler): a Deployment of two replicas of its image, built
+from the commit images.commit names, each on a worker node of its own, of
+which the one that holds the Lease scheduler acts (SCHED-1, SCHED-2, SCHED-4).
+It claims no volume and holds no credential but its ServiceAccount's token
+(SCHED-1). Its ServiceAccount has the controls' grants, by a Role here and a
+ClusterRole for the SecAccess, and its Lease's, and nothing else (RBAC-1,
+SCHED-6). Its arguments give it the release namespace, NATS's address, with no
+credential (SCHED-7), and its Lease's name and timings, which are first held
+to what client-go's leader election accepts (SCHED-3).
+*/}}
+{{- $lease := .Values.scheduler.lease }}
+{{- $duration := int64 $lease.durationSeconds }}
+{{- $renew := int64 $lease.renewDeadlineSeconds }}
+{{- $retry := int64 $lease.retryPeriodSeconds }}
+{{- if or (lt $duration 1) (lt $renew 1) (lt $retry 1) }}
+{{- fail "scheduler.lease: each timing must be at least 1 second (SCHED-3)" }}
+{{- end }}
+{{- if ge $renew $duration }}
+{{- fail (printf "scheduler.lease: the renewal deadline, %d seconds, must be shorter than the duration, %d (SCHED-3)" $renew $duration) }}
+{{- end }}
+{{- if ge $retry $renew }}
+{{- fail (printf "scheduler.lease: the retry period, %d seconds, must be shorter than the renewal deadline, %d (SCHED-3)" $retry $renew) }}
+{{- end }}
+{{- /* renew > 1.2 retry, in integers: 5 renew > 6 retry. */}}
+{{- if le (mul 5 $renew) (mul 6 $retry) }}
+{{- fail (printf "scheduler.lease: the renewal deadline, %d seconds, must be more than 1.2 times the retry period, %d (SCHED-3)" $renew $retry) }}
+{{- end }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: scheduler
+  labels:
+    app.kubernetes.io/name: scheduler
+    app.kubernetes.io/instance: {{ .Release.Name }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: scheduler
+  labels:
+    app.kubernetes.io/name: scheduler
+    app.kubernetes.io/instance: {{ .Release.Name }}
+rules:
+  - apiGroups: [edgar.nathanslaughter.com]
+    resources: [sources, backfills]
+    verbs: [get, list, watch]
+  - apiGroups: [edgar.nathanslaughter.com]
+    resources: [sources/status, backfills/status]
+    verbs: [update, patch]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [create]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    resourceNames: [scheduler]
+    verbs: [get, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: scheduler
+  labels:
+    app.kubernetes.io/name: scheduler
+    app.kubernetes.io/instance: {{ .Release.Name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: scheduler
+subjects:
+  - kind: ServiceAccount
+    name: scheduler
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-scheduler
+  labels:
+    app.kubernetes.io/name: scheduler
+    app.kubernetes.io/instance: {{ .Release.Name }}
+rules:
+  - apiGroups: [edgar.nathanslaughter.com]
+    resources: [secaccesses]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-scheduler
+  labels:
+    app.kubernetes.io/name: scheduler
+    app.kubernetes.io/instance: {{ .Release.Name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-scheduler
+subjects:
+  - kind: ServiceAccount
+    name: scheduler
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scheduler
+  labels:
+    app.kubernetes.io/name: scheduler
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: scheduler
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: scheduler
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      serviceAccountName: scheduler
+      # It stops acting and releases the Lease within its 10-second shutdown
+      # timeout, well inside this grace period (SCHED-4).
+      terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: scheduler
+                  app.kubernetes.io/instance: {{ .Release.Name }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: scheduler
+          image: {{ printf "%s:%s" .Values.scheduler.image .Values.images.commit | quote }}
+          imagePullPolicy: Never
+          args:
+            - --namespace={{ .Release.Namespace }}
+            - --nats-url=nats://nats:4222
+            - --lease-name=scheduler
+            - --lease-duration={{ $duration }}s
+            - --lease-renew-deadline={{ $renew }}s
+            - --lease-retry-period={{ $retry }}s
+            - --metrics-address=:8080
+            - --health-address=:8081
+            - --shutdown-timeout=10s
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+            - name: health
+              containerPort: 8081
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]

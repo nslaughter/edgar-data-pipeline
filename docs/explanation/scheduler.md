@@ -1,7 +1,7 @@
 # The scheduler
 
 <!-- status: Scheduler; The controls -->
-**Status** ([status page](../status.md)): Scheduler: Specified. The controls: Specified.
+**Status** ([status page](../status.md)): Scheduler: Specified; built in part. The controls: Specified; built in part.
 <!-- end status -->
 
 The scheduler is the controller that turns the owner's controls into work
@@ -224,7 +224,11 @@ default for its duration, renewal deadline, and retry period, as the
 fetcher's do, and the chart refuses those client-go's leader election
 refuses ([SCHED-3], [LEASE-1]). A replica that can't renew the Lease within
 its renewal deadline stops acting before another can take it over
-([SCHED-4]).
+([SCHED-4]). It counts the deadline itself, from when it sent its last
+renewal. client-go's leader election tries to renew a retry period after
+the last renewal, and gives up only once that try has gone on for the
+renewal deadline. At timings the chart accepts, such as 11, 10, and 2
+seconds, that would be after another replica could take the Lease over.
 
 A replica that Kubernetes stops while it holds the Lease, as in an upgrade
 or a drain, releases it once it has stopped acting, so another replica, the
@@ -412,15 +416,16 @@ EDGAR's content ([0006]).
 | [METRIC-1], [METRIC-2], [METRIC-3] | Its metrics, served by each replica, with labels from small sets. |
 | [TRACE-1], [TRACE-2], [TRACE-3], [TRACE-5], [TRACE-7], [TRACE-8] | Each poll and order starts a trace, carried in NATS headers. |
 
-Task T48 specified the scheduler's deployment. T22 builds the scheduler,
+Task T48 specified the scheduler's deployment. T22 built the scheduler,
 with the Go types, the chart's Sources, and its Deployment, Lease, grants,
-and consumer of poll events, and T24 builds its side of the notices: the orders, and each Source's
+and consumer of poll events, in `cmd/scheduler/` and `internal/scheduler/`,
+and T24 builds its side of the notices: the orders, and each Source's
 `openGapSince` and each Backfill's status, which it sets from notices
 ([plan][plan-observing]). The schemas' statements, [JOB-1] and [MSG-1],
-have tests already. [SOURCE-4]'s tests await T23, the fetcher; those of its
-metrics, of kube-state-metrics' grants ([RBAC-5]), and of its traces await
-T28 and T29; and the others', its deployment's among them, await T22 and
-T24
+have tests, and T22 wrote those of what it built, [SOURCE-4]'s of the
+scheduler's side ahead of T23, the fetcher. Those of its metrics, of
+kube-state-metrics' grants ([RBAC-5]), and of its traces await T28 and
+T29; and those of its side of the notices await T24
 ([§3 of the controls][controls-ids], [§3 of the notices][notices-ids],
 [§3 of telemetry][telemetry-ids]).
 

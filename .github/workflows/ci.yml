@@ -51,6 +51,37 @@ jobs:
         if: github.event_name == 'push'
         run: uv run scripts/verify.py --since "${{ github.event.before }}"
 
+  # The Go module's checks (decision record 0006): that go.mod and the
+  # generated code are current, go vet, golangci-lint, and go test, whose
+  # envtest tests run against an API server of the minor version kind's
+  # nodes run (internal/testenv).
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    env:
+      ENVTEST_K8S_VERSION: "1.36.2"
+    steps:
+      - uses: actions/checkout@v7
+      # The Go of go.mod's toolchain line.
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Check that go.mod and go.sum are tidy
+        run: go mod tidy -diff
+      - name: Check that the generated code is current
+        run: |
+          go tool controller-gen object paths=./api/...
+          git diff --exit-code
+      - name: Vet
+        run: go vet ./...
+      - uses: golangci/golangci-lint-action@v9.3.0
+        with:
+          version: v2.15.0
+      - name: Install envtest's binaries
+        run: echo "KUBEBUILDER_ASSETS=$(go tool setup-envtest use "$ENVTEST_K8S_VERSION" -p path)" >>"$GITHUB_ENV"
+      - name: Test
+        run: go test -race ./...
+
   # Installs the four charts on kind, then upgrades them, and runs the tests
   # of how the installed charts behave (spec/deployment.md, section 3).
   kind:
@@ -182,6 +213,8 @@ jobs:
           kubectl get issuers.cert-manager.io,certificates.cert-manager.io --namespace edgar
           # The fake EDGAR writes no request header to its output (REQ-2).
           kubectl logs --namespace edgar deployment/fake-edgar --tail=100 || true
+          kubectl logs --namespace edgar --selector app.kubernetes.io/name=scheduler --prefix --tail=100 || true
+          kubectl get sources.edgar.nathanslaughter.com,secaccesses.edgar.nathanslaughter.com,leases --namespace edgar -o wide || true
           for job in garage-setup jetstream-setup database-setup; do
             echo "--- $job"
             kubectl logs --namespace edgar "job/$job" --tail=100 || true

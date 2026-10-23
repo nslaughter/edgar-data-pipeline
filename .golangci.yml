@@ -1,0 +1,20 @@
+# golangci-lint's configuration for the Go module (decision record 0006).
+version: "2"
+linters:
+  # The standard set, with the checks that keep comments, errors, and
+  # imports in order.
+  default: standard
+  enable:
+    - errorlint
+    - gocritic
+    - misspell
+    - revive
+    - unconvert
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/nslaughter/edgar-data-pipeline

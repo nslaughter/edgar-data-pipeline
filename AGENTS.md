@@ -10,7 +10,7 @@ EDGAR's feeds and verify the stored versions.
 | --- | --- |
 | [`spec/snapshots.md`](spec/snapshots.md) | The two stores of what the pipeline fetches: everything under `data/`, and the cluster's objects in Garage and records in PostgreSQL. Their layout, records, versions, history, and scope; how fetches are made, by `scripts/snapshot.py` or the fetcher; the jobs that ask the fetcher for fetches and the events that announce their records, whose schemas are in [`spec/schemas/`](spec/schemas/); how the cluster's records reach `data/`; and import manifests, as numbered statements with an index. `scripts/snapshot.py` implements its rules and `scripts/verify.py` checks its invariants of `data/`. |
 | [`spec/deployment.md`](spec/deployment.md) | What the four Helm charts under `deploy/` install, in which order and at which versions, and how they configure it: their dependencies and the definitions each installs, the pins of every chart, image, and tool, PostgreSQL's major version 18, each component's replicas, storage, credentials, and placement, the cluster store's bucket, database, table, and streams, the fetcher's Lease, the scheduler's Deployment, Lease, grants, and durable consumer of poll events, the discoverer's streams, tables, credentials, and durable consumers, Grafana's database role and data source, the fake EDGAR that CI installs, the kind cluster, and the pipeline's own images and how they're built, as numbered statements with an index. The charts are under `deploy/`; tests render them, in `tests/test_deployment.py`, and check them installed on kind, in `tests/test_kind.py`. |
-| [`spec/controls.md`](spec/controls.md) | The pipeline's controls: the `Source`, `Backfill`, and `SecAccess` custom resources, whose definitions are in [`spec/schemas/`](spec/schemas/); the chart's values they're rendered from and the checks on them, such as each cadence's bounds; what the scheduler and the fetcher do with each; and who may change what, as numbered statements with an index. The code and most of its tests are still to be written. |
+| [`spec/controls.md`](spec/controls.md) | The pipeline's controls: the `Source`, `Backfill`, and `SecAccess` custom resources, whose definitions are in [`spec/schemas/`](spec/schemas/); the chart's values they're rendered from and the checks on them, such as each cadence's bounds; what the scheduler and the fetcher do with each; and who may change what, as numbered statements with an index. The scheduler implements its rules for Sources; the rest of its code, and most of its tests, are still to be written. |
 | [`spec/notices.md`](spec/notices.md) | What the discoverer makes of the fetcher's records: the filings each `Source`'s polls show, with both acceptance times as given and the polls that bound when each `Source` first showed them; each filing's files and their fetches; how the scheduler hands each `Backfill` to the discoverer, and its progress; each `Source`'s coverage and gaps; the orders and notices between the services, whose schemas are in [`spec/schemas/`](spec/schemas/) with the tables and views; and the views that give each lag, as numbered statements with an index. The discoverer and most of its tests are still to be written. |
 | [`spec/telemetry.md`](spec/telemetry.md) | What the pipeline reports about itself while it observes filings: the metrics the scheduler, the fetcher, and the discoverer serve, the fetcher's clock among them; the metrics kube-state-metrics exports from the controls' status; what Prometheus scrapes; the alerts on a stop after a `403`, on a gap longer than its `Source`'s cadence, and on a backup more than a day old; the views of coverage, gaps, and lags that Grafana reads, defined in [`spec/schemas/`](spec/schemas/); and the trace context carried through NATS, as numbered statements with an index. The metrics, alerts, and traces, and most of their tests, are still to be written. |
 | [`spec/site.md`](spec/site.md) | The documentation site that publishes these documents: which documents it holds, built from their files where they are; the pages written for it, which make no rules and cite the document that owns each fact, `edgar-asof`'s among them; each part's status, derived from the plan, the specifications, and the decision records, on a status page a test keeps current; the estimates and the analysis beyond the plan; and how the site is built, checked by the tests, and published from `main` by GitHub Pages, as numbered statements with an index. The site and its tests are still to be written. |
@@ -93,8 +93,10 @@ investigation/
   instead of choosing an interpretation. A change to a specification is its
   own pull request, versioned as the document says.
 - **Every statement has an ID, and its tests carry it.** Mark each test with
-  the IDs it checks, as `@pytest.mark.spec("REC-5")`. A new statement gets
-  the next unused number in its area; IDs are never reused or renumbered.
+  the IDs it checks, as `@pytest.mark.spec("REC-5")` in Python, or in Go as
+  a line `// spec: REC-5, REC-6` of the test's doc comment, directly above
+  its `func TestName(t *testing.T)`. A new statement gets the next unused
+  number in its area; IDs are never reused or renumbered.
   `tests/test_spec_coverage.py` reads every `spec/*.md`, and fails if a
   statement checked by `verify`, `tests`, or `kind` has no test, or a marker
   names no statement. A statement whose tests a later task in the plan
@@ -140,6 +142,9 @@ investigation/
 | Lint | `uv run ruff check .` |
 | Type check | `uv run mypy` |
 | Tests | `uv run pytest`, with Helm 4 and jq installed |
+| Go checks | `go mod tidy -diff`, `go vet ./...`, and `golangci-lint run`, at the version CI pins |
+| Go tests | `KUBEBUILDER_ASSETS="$(go tool setup-envtest use 1.36.2 -p path)" go test ./...` |
+| Regenerate the resources' Go code | `go tool controller-gen object paths=./api/...` |
 | Build the pipeline's images and load them into kind | `uv run scripts/build_images.py` |
 | Test the installed charts | `EDGAR_KUBE_CONTEXT=kind-edgar uv run pytest tests/test_kind.py` |
 | Snapshot a feed | `uv run scripts/snapshot.py FEED URL ...`, with `SEC_USER_AGENT` in the environment or `.env.dev` |
@@ -277,10 +282,10 @@ and nothing beyond it.
    ([commits and pull requests](#commits-and-pull-requests)): it keeps both
    tasks' entries, and names the next task again.
 9. **Verify.** Run the checks CI runs, from [commands](#commands): the format
-   check, the lint, the type check, the tests, and
-   `uv run scripts/verify.py --since origin/main`. Check that each new test
-   fails without the behavior it covers. Runs against the SEC wait for the
-   owner, and only one runs at a time, across every checkout and worktree
+   check, the lint, the type check, the tests, the Go checks, the Go tests,
+   and `uv run scripts/verify.py --since origin/main`. Check that each new
+   test fails without the behavior it covers. Runs against the SEC wait for
+   the owner, and only one runs at a time, across every checkout and worktree
    ([FETCH-7](spec/snapshots.md#10-fetching)). A worktree has no `.env.dev`,
    because git ignores it, so a run there takes `SEC_USER_AGENT` from the
    environment. Report only what you ran, with its outcome.

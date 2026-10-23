@@ -91,8 +91,8 @@ each once the one before it is ready
 ([`spec/deployment.md`](spec/deployment.md)): the Prometheus operator's
 definitions; cert-manager; the operators, CloudNativePG and its Barman Cloud
 plugin, with the remaining definitions; and the umbrella chart, with NATS
-JetStream, Garage, PostgreSQL 18, and kube-prometheus-stack. It needs Docker,
-kind, kubectl, and Helm 4.
+JetStream, Garage, PostgreSQL 18, kube-prometheus-stack, and the scheduler,
+with the pipeline's controls. It needs Docker, kind, kubectl, and Helm 4.
 
 ```sh
 kind create cluster --config deploy/kind.yaml
@@ -111,6 +111,13 @@ own images from the commit checked out, from their Dockerfiles under
 nodes; it refuses a working tree with uncommitted changes. The umbrella
 chart runs each by that commit, its value `images.commit`, and never pulls
 one.
+
+The controls are custom resources the umbrella chart renders from its
+values ([`spec/controls.md`](spec/controls.md)): a `Source` for each
+company's `submissions`, polled every 10 seconds, and the `SecAccess`, which
+the chart's values pause, so nothing is sent to the SEC until the owner's
+values allow it. A control changes only through the values, with
+`helm upgrade`.
 
 `deploy/edgar-values.yaml`, which git ignores, holds what the umbrella chart
 requires and no committed file sets: each credential, and a name for the

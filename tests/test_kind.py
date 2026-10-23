@@ -23,7 +23,7 @@ import re
 import subprocess
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -823,6 +823,105 @@ def test_a_stream_by_interest_refuses_or_keeps_each_message_while_the_job_makes_
         jetstream("STREAM.DELETE.NATS6TEST")
         kubectl("delete", "pod", "-n", NAMESPACE, name, "--wait=false")
         kubectl("delete", "configmap", "-n", NAMESPACE, name)
+
+
+# SCHED
+
+
+SCHEDULER = "app.kubernetes.io/name=scheduler,app.kubernetes.io/instance=edgar"
+
+
+def scheduler_lease() -> dict[str, Any]:
+    lease = kubectl_json("get", "lease", "-n", NAMESPACE, "scheduler")
+    assert isinstance(lease, dict)
+    return lease
+
+
+def holder(lease: dict[str, Any]) -> str:
+    """The pod that holds the Lease: its identity is the pod's name, an
+    underscore, and an ID of its own."""
+    identity = lease["spec"].get("holderIdentity") or ""
+    return str(identity).split("_", 1)[0]
+
+
+def lease_time(value: str) -> datetime:
+    """A Lease's time, RFC 3339 with microseconds."""
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def running(selector: str) -> list[dict[str, Any]]:
+    return [
+        pod
+        for pod in pods(selector)
+        if pod["status"].get("phase") == "Running" and "deletionTimestamp" not in pod["metadata"]
+    ]
+
+
+@pytest.mark.spec("SCHED-5")
+def test_the_schedulers_pods_run_on_two_worker_nodes_and_one_holds_the_lease() -> None:
+    workers = {
+        node["metadata"]["name"]
+        for node in kubectl_json("get", "nodes")["items"]
+        if "node-role.kubernetes.io/control-plane" not in node["metadata"]["labels"]
+    }
+    scheduler = running(SCHEDULER)
+    nodes = [pod["spec"]["nodeName"] for pod in scheduler]
+    lease = scheduler_lease()
+
+    assert len(scheduler) == 2
+    assert len(set(nodes)) == 2
+    assert set(nodes) <= workers
+    assert holder(lease) in {pod["metadata"]["name"] for pod in scheduler}
+    assert (
+        lease["spec"]["leaseDurationSeconds"] == values()["scheduler"]["lease"]["durationSeconds"]
+    )
+
+
+@pytest.mark.spec("SCHED-5")
+def test_another_pod_holds_the_lease_before_its_duration_when_its_holder_is_deleted() -> None:
+    lease = scheduler_lease()
+    deleted = holder(lease)
+    duration = lease["spec"]["leaseDurationSeconds"]
+    renewed = lease_time(lease["spec"]["renewTime"])
+    assert deleted
+
+    kubectl("delete", "pod", "-n", NAMESPACE, deleted, "--wait=false")
+    try:
+
+        def taken_over() -> dict[str, Any] | None:
+            now = scheduler_lease()
+            return now if holder(now) not in ("", deleted) else None
+
+        taken = wait_until(taken_over, 90, "another scheduler pod to hold the Lease")
+        # The holder renewed it at least as late as renewed, so another pod
+        # took it over before its duration passed since its last renewal.
+        acquired = lease_time(taken["spec"]["acquireTime"])
+        assert acquired < renewed + timedelta(seconds=duration)
+    finally:
+        kubectl("rollout", "status", "-n", NAMESPACE, "deployment/scheduler", "--timeout=180s")
+
+
+@pytest.mark.spec("SOURCE-1", "SOURCE-3")
+def test_the_scheduler_sets_the_conditions_of_the_charts_sources() -> None:
+    # CI installs the chart's default values, which pause the SecAccess (VAL-4).
+    expected = {
+        name: {"Polling": ("False", "RequestsPaused"), "WithinBudget": ("True", "WithinBudget")}
+        for name in values()["controls"]["sources"]
+    }
+
+    def set_as_expected() -> bool:
+        found = {
+            source["metadata"]["name"]: {
+                condition["type"]: (condition["status"], condition["reason"])
+                for condition in source.get("status", {}).get("conditions", [])
+            }
+            for source in kubectl_json("get", "sources.edgar.nathanslaughter.com", "-n", NAMESPACE)[
+                "items"
+            ]
+        }
+        return found == expected
+
+    wait_until(set_as_expected, 60, "the Sources' conditions")
 
 
 # GARAGE
