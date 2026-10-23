@@ -112,9 +112,13 @@ a filing's two lags differ by the Eastern offset until a finding settles
 which is right ([§10 of the notices][notices-lags]). The lags can settle it
 themselves: a filing is public only once it's accepted, so a time from
 which a lag's high bound falls below zero isn't when the filing was
-accepted. Such a finding changes one function in `notices.sql`, in a new
-version of the notices specification, and nothing stored ([notices' open
-question 2][notices-questions]). And
+accepted. Such a finding changes how the view reads that time, in
+`notices.sql`, in a new version of the notices specification, and nothing
+stored: one function, or, since `submissions` can change how it gives a
+filing's time ([SRC-24]), a reading of the time by when the filing's list
+was fetched. A database that already holds the view takes the change
+through a migration ([notices' open question 2][notices-questions],
+[`deployment.md`, §9][deployment-later]). And
 `edgar-asof` has no default interpreter of acceptance times ([TIME-9]):
 whether the header's digits read as Eastern time become its default waits
 on a finding that compares more headers with `submissions` than [SRC-2] and

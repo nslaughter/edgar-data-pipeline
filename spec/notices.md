@@ -703,10 +703,17 @@ The view `lags` has these columns:
    public only once it's accepted ([0010]), so an acceptance time from
    which a filing's lag has a high bound below zero is later than when
    its Source showed it, and isn't when it was accepted. A finding that
-   settles it changes the function `listed_instant` or `header_instant` in
-   `notices.sql`, in a new version of this document, and nothing stored;
-   a database that already holds the function takes the change through a
-   migration ([`deployment.md`, §9](deployment.md#9-later-versions)).
+   settles it changes how `lags` reads that time, in `notices.sql`, in a
+   new version of this document, and nothing stored: the function
+   `listed_instant` or `header_instant`, where one reading holds for every
+   time the record keeps. Since `submissions` can change how it gives the
+   times of filings it already lists ([SRC-24]), and a function of the
+   time alone can't tell one form from another, the finding may instead
+   show when it did, and `lags` read each filing's time by when its list
+   was fetched: the `received_at` of its `listed_by` record, which changes
+   what `lags` joins too. A database that already holds the view and its
+   functions takes the change through a migration
+   ([`deployment.md`, §9](deployment.md#9-later-versions)).
 3. **Exact gaps.** A job gives neither its due time nor its Source's
    cadence, so [§5](#5-polls-coverage-and-gaps) takes each poll's window as
    the cadence. A shortened cadence can hide a poll missed at the change,
@@ -769,7 +776,10 @@ version 0.1.0 does.
   [LIST-2], which adds a Backfill's filings to `filings` as [SEEN-2] adds
   a poll's.
 - **Open question 2** asks which acceptance time is right, not only the
-  header's zone, and says how the lags can settle it.
+  header's zone. It says how the lags can settle it, and that a finding
+  that settles it changes a function, or, since `submissions` can change
+  how it gives a filing's time, has `lags` read the time by when its list
+  was fetched.
 - **`notices.sql`**'s comments cite the new findings. Its tables, views,
   and functions don't change.
 

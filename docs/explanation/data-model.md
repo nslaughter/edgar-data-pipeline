@@ -373,9 +373,12 @@ finding settles which is right ([0010]).
 
 The lags can settle it themselves: a filing is public only once it's
 accepted, so a time from which a lag's high bound falls below zero isn't
-when the filing was accepted. A finding that settles it changes one
-function in `notices.sql`, in a new version of the notices specification,
-and nothing stored ([open questions of the notices][notices-open]).
+when the filing was accepted. A finding that settles it changes how
+`lags` reads that time, in `notices.sql`, in a new version of the notices
+specification, and nothing stored: one function, or, since `submissions`
+can change how it gives a filing's time ([SRC-24]), a reading of the time
+by when the filing's list was fetched
+([open questions of the notices][notices-open]).
 
 `edgar-asof` keeps the same rule: it compares or converts raw times only
 through an interpreter the caller passes. It provides one that reads
