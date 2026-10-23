@@ -141,15 +141,29 @@ func (p *Poller) stop(name string) {
 // due its cadence after the one before it was due, queued no earlier, and
 // skipped if it can't be queued before the one after it is due. A new
 // cadence applies from the next poll, which is due the new cadence after the
-// last poll queued was due (SOURCE-2).
+// last poll queued was due (SOURCE-2). A change to the Source's Poll is
+// applied before any further attempt to queue a poll, even one that follows
+// at once an attempt that failed when its poll expired.
 func (p *Poller) run(ctx context.Context, name string, poll Poll, updates <-chan Poll) {
 	log := p.Log.WithValues("source", name)
 	due := p.Clock.Now()
 	var lastQueued time.Time
 	var id string
+	apply := func(next Poll) {
+		if next.Cadence != poll.Cadence && !lastQueued.IsZero() {
+			due = lastQueued.Add(next.Cadence)
+			id = ""
+		}
+		poll = next
+	}
 	timer := p.Clock.NewTimer(time.Hour)
 	defer timer.Stop()
 	for {
+		select {
+		case next := <-updates:
+			apply(next)
+		default:
+		}
 		// Act on what's due, then wait until the next poll is due, or the
 		// next attempt to queue one.
 		now := p.Clock.Now()
@@ -186,11 +200,7 @@ func (p *Poller) run(ctx context.Context, name string, poll Poll, updates <-chan
 		case <-ctx.Done():
 			return
 		case next := <-updates:
-			if next.Cadence != poll.Cadence && !lastQueued.IsZero() {
-				due = lastQueued.Add(next.Cadence)
-				id = ""
-			}
-			poll = next
+			apply(next)
 		case <-timer.C():
 		}
 	}

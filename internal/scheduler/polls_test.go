@@ -31,21 +31,41 @@ type fakePublisher struct {
 	kept     []published
 	refusing bool
 	attempts int
+	// expiring, if set, is called with the next attempt's job in place of
+	// the attempt, which then fails, as one that waits until its job
+	// expires: the function stands for that wait, and moves the clock on to
+	// the job's expiry.
+	expiring func(messages.Job)
 }
 
 func (p *fakePublisher) Publish(_ context.Context, subject string, data []byte, id string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.attempts++
-	if p.refusing {
-		return errors.New("refused")
-	}
 	var job messages.Job
 	if err := json.Unmarshal(data, &job); err != nil {
 		return err
 	}
+	p.mu.Lock()
+	p.attempts++
+	expiring := p.expiring
+	p.expiring = nil
+	p.mu.Unlock()
+	if expiring != nil {
+		expiring(job)
+		return context.DeadlineExceeded
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.refusing {
+		return errors.New("refused")
+	}
 	p.kept = append(p.kept, published{Subject: subject, ID: id, Job: job, Data: data})
 	return nil
+}
+
+// expire has the next attempt wait, as wait does, and fail.
+func (p *fakePublisher) expire(wait func(messages.Job)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.expiring = wait
 }
 
 func (p *fakePublisher) jobs() []published {
@@ -304,6 +324,38 @@ func TestANewCadenceAppliesFromTheNextPollDueTheNewCadenceAfterTheLastQueuedWasD
 	queuedAt, expiresAt := pt.queued()
 	equal(t, "a shorter cadence", queuedAt, []string{at(0), at(30), at(35), at(36), at(39)})
 	equal(t, "a shorter cadence, expiring", expiresAt, []string{at(10), at(60), at(36), at(39), at(42)})
+}
+
+// spec: SOURCE-2
+func TestANewCadenceAppliesBeforeTheNextTryAfterOneThatFailedWhenItsPollExpired(t *testing.T) {
+	pt := newPollerTest(t)
+	pt.start()
+	pt.set(true, 10*time.Second)
+	// The poll due at 10 waits to be queued until it expires, at 20, and
+	// fails; meanwhile, at 12, the owner changes the cadence to 100.
+	pt.publisher.expire(func(job messages.Job) {
+		pt.clock.Step(2 * time.Second)
+		pt.poller.Set("apple-submissions", Poll{
+			Polling: true,
+			Feed:    "submissions",
+			URL:     "https://data.sec.gov/submissions/CIK0000320193.json",
+			Cadence: 100 * time.Second,
+		})
+		expires, err := time.Parse(v1alpha1.TimestampLayout, job.ExpiresAt)
+		if err != nil {
+			t.Error(err)
+		}
+		pt.clock.SetTime(expires)
+	})
+	pt.to(10)
+	// The next poll is due 100 seconds after the last queued was due, at
+	// 100, so none is tried at 20 at the old cadence.
+	queuedAt, _ := pt.queued()
+	equal(t, "when the poll due at 10 expired", queuedAt, []string{at(0)})
+	pt.to(100)
+	queuedAt, expiresAt := pt.queued()
+	equal(t, "queued", queuedAt, []string{at(0), at(100)})
+	equal(t, "expiring", expiresAt, []string{at(10), at(200)})
 }
 
 // spec: SOURCE-2
