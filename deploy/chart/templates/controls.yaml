@@ -31,7 +31,7 @@ spec:
 apiVersion: edgar.nathanslaughter.com/v1alpha1
 kind: Source
 metadata:
-  name: {{ $name }}
+  name: {{ $name | quote }}
   namespace: {{ $.Release.Namespace }}
 spec:
   {{- toYaml $spec | nindent 2 }}
@@ -41,7 +41,7 @@ spec:
 apiVersion: edgar.nathanslaughter.com/v1alpha1
 kind: Backfill
 metadata:
-  name: {{ $name }}
+  name: {{ $name | quote }}
   namespace: {{ $.Release.Namespace }}
 spec:
   {{- toYaml $spec | nindent 2 }}

@@ -237,6 +237,24 @@ def test_the_chart_renders_a_backfill_for_each_entry_named_by_its_key() -> None:
     assert by_kind[("SecAccess", "cluster")]["spec"] == secaccess
 
 
+@pytest.mark.spec("VAL-1", "VAL-2")
+def test_each_control_is_named_by_its_key_even_one_yaml_reads_as_another_type() -> None:
+    # Each is a name the API server accepts, which YAML would read, unquoted,
+    # as a number, a boolean, or null.
+    names = ["123", "1e3", "0x10", "true", "yes", "null"]
+    found = controls_rendered(
+        with_controls(
+            sources={name: source() for name in names},
+            backfills={name: backfill() for name in names},
+        )
+    )
+
+    for kind in ("Source", "Backfill"):
+        rendered_names = [doc["metadata"]["name"] for doc in found if doc["kind"] == kind]
+        assert all(isinstance(name, str) for name in rendered_names), rendered_names
+        assert sorted(rendered_names) == sorted(names)
+
+
 @pytest.mark.spec("VAL-1")
 def test_no_other_chart_renders_a_control() -> None:
     for chart, _, _ in RELEASES[:-1]:
