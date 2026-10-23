@@ -389,9 +389,16 @@ chart creates or changes them ([0010], owner's decision 5).
    lists it** (Q4). If new filings' fetches end without a version, a later
    version queues them again after a delay; until then, a Backfill fetches
    them again.
-2. **The header's time zone.** The lags read it as US Eastern time; a
-   finding that settles it changes the function `header_instant`, and
-   nothing stored.
+2. **Which acceptance time is right, and the header's time zone.** The
+   lags read `submissions`' time as the instant it states and the header's
+   digits as US Eastern time, and the two differ by the Eastern offset
+   ([SRC-25]). A time from which a filing's lag has a high bound below zero
+   isn't when it was accepted, so the lags can settle it. A finding that
+   does changes how the view reads that time, and nothing stored: one
+   function, or, since `submissions` can change how it gives a filing's
+   time ([SRC-24]), a reading by when the filing's list was fetched. A
+   database that already holds the view takes the change through a
+   migration ([`deployment.md`, §9][deployment-later]).
 3. **Exact gaps.** A job gives neither its due time nor its Source's
    cadence, so each poll's window stands in for the cadence. A shortened
    cadence can hide a poll missed at the change, and a lengthened one can
