@@ -404,6 +404,12 @@ PRIMES = [2147483647, 2147483629, 2147483587, 2147483579, 2147483563, 2147483549
 def test_the_budget_holds_for_cadences_whose_exact_sum_is_too_large_to_hold() -> None:
     assert not refused(with_controls(sources=sources_at(*PRIMES, 1, 1)))
     assert refused(with_controls(sources=sources_at(*PRIMES, 1, 1, 1)))
+    # 1/2147483647 + 1/2147483629 + 1 + 1 + 1/2 is about 2.5000000009: over
+    # the budget, but too near it for floating point to place, so the chart
+    # refuses it as too near.
+    near = render("chart", with_controls(sources=sources_at(*PRIMES[:2], 1, 1, 2)))
+    assert near.returncode != 0
+    assert "too near the budget" in near.stderr
 
 
 @pytest.mark.spec("VAL-4")
