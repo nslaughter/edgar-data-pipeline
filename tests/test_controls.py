@@ -360,8 +360,9 @@ def test_the_values_schema_requires_each_sources_cadence_an_integer_of_at_least_
 
 
 def sources_at(*cadences: int, paused: tuple[int, ...] = ()) -> dict[str, Any]:
+    """Sources at the cadences given, named so the chart sums them in that order."""
     return {
-        f"source-{i}": source(cadence, **({"paused": True} if cadence in paused else {}))
+        f"source-{i:02d}": source(cadence, **({"paused": True} if cadence in paused else {}))
         for i, cadence in enumerate(cadences)
     }
 
@@ -394,22 +395,38 @@ def test_paused_sources_dont_count_toward_the_budget() -> None:
     assert refused(with_controls(sources=sources_at(1, 1, 2, 7)))
 
 
-# Primes below 2^31, so the exact sum of their reciprocals has a denominator
-# too large to hold, and the chart compares it in floating point. The chart
-# sums the Sources in the order of their names, so these come first.
+# Primes below 2^31, so the sum of their reciprocals needs a denominator too
+# large for an int64, and the chart sums them again with integers of any
+# size. The chart sums the Sources in the order of their names, so these come
+# first.
 PRIMES = [2147483647, 2147483629, 2147483587, 2147483579, 2147483563, 2147483549]
+# With 3263442, cadences whose reciprocals sum to exactly 5/2, though the sum
+# of the first nine already needs a denominator too large for an int64.
+EXACTLY_THE_BUDGET = [1894, 8, 44, 12, 1, 3192, 1809, 3581556, 3267056, 3585342, 3270672, 1, 4, 57]
 
 
 @pytest.mark.spec("VAL-3")
-def test_the_budget_holds_for_cadences_whose_exact_sum_is_too_large_to_hold() -> None:
-    assert not refused(with_controls(sources=sources_at(*PRIMES, 1, 1)))
-    assert refused(with_controls(sources=sources_at(*PRIMES, 1, 1, 1)))
-    # 1/2147483647 + 1/2147483629 + 1 + 1 + 1/2 is about 2.5000000009: over
-    # the budget, but too near it for floating point to place, so the chart
-    # refuses it as too near.
-    near = render("chart", with_controls(sources=sources_at(*PRIMES[:2], 1, 1, 2)))
-    assert near.returncode != 0
-    assert "too near the budget" in near.stderr
+@pytest.mark.parametrize(
+    ("cadences", "within"),
+    [
+        ([*PRIMES, 1, 1], True),
+        ([*PRIMES, 1, 1, 1], False),
+        # About 2.5000000009.
+        ([*PRIMES[:2], 1, 1, 2], False),
+        ([*EXACTLY_THE_BUDGET, 3263442], True),
+        # 5/2, less and more by about 9.4e-14.
+        ([*EXACTLY_THE_BUDGET, 3263443], True),
+        ([*EXACTLY_THE_BUDGET, 3263441], False),
+    ],
+)
+def test_the_budget_is_exact_for_sums_too_large_for_an_int64(
+    cadences: list[int], within: bool
+) -> None:
+    result = render("chart", with_controls(sources=sources_at(*cadences)))
+
+    assert (result.returncode == 0) is within, result.stderr
+    if not within:
+        assert "more than the budget of 5/2" in result.stderr
 
 
 @pytest.mark.spec("VAL-4")

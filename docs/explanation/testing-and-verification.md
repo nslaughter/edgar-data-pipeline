@@ -151,9 +151,10 @@ stops before the other could take it over, at timings whose retry period
 and renewal deadline together pass the Lease's duration ([SCHED-4]); and
 poll events, read through `scheduler-polls` once it exists, setting each
 Source's poll times ([SOURCE-4], [SCHED-9]). Rendering the umbrella chart
-checks the controls it renders from its values, and the values it refuses
-([VAL-1] to [VAL-4]), and the grants on them across the four charts
-([RBAC-1], [RBAC-4]).
+checks the controls it renders from its values, and the values it refuses,
+the budget summed exactly however many digits the sum needs ([VAL-1] to
+[VAL-4]), and the grants on them across the four charts ([RBAC-1],
+[RBAC-4]).
 
 **The charts, rendered and installed.** The deployment's invariants are
 checked by rendering each of the four charts with `helm template`; the
