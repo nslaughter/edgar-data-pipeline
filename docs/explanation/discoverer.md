@@ -1,7 +1,7 @@
 # The discoverer
 
 <!-- status: Discoverer -->
-**Status** ([status page](../status.md)): Discoverer: Decided; specified in part.
+**Status** ([status page](../status.md)): Discoverer: Specified.
 <!-- end status -->
 
 The discoverer reads what the fetcher fetched and makes the record of
