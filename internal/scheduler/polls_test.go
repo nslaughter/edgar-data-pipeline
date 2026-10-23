@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -25,12 +27,22 @@ type published struct {
 	Data    []byte
 }
 
-// fakePublisher keeps what's published, or refuses it while refusing.
+func (p published) String() string {
+	return fmt.Sprintf("%s: %+v", p.Subject, p.Job)
+}
+
+// fakePublisher keeps what's published, or refuses it while refusing. While
+// losing, it keeps what's published but returns an error, as when JetStream
+// keeps a message but its acknowledgement is lost. A message published again
+// with the id of one it kept is kept once, as within JetStream's duplicate
+// window.
 type fakePublisher struct {
 	mu       sync.Mutex
 	kept     []published
 	refusing bool
-	attempts int
+	losing   bool
+	// attempts holds each attempt's id.
+	attempts []string
 	// expiring, if set, is called with the next attempt's job in place of
 	// the attempt, which then fails, as one that waits until its job
 	// expires: the function stands for that wait, and moves the clock on to
@@ -44,7 +56,7 @@ func (p *fakePublisher) Publish(_ context.Context, subject string, data []byte, 
 		return err
 	}
 	p.mu.Lock()
-	p.attempts++
+	p.attempts = append(p.attempts, id)
 	expiring := p.expiring
 	p.expiring = nil
 	p.mu.Unlock()
@@ -57,7 +69,12 @@ func (p *fakePublisher) Publish(_ context.Context, subject string, data []byte, 
 	if p.refusing {
 		return errors.New("refused")
 	}
-	p.kept = append(p.kept, published{Subject: subject, ID: id, Job: job, Data: data})
+	if !slices.ContainsFunc(p.kept, func(k published) bool { return k.ID == id }) {
+		p.kept = append(p.kept, published{Subject: subject, ID: id, Job: job, Data: data})
+	}
+	if p.losing {
+		return errors.New("acknowledgement lost")
+	}
 	return nil
 }
 
@@ -78,6 +95,19 @@ func (p *fakePublisher) refuse(refusing bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.refusing = refusing
+}
+
+func (p *fakePublisher) lose(losing bool) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.losing = losing
+}
+
+// tried gives each attempt's id.
+func (p *fakePublisher) tried() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]string(nil), p.attempts...)
 }
 
 var start = time.Date(2026, 10, 22, 14, 0, 0, 0, time.UTC)
@@ -268,11 +298,8 @@ func TestAPollThatCantBeQueuedBeforeTheNextIsDueIsSkipped(t *testing.T) {
 	pt.publisher.refuse(true)
 	pt.set(true, 10*time.Second)
 	pt.to(12.5)
-	pt.publisher.mu.Lock()
-	attempts := pt.publisher.attempts
-	pt.publisher.mu.Unlock()
 	// The first poll was tried each second until the second was due.
-	if attempts < 10 {
+	if attempts := len(pt.publisher.tried()); attempts < 10 {
 		t.Fatalf("tried %d times", attempts)
 	}
 	pt.publisher.refuse(false)
@@ -290,19 +317,58 @@ func TestAPollThatCantBeQueuedBeforeTheNextIsDueIsSkipped(t *testing.T) {
 	equal(t, "after a pause, expiring", expiresAt, []string{at(20), at(40)})
 }
 
+// triedAs checks that the publisher was given n attempts, each with the id
+// given.
+func triedAs(t *testing.T, p *fakePublisher, id string, n int) {
+	t.Helper()
+	tried := p.tried()
+	if len(tried) != n {
+		t.Fatalf("%d attempts: %v", len(tried), tried)
+	}
+	for i, attempt := range tried {
+		if attempt != id {
+			t.Errorf("attempt %d had the id %s, not the job's, %s", i, attempt, id)
+		}
+	}
+}
+
 // spec: SOURCE-2
 func TestAPollRetriedIsOneJob(t *testing.T) {
-	pt := newPollerTest(t)
-	pt.start()
-	pt.publisher.refuse(true)
-	pt.set(true, 10*time.Second)
-	pt.to(2)
-	pt.publisher.refuse(false)
-	pt.to(3)
-	jobs := pt.publisher.jobs()
-	if len(jobs) != 1 || jobs[0].Job.QueuedAt != at(3) || jobs[0].Job.ExpiresAt != at(10) {
-		t.Fatalf("got %+v", jobs)
-	}
+	t.Run("tried again after JetStream refused it", func(t *testing.T) {
+		pt := newPollerTest(t)
+		pt.start()
+		pt.publisher.refuse(true)
+		pt.set(true, 10*time.Second)
+		pt.to(2)
+		pt.publisher.refuse(false)
+		pt.to(3)
+		jobs := pt.publisher.jobs()
+		if len(jobs) != 1 || jobs[0].Job.QueuedAt != at(3) || jobs[0].Job.ExpiresAt != at(10) {
+			t.Fatalf("got %+v", jobs)
+		}
+		triedAs(t, pt.publisher, jobs[0].ID, 4)
+	})
+	t.Run("tried again after JetStream kept it but its acknowledgement was lost", func(t *testing.T) {
+		pt := newPollerTest(t)
+		pt.start()
+		pt.publisher.lose(true)
+		pt.set(true, 10*time.Second)
+		pt.to(2)
+		pt.publisher.lose(false)
+		pt.to(3)
+		// JetStream kept the first attempt, and each later one, with its id,
+		// was kept once.
+		jobs := pt.publisher.jobs()
+		if len(jobs) != 1 || jobs[0].Job.QueuedAt != at(0) || jobs[0].Job.ExpiresAt != at(10) {
+			t.Fatalf("got %+v", jobs)
+		}
+		triedAs(t, pt.publisher, jobs[0].ID, 4)
+		// The next poll is a job of its own.
+		pt.to(10)
+		if jobs = pt.publisher.jobs(); len(jobs) != 2 || jobs[1].ID == jobs[0].ID {
+			t.Fatalf("got %+v", jobs)
+		}
+	})
 }
 
 // spec: SOURCE-2
