@@ -32,9 +32,9 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
    header, its index page, and the XBRL instance the index page names.
    [FILE-1], [FILE-2], [FILE-3].
 2. **Each filing keeps both its acceptance times as given:** `submissions`'
-   `acceptanceDateTime`, as the first list read that names the filing gives
-   it, and the digits of its header's `ACCEPTANCE-DATETIME` ([0010]).
-   [SEEN-2], [FILE-3].
+   `acceptanceDateTime`, as the list the discoverer first added the filing
+   from gives it, and the digits of its header's `ACCEPTANCE-DATETIME`
+   ([0010]). [SEEN-2], [LIST-2], [FILE-3].
 3. **The record says when each Source first showed each filing:** between
    two of its polls, which the record names, and whether a gap lies between
    them. [SEEN-2], [SEEN-3], [LAG-1].
@@ -590,9 +590,10 @@ A notice's fields:
 The record keeps each time as its source gives it ([0010]): each record's
 `requested_at` and `received_at` by the fetcher's clock
 ([§6 of the store](snapshots.md#6-records)), each filing's
-`acceptanceDateTime` as the first list read that names it gives it
-([SEEN-2]), and the digits of its header's `ACCEPTANCE-DATETIME`. The view
-`lags` reads the acceptance times as instants:
+`acceptanceDateTime` as the list the discoverer first added it from gives
+it ([SEEN-2], [LIST-2]), and the digits of its header's
+`ACCEPTANCE-DATETIME`. The view `lags` reads the acceptance times as
+instants:
 
 - **`submissions`' `acceptanceDateTime`** as the instant it states, in RFC
   3339 with a `Z` ([SRC-25]);
@@ -615,10 +616,10 @@ finding settles which is right ([0010]).
 `submissions` can also change the time it gives a filing it already
 lists: between October 7 and October 16, 2026, it moved each of
 Microsoft's and Walmart's later by that offset, and changed no other column
-of them ([SRC-24]). `filings` keeps the time the first list read gave the
-filing, and the lags read that one; a later list's time is in that list's
-version in the bucket, which the lags don't read. So how a filing's two
-times differ can depend on when its first list was read.
+of them ([SRC-24]). `filings` keeps the time from the list the discoverer
+first added the filing from, and the lags read that one; a later list's
+time is in that list's version in the bucket, which the lags don't read.
+So how a filing's two times differ can depend on when that list was read.
 
 A Source first showed a filing after the request of its last poll that
 didn't show it was sent, and by the time the response of the first that did
@@ -760,10 +761,12 @@ version 0.1.0 does.
   digits are still read as Eastern time, now that each company's
   `submissions` gives a time later than them by the Eastern offset, not
   Apple's alone; that the lags from the two times then differ by that
-  offset; and that the lags read the time a filing's first list gave,
-  since `submissions` can change it.
+  offset; and that the lags read the time from the list a filing was
+  first added from, since `submissions` can change it.
 - **Guarantee 2,** `filings`' `acceptance_date_time`, and a filing
-  notice's `listed_acceptance` say so too.
+  notice's `listed_acceptance` say so too. Guarantee 2 also lists
+  [LIST-2], which adds a Backfill's filings to `filings` as [SEEN-2] adds
+  a poll's.
 - **Open question 2** asks which acceptance time is right, not only the
   header's zone, and says how the lags can settle it.
 - **`notices.sql`**'s comments cite the new findings. Its tables, views,

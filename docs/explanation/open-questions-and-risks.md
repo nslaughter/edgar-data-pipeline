@@ -511,9 +511,9 @@ revisit: whether to keep each company's `submissions` as the notice source
   companies' filings, not only Apple's, are later than their headers'
   digits read as Eastern time, by the Eastern offset on each date
   ([SRC-2], [SRC-25]). `submissions` can also change a filing's time after
-  it lists it ([SRC-24]). The lags read the time the first list read gives
-  a filing, so a filing's two lags differ by that offset until a finding
-  settles which is right ([§10 of the notices][notices-lags]).
+  it lists it ([SRC-24]). The lags read the time from the list a filing was
+  first added from, so a filing's two lags differ by that offset until a
+  finding settles which is right ([§10 of the notices][notices-lags]).
 - **A lag is only as good as its clocks.** The fetcher checks its clock
   against each response's `Date` ([0010], [METRIC-4]), which rests on an
   assumption ([above](#assumptions-not-yet-shown)).

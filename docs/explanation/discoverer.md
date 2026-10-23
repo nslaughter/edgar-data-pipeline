@@ -247,9 +247,10 @@ scope, adds at least 3,042 requests more ([SRC-20]).
 
 The record keeps each time as its source gives it: each record's
 `requested_at` and `received_at` by the fetcher's clock, each filing's
-`acceptanceDateTime` as the first list read gives it, and the 14 digits of
-its header's `ACCEPTANCE-DATETIME` ([§10 of the notices][notices-lags],
-[0010]). The view `lags` reads them as instants, only there:
+`acceptanceDateTime` as the list it was first added from gives it, and the
+14 digits of its header's `ACCEPTANCE-DATETIME`
+([§10 of the notices][notices-lags], [0010]). The view `lags` reads them as
+instants, only there:
 
 - `submissions`' `acceptanceDateTime` as the instant it states, in RFC 3339
   with a `Z` ([SRC-25]);
@@ -266,8 +267,8 @@ So a filing's lags from `submissions`' time are shorter than those from its
 header by that offset, until a finding settles which is right ([0010]).
 `submissions` can also change a filing's time after listing it, as it did
 for each of Microsoft's and Walmart's between October 7 and October 16,
-2026 ([SRC-24]), so how a filing's two times differ can depend on when its
-first list was read.
+2026 ([SRC-24]), so how a filing's two times differ can depend on when the
+list it was first added from was read.
 
 For each sighting, `lags` gives each lag, from each acceptance time to
 when the Source first showed the filing, as a low bound and a high bound:

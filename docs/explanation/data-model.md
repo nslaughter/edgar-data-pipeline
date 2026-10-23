@@ -358,8 +358,8 @@ The view `lags` reads the two acceptance times as instants
 ([§10 of the notices][notices-lags]):
 
 - **`submissions`' `acceptanceDateTime`** as the instant it states
-  ([SRC-25]), as the first list read gives it, since `submissions` can
-  change a filing's time after listing it ([SRC-24]).
+  ([SRC-25]), as the list the filing was first added from gives it, since
+  `submissions` can change a filing's time after listing it ([SRC-24]).
 - **The header's digits** as US Eastern time, `America/New_York`.
 
 Read so, the two disagree for each of the three companies: `submissions`

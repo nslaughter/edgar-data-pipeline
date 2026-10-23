@@ -44,7 +44,7 @@ be shown: that a filing's archived files never change after acceptance
 
 | Time | Where it comes from | After an outage |
 | --- | --- | --- |
-| Acceptance | The filing's header, `ACCEPTANCE-DATETIME` (SRC-1), with `submissions`' `acceptanceDateTime` beside it, as the first list read gives it (SRC-24, SRC-25); both kept as given, since which is right, and the header's time zone, are still to be established | Unaffected: it is read from the filing whenever the filing is fetched |
+| Acceptance | The filing's header, `ACCEPTANCE-DATETIME` (SRC-1), with `submissions`' `acceptanceDateTime` beside it, as the list the filing was first added from gives it (SRC-24, SRC-25); both kept as given, since which is right, and the header's time zone, are still to be established | Unaffected: it is read from the filing whenever the filing is fetched |
 | Public availability | Not stated by the SEC. It lies between acceptance and first seen, and the record measures the delay (Q4, [0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)) | Estimated from acceptance and the measured delay |
 | First seen | For each source, the pipeline's first poll that showed the filing, after the last that didn't | Bounded: after the last successful poll before the gap, and at or before the first poll after it; flagged as a gap |
 
