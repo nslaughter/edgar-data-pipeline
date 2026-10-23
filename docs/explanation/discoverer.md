@@ -266,8 +266,9 @@ they state, most of Microsoft's and a third of Walmart's don't ([SRC-25]).
 So a filing's lags from `submissions`' time are shorter than those from its
 header by that offset, until a finding settles which is right ([0010]).
 `submissions` can also change a filing's time after listing it, as it did
-for each of Microsoft's and Walmart's between October 7 and October 16,
-2026 ([SRC-24]), so how a filing's two times differ can depend on when the
+between October 7 and October 16, 2026, for every filing in Microsoft's
+and Walmart's `filings.recent`, and in Microsoft's first further file
+([SRC-24]), so how a filing's two times differ can depend on when the
 list it was first added from was read.
 
 For each sighting, `lags` gives each lag, from each acceptance time to

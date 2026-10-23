@@ -179,11 +179,13 @@ EDGAR gives a filing's acceptance time in two places, and they disagree. A
 filing's header gives 14 digits with no time zone ([SRC-1]). `submissions`
 gives a time in RFC 3339 with a `Z`, later than the header's digits read as
 US Eastern time by the Eastern offset on its date, for each of the three
-companies' filings ([SRC-25]). On October 7, 2026, only Apple's were; by
-October 16, `submissions` had moved each of Microsoft's and Walmart's later
-by that offset, for filings it already listed ([SRC-2], [SRC-24]). Read as
-UTC, `submissions`' times put most of Microsoft's recent filings, and a
-third of Walmart's, outside the hours the SEC gives for EDGAR ([SRC-25]).
+companies' filings ([SRC-25]). On October 7, 2026, of the eight filings
+whose headers are stored, only Apple's three were; by October 16,
+`submissions` had moved the time of every filing it already listed in
+Microsoft's and Walmart's `filings.recent`, and in Microsoft's first
+further file, later by that offset ([SRC-2], [SRC-24]). Read as UTC,
+`submissions`' times put most of Microsoft's recent filings, and a third
+of Walmart's, outside the hours the SEC gives for EDGAR ([SRC-25]).
 
 So the library never settles which is right:
 

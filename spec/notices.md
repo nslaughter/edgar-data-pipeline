@@ -614,9 +614,10 @@ each, and a filing whose times differ by that offset has lags from
 finding settles which is right ([0010]).
 
 `submissions` can also change the time it gives a filing it already
-lists: between October 7 and October 16, 2026, it moved each of
-Microsoft's and Walmart's later by that offset, and changed no other column
-of them ([SRC-24]). `filings` keeps the time from the list the discoverer
+lists: between October 7 and October 16, 2026, it moved the time of every
+filing in Microsoft's and Walmart's `filings.recent`, and in Microsoft's
+first further file, later by that offset, and changed no other column of
+them ([SRC-24]). `filings` keeps the time from the list the discoverer
 first added the filing from, and the lags read that one; a later list's
 time is in that list's version in the bucket, which the lags don't read.
 So how a filing's two times differ can depend on when that list was read.
