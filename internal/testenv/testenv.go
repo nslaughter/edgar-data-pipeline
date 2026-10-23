@@ -79,11 +79,30 @@ func StartKubernetes() (*envtest.Environment, *rest.Config, error) {
 // cleanup stops both.
 func NATS(t testing.TB) (*server.Server, jetstream.JetStream) {
 	t.Helper()
+	srv := StartNATS(t, -1, t.TempDir())
+	conn, err := nats.Connect(srv.ClientURL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(conn.Close)
+	js, err := jetstream.New(conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return srv, js
+}
+
+// StartNATS starts a NATS server with JetStream on a local port, a free one
+// if port is -1, keeping its store in the directory given, so a server
+// started again on its port and store has its streams. The test's cleanup
+// stops it.
+func StartNATS(t testing.TB, port int, store string) *server.Server {
+	t.Helper()
 	srv, err := server.NewServer(&server.Options{
 		Host:      "127.0.0.1",
-		Port:      -1,
+		Port:      port,
 		JetStream: true,
-		StoreDir:  t.TempDir(),
+		StoreDir:  store,
 		NoLog:     true,
 		NoSigs:    true,
 	})
@@ -94,20 +113,11 @@ func NATS(t testing.TB) (*server.Server, jetstream.JetStream) {
 	if !srv.ReadyForConnections(10 * time.Second) {
 		t.Fatal("NATS didn't start")
 	}
-	conn, err := nats.Connect(srv.ClientURL())
-	if err != nil {
-		t.Fatal(err)
-	}
 	t.Cleanup(func() {
-		conn.Close()
 		srv.Shutdown()
 		srv.WaitForShutdown()
 	})
-	js, err := jetstream.New(conn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return srv, js
+	return srv
 }
 
 // MakeJobs makes the stream JOBS, a work queue, as the chart's values have it.

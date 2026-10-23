@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -56,8 +55,7 @@ func run() error {
 
 	// It waits for NATS, which may start after it, and reconnects to it
 	// whenever it's lost.
-	conn, err := nats.Connect(natsURL, nats.Name("scheduler"), nats.RetryOnFailedConnect(true),
-		nats.MaxReconnects(-1), nats.ReconnectWait(2*time.Second))
+	conn, err := scheduler.ConnectNATS(natsURL)
 	if err != nil {
 		return err
 	}

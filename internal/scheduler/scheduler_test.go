@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -23,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -793,4 +795,84 @@ func TestPollEventsThroughTheConsumerSetEachSourcesPollTimes(t *testing.T) {
 			t.Errorf("consumers of RECORDS: %v", consumers)
 		}
 	})
+}
+
+// countingPublisher counts the attempts to publish through it.
+type countingPublisher struct {
+	Publisher
+	attempts atomic.Int32
+}
+
+func (p *countingPublisher) Publish(ctx context.Context, subject string, data []byte, id string) error {
+	p.attempts.Add(1)
+	return p.Publisher.Publish(ctx, subject, data, id)
+}
+
+// spec: SOURCE-1, SOURCE-2
+func TestAPollGivenUpWhileNATSIsLostIsNeverQueued(t *testing.T) {
+	ctx := context.Background()
+	store := t.TempDir()
+	srv := testenv.StartNATS(t, -1, store)
+	port := srv.Addr().(*net.TCPAddr).Port
+	conn, err := ConnectNATS(srv.ClientURL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(conn.Close)
+	js, err := jetstream.New(conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jobs := testenv.MakeJobs(ctx, t, js)
+	connection := func(want nats.Status) func() error {
+		return func() error {
+			if status := conn.Status(); status != want {
+				return fmt.Errorf("the connection is %s", status)
+			}
+			return nil
+		}
+	}
+
+	srv.Shutdown()
+	srv.WaitForShutdown()
+	testenv.Eventually(t, 10*time.Second, connection(nats.RECONNECTING))
+	publisher := &countingPublisher{Publisher: JetStreamPublisher{JetStream: js, Stream: messages.StreamJobs}}
+	poller := &Poller{Publisher: publisher, Clock: clock.RealClock{}, Retry: 100 * time.Millisecond, Log: logr.Discard()}
+	running, stop := context.WithCancel(ctx)
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		_ = poller.Start(running)
+	}()
+	t.Cleanup(func() {
+		stop()
+		<-stopped
+	})
+	poll := Poll{Polling: true, Feed: "submissions", URL: "https://data.sec.gov/submissions/CIK0000320193.json",
+		Cadence: time.Second}
+	poller.Set("polled", poll)
+	// Its first two polls expire, each when the next is due, while NATS is
+	// lost, and the owner pauses the Source while the third is being tried.
+	time.Sleep(2500 * time.Millisecond)
+	poll.Polling = false
+	poller.Set("polled", poll)
+	tried := publisher.attempts.Load()
+	if tried < 3 {
+		t.Fatalf("tried %d times to queue its polls", tried)
+	}
+
+	testenv.StartNATS(t, port, store)
+	testenv.Eventually(t, 10*time.Second, connection(nats.CONNECTED))
+	if err := conn.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		info, err := jobs.Info(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.State.Msgs != 0 {
+			t.Fatalf("once NATS was back, it kept %d of the %d tries made while it was lost", info.State.Msgs, tried)
+		}
+	}
 }

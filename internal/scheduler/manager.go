@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -210,6 +211,18 @@ func (m *manager) release(ctx context.Context) error {
 		m.log.Info("Released the Lease", "lease", m.lock.Describe())
 		return nil
 	})
+}
+
+// ConnectNATS connects to NATS at url, waiting for it if it isn't up yet, as
+// when it starts after the scheduler, and reconnecting whenever it's lost.
+// While it's reconnecting, a message published fails at once, as a poll's
+// job refused is, and is tried again until the next is due. nats.go would
+// otherwise hold it, to send on reconnecting, even after the scheduler had
+// given it up: after its Source was paused, or once it had expired
+// (SOURCE-1, SOURCE-2).
+func ConnectNATS(url string) (*nats.Conn, error) {
+	return nats.Connect(url, nats.Name("scheduler"), nats.RetryOnFailedConnect(true),
+		nats.MaxReconnects(-1), nats.ReconnectWait(2*time.Second), nats.ReconnectBufSize(-1))
 }
 
 // JetStreamPublisher publishes to a stream through JetStream, which
