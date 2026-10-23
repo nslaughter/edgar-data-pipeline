@@ -271,14 +271,19 @@ The view gives both bounds from each of the filing's two acceptance times
 ([VIEW-6]):
 
 - **From `submissions`' `acceptanceDateTime`,** read as the instant it
-  states ([SRC-2]): `listed_lag_low_seconds` and `listed_lag_high_seconds`.
+  states ([SRC-25]): `listed_lag_low_seconds` and `listed_lag_high_seconds`.
 - **From the header's `ACCEPTANCE-DATETIME`,** 14 digits that give no time
   zone ([SRC-1]), read as US Eastern time: `header_lag_low_seconds` and
-  `header_lag_high_seconds`. Read so, Microsoft's and Walmart's stored
-  headers agree with their `submissions`, and each of Apple's three is 4
-  hours earlier than its time in `submissions` ([SRC-2]), so Apple's lags
-  from one of the two show as outliers until a finding settles which is
-  right ([§10 of the notices][notices-lags]).
+  `header_lag_high_seconds`.
+
+Read so, each of the three companies' `submissions` gives a filing's time
+later than its header's by the Eastern offset on its date, 4 hours in
+daylight time and 5 in standard time ([SRC-25]). So a filing's lags from
+`submissions`' time are shorter than those from its header by that offset,
+until a finding settles which is right ([§10 of the notices][notices-lags]).
+The lags can settle it: a filing is public only once it's accepted, so a
+time from which a lag's high bound falls below zero isn't when the filing
+was accepted ([open question 2 of the notices][notices-open]).
 
 The view also says whether a gap lies between the two polls, which widens
 the bounds. It gives only the sightings with a last poll that didn't show
@@ -412,7 +417,7 @@ monitoring of observing filings ([§3 of the telemetry][ids];
 [monitoring]: ../design.md#monitoring
 [plan-observing]: ../plan.md#observing-filings
 [SRC-1]: ../../investigation/edgar.md#findings-so-far
-[SRC-2]: ../../investigation/edgar.md#findings-so-far
+[SRC-25]: ../../investigation/edgar.md#findings-so-far
 [ACCESS-3]: ../../spec/controls.md#8-secaccess
 [BACKFILL-3]: ../../spec/controls.md#7-backfill
 [secaccess]: ../../spec/controls.md#8-secaccess
@@ -434,6 +439,7 @@ monitoring of observing filings ([§3 of the telemetry][ids];
 [MSG-2]: ../../spec/notices.md#streams
 [notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [notices-lags]: ../../spec/notices.md#10-times-and-lags
+[notices-open]: ../../spec/notices.md#12-open-questions
 [notices-sightings]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [ORDER-1]: ../../spec/notices.md#8-backfills
 [SEEN-1]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing

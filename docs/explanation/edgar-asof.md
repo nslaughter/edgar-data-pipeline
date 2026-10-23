@@ -177,11 +177,13 @@ caller ([as of T][asof-facts-asof], [SRC-15]).
 
 EDGAR gives a filing's acceptance time in two places, and they disagree. A
 filing's header gives 14 digits with no time zone ([SRC-1]). `submissions`
-gives a time in RFC 3339 with a `Z`, 4 or 5 hours later than the header's
-digits for Microsoft's and Walmart's filings, as converting US Eastern time
-to UTC would make it, and 8 hours later for all three of Apple's stored
-filings ([SRC-2]). Read as UTC, `submissions`' times put most of Apple's
-filings outside the hours the SEC gives for EDGAR ([SRC-13]).
+gives a time in RFC 3339 with a `Z`, later than the header's digits read as
+US Eastern time by the Eastern offset on its date, for each of the three
+companies' filings ([SRC-25]). On October 7, 2026, only Apple's were; by
+October 16, `submissions` had moved each of Microsoft's and Walmart's later
+by that offset, for filings it already listed ([SRC-2], [SRC-24]). Read as
+UTC, `submissions`' times put most of Microsoft's recent filings, and a
+third of Walmart's, outside the hours the SEC gives for EDGAR ([SRC-25]).
 
 So the library never settles which is right:
 
@@ -208,8 +210,8 @@ times as given ([SEEN-2], [FILE-3]), and the view `lags` reads them only
 when it's queried: `submissions`' time as the instant it states, and the
 header's digits as US Eastern time, with a lag from each, side by side
 ([LAG-1]). Where the library leaves the choice to its caller, the view makes
-one for each source and shows both. A finding that settles the header's zone
-changes the view, and nothing stored
+one for each source and shows both. A finding that settles which is right,
+or the header's zone, changes the view, and nothing stored
 ([notices' open questions][the notices' open questions]).
 
 ### The cache, and where it departs from the snapshot store
@@ -464,11 +466,12 @@ Its state, as its plan and specifications gave it on October 14, 2026:
 [SRC-10]: ../../investigation/edgar.md#findings-so-far
 [SRC-11]: ../../investigation/edgar.md#findings-so-far
 [SRC-12]: ../../investigation/edgar.md#findings-so-far
-[SRC-13]: ../../investigation/edgar.md#findings-so-far
 [SRC-14]: ../../investigation/edgar.md#findings-so-far
 [SRC-15]: ../../investigation/edgar.md#findings-so-far
 [SRC-16]: ../../investigation/edgar.md#findings-so-far
 [SRC-17]: ../../investigation/edgar.md#findings-so-far
+[SRC-24]: ../../investigation/edgar.md#findings-so-far
+[SRC-25]: ../../investigation/edgar.md#findings-so-far
 [store-readers]: ../../spec/snapshots.md#readers-outside-the-pipeline
 [store-records]: ../../spec/snapshots.md#6-records
 [store-scope]: ../../spec/snapshots.md#9-scope

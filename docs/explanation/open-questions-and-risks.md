@@ -106,10 +106,15 @@ versions don't show which time is right for any of the three ([SRC-25]).
 `submissions` agree, and [T7] whether Apple's still differ by 8 hours
 ([investigation][plan-investigation]).
 
-Two things wait on the answer. The view of lags reads the header's digits
-as US Eastern time, and a finding that settles the zone changes one
-function in `notices.sql`, in a new version of the notices specification,
-and nothing stored ([notices' open question 2][notices-questions]). And
+Two things wait on the answer. The view of lags reads `submissions`' times
+as the instants they state, and the header's digits as US Eastern time, so
+a filing's two lags differ by the Eastern offset until a finding settles
+which is right ([§10 of the notices][notices-lags]). The lags can settle it
+themselves: a filing is public only once it's accepted, so a time from
+which a lag's high bound falls below zero isn't when the filing was
+accepted. Such a finding changes one function in `notices.sql`, in a new
+version of the notices specification, and nothing stored ([notices' open
+question 2][notices-questions]). And
 `edgar-asof` has no default interpreter of acceptance times ([TIME-9]):
 whether the header's digits read as Eastern time become its default waits
 on a finding that compares more headers with `submissions` than [SRC-2] and
@@ -506,8 +511,9 @@ revisit: whether to keep each company's `submissions` as the notice source
   companies' filings, not only Apple's, are later than their headers'
   digits read as Eastern time, by the Eastern offset on each date
   ([SRC-2], [SRC-25]). `submissions` can also change a filing's time after
-  it lists it ([SRC-24]). How the lags read `submissions`' times is for
-  [T44], a version of the notices.
+  it lists it ([SRC-24]). The lags read the time the first list read gives
+  a filing, so a filing's two lags differ by that offset until a finding
+  settles which is right ([§10 of the notices][notices-lags]).
 - **A lag is only as good as its clocks.** The fetcher checks its clock
   against each response's `Date` ([0010], [METRIC-4]), which rests on an
   assumption ([above](#assumptions-not-yet-shown)).
@@ -636,7 +642,6 @@ revisit: whether to keep each company's `submissions` as the notice source
 [T31]: ../plan.md#traces-logs-and-drills
 [T32]: ../plan.md#facts
 [T38]: ../plan.md#observing-filings
-[T44]: ../plan.md#observing-filings
 [T48]: ../plan.md#observing-filings
 [agents-rules]: ../../AGENTS.md#rules
 [agents-where]: ../../AGENTS.md#where-documents-go
