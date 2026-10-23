@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/url"
 	"os"
@@ -468,12 +467,16 @@ func TestOnlyTheReplicaThatHoldsTheLeaseActsAndOneStoppedReleasesIt(t *testing.T
 }
 
 // proxy relays TCP connections to the API server until it's cut, when it
-// closes them, and refuses new ones.
+// closes them and refuses new ones, or until it hangs, when it keeps them
+// open, and accepts new ones, but relays nothing more, as a network that
+// drops what it's sent.
 type proxy struct {
 	listener net.Listener
 	mu       sync.Mutex
 	conns    []net.Conn
 	cut      bool
+	hung     bool
+	closed   chan struct{}
 }
 
 func newProxy(t *testing.T, target string) *proxy {
@@ -482,7 +485,7 @@ func newProxy(t *testing.T, target string) *proxy {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &proxy{listener: listener}
+	p := &proxy{listener: listener, closed: make(chan struct{})}
 	go func() {
 		for {
 			conn, err := listener.Accept()
@@ -501,60 +504,118 @@ func newProxy(t *testing.T, target string) *proxy {
 			}
 			p.conns = append(p.conns, conn, upstream)
 			p.mu.Unlock()
-			go func() { _, _ = io.Copy(upstream, conn); _ = upstream.Close() }()
-			go func() { _, _ = io.Copy(conn, upstream); _ = conn.Close() }()
+			go p.relay(upstream, conn)
+			go p.relay(conn, upstream)
 		}
 	}()
 	t.Cleanup(p.cutOff)
 	return p
 }
 
+// relay copies what src sends to dst until either is closed. Once the proxy
+// hangs, it holds what it reads, and sends nothing more.
+func (p *proxy) relay(dst, src net.Conn) {
+	defer func() { _ = dst.Close() }()
+	buf := make([]byte, 32<<10)
+	for {
+		n, err := src.Read(buf)
+		if n > 0 {
+			p.mu.Lock()
+			hung := p.hung
+			p.mu.Unlock()
+			if hung {
+				<-p.closed
+				return
+			}
+			if _, err := dst.Write(buf[:n]); err != nil {
+				return
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
 func (p *proxy) cutOff() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.cut {
+		return
+	}
 	p.cut = true
+	close(p.closed)
 	_ = p.listener.Close()
 	for _, conn := range p.conns {
 		_ = conn.Close()
 	}
 }
 
+func (p *proxy) hang() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.hung = true
+}
+
 // spec: SCHED-4
 func TestAReplicaThatCantRenewTheLeaseStopsActingBeforeAnotherTakesItOver(t *testing.T) {
-	c := newClient(t)
-	release := newNamespace(t, c)
-	allowRequests(t, c)
-	newSource(t, c, release, "polled", 1, false)
-	server, err := url.Parse(restConfig.Host)
-	if err != nil {
-		t.Fatal(err)
-	}
-	relay := newProxy(t, server.Host)
-	relayed := rest.CopyConfig(restConfig)
-	relayed.Host = "https://" + relay.listener.Addr().String()
-	timings := lease{duration: 6 * time.Second, renew: 4 * time.Second, retry: time.Second}
-	cutOff := runScheduler(t, release, timings, relayed, nil)
-	elected(t, cutOff, 10*time.Second)
-	other := runScheduler(t, release, timings, restConfig, nil)
-	queuesAgain(t, cutOff, "polled")
+	for _, loss := range []struct {
+		name string
+		lose func(*proxy)
+	}{
+		{"its connections to the API server closed", (*proxy).cutOff},
+		{"its requests to the API server unanswered", (*proxy).hang},
+	} {
+		t.Run(loss.name, func(t *testing.T) {
+			c := newClient(t)
+			release := newNamespace(t, c)
+			allowRequests(t, c)
+			newSource(t, c, release, "polled", 1, false)
+			server, err := url.Parse(restConfig.Host)
+			if err != nil {
+				t.Fatal(err)
+			}
+			relay := newProxy(t, server.Host)
+			relayed := rest.CopyConfig(restConfig)
+			relayed.Host = "https://" + relay.listener.Addr().String()
+			timings := lease{duration: 6 * time.Second, renew: 4 * time.Second, retry: time.Second}
+			lost := runScheduler(t, release, timings, relayed, nil)
+			elected(t, lost, 10*time.Second)
+			other := runScheduler(t, release, timings, restConfig, nil)
+			queuesAgain(t, lost, "polled")
 
-	relay.cutOff()
-	select {
-	case <-cutOff.done:
-	case <-time.After(timings.renew + 3*timings.retry):
-		t.Fatal("the replica cut off from the API server didn't stop")
-	}
-	if cutOff.err == nil {
-		t.Error("the replica cut off from the API server stopped without an error")
-	}
-	elected(t, other, timings.duration+3*timings.retry)
-	queuesAgain(t, other, "polled")
-	polls := cutOff.polls("polled")
-	if last := polls[len(polls)-1]; last.After(cutOff.stoppedAt) {
-		t.Errorf("queued a poll at %s, after it stopped at %s", last, cutOff.stoppedAt)
-	}
-	if first := other.polls("polled")[0]; !first.After(cutOff.stoppedAt) {
-		t.Errorf("the other replica queued a poll at %s, before the first stopped at %s", first, cutOff.stoppedAt)
+			loss.lose(relay)
+			lostAt := time.Now()
+			select {
+			case <-lost.done:
+			case <-time.After(30 * time.Second):
+				t.Fatal("the replica that lost the API server didn't stop")
+			}
+			if lost.err == nil {
+				t.Error("the replica that lost the API server stopped without an error")
+			}
+			elected(t, other, timings.duration+3*timings.retry)
+			queuesAgain(t, other, "polled")
+			polls, taken := lost.polls("polled"), other.polls("polled")
+			// It stopped acting before the other could take the Lease over,
+			// so each of its polls came before the other's first.
+			if last := polls[len(polls)-1]; !last.Before(taken[0]) {
+				t.Errorf("it queued a poll at %s, after the other replica's first, at %s",
+					last.Format(time.StampMilli), taken[0].Format(time.StampMilli))
+			}
+			if last := polls[len(polls)-1]; last.After(lost.stoppedAt) {
+				t.Errorf("queued a poll at %s, after it stopped at %s", last, lost.stoppedAt)
+			}
+			if !taken[0].After(lost.stoppedAt) {
+				t.Errorf("the other replica queued a poll at %s, before the first stopped at %s", taken[0], lost.stoppedAt)
+			}
+			// It stopped within the renewal deadline of its first try to
+			// renew the Lease after it lost the API server, which came
+			// within a retry period.
+			if took := lost.stoppedAt.Sub(lostAt); took > timings.renew+2*timings.retry {
+				t.Errorf("it stopped %s after it lost the API server", took)
+			}
+		})
 	}
 }
 
