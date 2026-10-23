@@ -141,6 +141,7 @@ func allowRequests(t *testing.T, c client.Client) {
 // replica is one scheduler, run as one of its pods would run it.
 type replica struct {
 	mgr       ctrl.Manager
+	identity  string
 	publisher *fakePublisher
 	cancel    context.CancelFunc
 	done      chan struct{}
@@ -181,7 +182,7 @@ func runScheduler(t *testing.T, namespace string, timings lease, config *rest.Co
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.mgr = mgr
+	r.mgr, r.identity = mgr, opts.Identity
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
 	go func() {
@@ -677,14 +678,37 @@ func TestAReplicaThatCantRenewTheLeaseStopsActingBeforeAnotherTakesItOver(t *tes
 			relay := newProxy(t, server.Host)
 			relayed := rest.CopyConfig(restConfig)
 			relayed.Host = "https://" + relay.listener.Addr().String()
-			timings := lease{duration: 6 * time.Second, renew: 4 * time.Second, retry: time.Second}
+			// Timings the chart accepts (SCHED-3), whose retry period and
+			// renewal deadline together pass the Lease's duration: client-go
+			// tries to renew the Lease a retry period after its last renewal,
+			// and stops leading once that try has gone on for the renewal
+			// deadline, after another replica could take the Lease over.
+			timings := lease{duration: 6 * time.Second, renew: 4 * time.Second, retry: 3 * time.Second}
 			lost := runScheduler(t, release, timings, relayed, nil)
 			elected(t, lost, 10*time.Second)
 			other := runScheduler(t, release, timings, restConfig, nil)
 			queuesAgain(t, lost, "polled")
+			// While it renews the Lease, it acts past the renewal deadline.
+			time.Sleep(timings.renew + timings.retry)
+			select {
+			case <-lost.done:
+				t.Fatalf("it stopped while it could renew the Lease: %v", lost.err)
+			default:
+			}
+			queuesAgain(t, lost, "polled")
 
 			loss.lose(relay)
-			lostAt := time.Now()
+			// The Lease as the replica last renewed it: another replica can
+			// take it over once its duration has passed since.
+			time.Sleep(500 * time.Millisecond)
+			held := &coordinationv1.Lease{}
+			if err := c.Get(context.Background(), client.ObjectKey{Namespace: release, Name: "scheduler"}, held); err != nil {
+				t.Fatal(err)
+			}
+			if held.Spec.HolderIdentity == nil || *held.Spec.HolderIdentity != lost.identity || held.Spec.RenewTime == nil {
+				t.Fatalf("the Lease isn't the replica's: %+v", held.Spec)
+			}
+			takeable := held.Spec.RenewTime.Add(timings.duration)
 			select {
 			case <-lost.done:
 			case <-time.After(30 * time.Second):
@@ -693,7 +717,11 @@ func TestAReplicaThatCantRenewTheLeaseStopsActingBeforeAnotherTakesItOver(t *tes
 			if lost.err == nil {
 				t.Error("the replica that lost the API server stopped without an error")
 			}
-			elected(t, other, timings.duration+3*timings.retry)
+			if !lost.stoppedAt.Before(takeable) {
+				t.Errorf("it stopped at %s, once another replica could take the Lease over, at %s",
+					lost.stoppedAt.Format(time.StampMilli), takeable.Format(time.StampMilli))
+			}
+			elected(t, other, timings.duration+5*timings.retry)
 			queuesAgain(t, other, "polled")
 			polls, taken := lost.polls("polled"), other.polls("polled")
 			// It stopped acting before the other could take the Lease over,
@@ -707,12 +735,6 @@ func TestAReplicaThatCantRenewTheLeaseStopsActingBeforeAnotherTakesItOver(t *tes
 			}
 			if !taken[0].After(lost.stoppedAt) {
 				t.Errorf("the other replica queued a poll at %s, before the first stopped at %s", taken[0], lost.stoppedAt)
-			}
-			// It stopped within the renewal deadline of its first try to
-			// renew the Lease after it lost the API server, which came
-			// within a retry period.
-			if took := lost.stoppedAt.Sub(lostAt); took > timings.renew+2*timings.retry {
-				t.Errorf("it stopped %s after it lost the API server", took)
 			}
 		})
 	}

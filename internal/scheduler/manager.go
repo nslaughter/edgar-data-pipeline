@@ -6,7 +6,9 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -62,12 +64,12 @@ type Options struct {
 
 // NewManager returns the scheduler as a controller-runtime manager. Its
 // reconciler, its Poller, and its PollEvents run only while it holds the
-// Lease, and stop when it can't renew the Lease within the renewal deadline,
-// before another replica can take the Lease over. When its context is done,
-// as when Kubernetes stops its pod, it stops them, then releases the Lease,
-// so another replica takes it over without waiting out the Lease's duration
-// (SCHED-4). It records no Kubernetes Events, which it isn't granted
-// (SCHED-6).
+// Lease, and stop once the renewal deadline has passed since it last renewed
+// the Lease, before another replica can take the Lease over. When its
+// context is done, as when Kubernetes stops its pod, it stops them, then
+// releases the Lease, so another replica takes it over without waiting out
+// the Lease's duration (SCHED-4). It records no Kubernetes Events, which it
+// isn't granted (SCHED-6).
 func NewManager(restConfig *rest.Config, opts Options) (ctrl.Manager, error) {
 	scheme := runtime.NewScheme()
 	if err := v1alpha1.AddToScheme(scheme); err != nil {
@@ -77,11 +79,12 @@ func NewManager(restConfig *rest.Config, opts Options) (ctrl.Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	lock, err := resourcelock.New(resourcelock.LeasesResourceLock, opts.Namespace, opts.LeaseName,
+	leaseLock, err := resourcelock.New(resourcelock.LeasesResourceLock, opts.Namespace, opts.LeaseName,
 		clients.CoreV1(), clients.CoordinationV1(), resourcelock.ResourceLockConfig{Identity: opts.Identity})
 	if err != nil {
 		return nil, err
 	}
+	lock := &renewals{Interface: leaseLock, acquired: make(chan struct{})}
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme: scheme,
 		Logger: opts.Log,
@@ -148,29 +151,97 @@ func NewManager(restConfig *rest.Config, opts Options) (ctrl.Manager, error) {
 	if err := mgr.AddReadyzCheck("ping", healthz.Ping); err != nil {
 		return nil, err
 	}
-	return &manager{Manager: mgr, lock: lock, identity: opts.Identity, timeout: opts.RenewDeadline,
+	return &manager{Manager: mgr, lock: lock, identity: opts.Identity, renewDeadline: opts.RenewDeadline,
 		log: opts.Log}, nil
 }
 
-// manager is the scheduler's controller-runtime manager, which releases the
-// Lease once its work has stopped.
+// renewals is the Lease's lock, through which client-go's leader election
+// takes and renews the Lease, and which notes when this replica last sent a
+// write of the Lease that the API server accepted. The API server applied it
+// no sooner, and another replica counts the Lease's duration from when it
+// saw the write, later still, so none can take the Lease over until the
+// duration has passed since then.
+type renewals struct {
+	resourcelock.Interface
+	// acquired is closed once this replica first takes the Lease.
+	acquired chan struct{}
+	once     sync.Once
+	mu       sync.Mutex
+	last     time.Time
+}
+
+func (r *renewals) Create(ctx context.Context, record resourcelock.LeaderElectionRecord) error {
+	sent := time.Now()
+	err := r.Interface.Create(ctx, record)
+	r.note(record, sent, err)
+	return err
+}
+
+func (r *renewals) Update(ctx context.Context, record resourcelock.LeaderElectionRecord) error {
+	sent := time.Now()
+	err := r.Interface.Update(ctx, record)
+	r.note(record, sent, err)
+	return err
+}
+
+// note notes a write sent when given, if it made this replica the Lease's
+// holder.
+func (r *renewals) note(record resourcelock.LeaderElectionRecord, sent time.Time, err error) {
+	if err != nil || record.HolderIdentity != r.Identity() {
+		return
+	}
+	r.mu.Lock()
+	r.last = sent
+	r.mu.Unlock()
+	r.once.Do(func() { close(r.acquired) })
+}
+
+// renewed is when this replica last sent a write of the Lease, as its holder,
+// that the API server accepted.
+func (r *renewals) renewed() time.Time {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.last
+}
+
+// manager is the scheduler's controller-runtime manager, which stops its
+// work once the renewal deadline has passed since it last renewed the Lease,
+// and releases the Lease once its work has stopped.
 type manager struct {
 	ctrl.Manager
-	lock     resourcelock.Interface
+	lock     *renewals
 	identity string
-	// timeout bounds the release, as client-go bounds its own: the renewal
-	// deadline.
-	timeout time.Duration
-	log     logr.Logger
+	// renewDeadline bounds how long the work goes on after the last renewal,
+	// and the release, as client-go bounds its own.
+	renewDeadline time.Duration
+	log           logr.Logger
 }
 
 // Start runs the scheduler until ctx is done, or until it fails, as when it
-// can't renew the Lease. If ctx is done, and its work stopped within the
-// shutdown timeout, it then releases the Lease, if it held it. One whose
-// work hadn't stopped, or that couldn't renew the Lease, leaves the Lease to
-// expire.
+// can't renew the Lease. Once the renewal deadline has passed since it last
+// renewed the Lease, it stops its work, and fails. If ctx is done, and its
+// work stopped within the shutdown timeout, it then releases the Lease, if it
+// held it. One whose work hadn't stopped, or that couldn't renew the Lease,
+// leaves the Lease to expire.
 func (m *manager) Start(ctx context.Context) error {
-	if err := m.Manager.Start(ctx); err != nil {
+	ctx, stop := context.WithCancel(ctx)
+	defer stop()
+	expired := make(chan struct{})
+	watched := make(chan struct{})
+	go func() {
+		defer close(watched)
+		m.watch(ctx, stop, expired)
+	}()
+	err := m.Manager.Start(ctx)
+	stop()
+	<-watched
+	select {
+	case <-expired:
+		return errors.Join(fmt.Errorf("couldn't renew the Lease %s within its renewal deadline, %s",
+			m.lock.Describe(), m.renewDeadline), err)
+	default:
+	}
+	if err != nil {
 		return err
 	}
 	select {
@@ -178,12 +249,43 @@ func (m *manager) Start(ctx context.Context) error {
 	default:
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), m.timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), m.renewDeadline)
 	defer cancel()
 	if err := m.release(ctx); err != nil {
 		return fmt.Errorf("releasing the Lease: %w", err)
 	}
 	return nil
+}
+
+// watch stops the work, by calling stop, once the renewal deadline has passed
+// since this replica last renewed the Lease, and closes expired, until ctx is
+// done. client-go's leader election stops the work only once a try to renew
+// the Lease, begun a retry period after the last renewal, has gone on for the
+// renewal deadline: with a retry period and a renewal deadline that together
+// pass the Lease's duration, which client-go accepts, and so the chart does
+// (SCHED-3), that's after another replica could take the Lease over
+// (SCHED-4).
+func (m *manager) watch(ctx context.Context, stop context.CancelFunc, expired chan<- struct{}) {
+	select {
+	case <-ctx.Done():
+		return
+	case <-m.lock.acquired:
+	}
+	for ctx.Err() == nil {
+		wait := time.Until(m.lock.renewed().Add(m.renewDeadline))
+		if wait <= 0 {
+			m.log.Info("Couldn't renew the Lease within its renewal deadline, so stopping", "lease", m.lock.Describe())
+			close(expired)
+			stop()
+			return
+		}
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+		case <-timer.C:
+		}
+		timer.Stop()
+	}
 }
 
 // release gives up the Lease, if this replica still holds it, as client-go's

@@ -224,7 +224,11 @@ default for its duration, renewal deadline, and retry period, as the
 fetcher's do, and the chart refuses those client-go's leader election
 refuses ([SCHED-3], [LEASE-1]). A replica that can't renew the Lease within
 its renewal deadline stops acting before another can take it over
-([SCHED-4]).
+([SCHED-4]). It counts the deadline itself, from when it sent its last
+renewal. client-go's leader election tries to renew a retry period after
+the last renewal, and gives up only once that try has gone on for the
+renewal deadline. At timings the chart accepts, such as 11, 10, and 2
+seconds, that would be after another replica could take the Lease over.
 
 A replica that Kubernetes stops while it holds the Lease, as in an upgrade
 or a drain, releases it once it has stopped acting, so another replica, the
