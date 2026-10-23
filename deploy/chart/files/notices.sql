@@ -32,7 +32,8 @@ CREATE TABLE readings (
 );
 
 -- SEEN-2, LIST-2: each filing a list names, with the values of its first
--- listing, as given.
+-- listing, as given. A later list can give it another acceptanceDateTime
+-- (SRC-24), which this table doesn't keep.
 CREATE TABLE filings (
     accession_number     text NOT NULL PRIMARY KEY
                          CHECK (accession_number ~ '^[0-9]{10}-[0-9]{2}-[0-9]{6}$'),
@@ -154,7 +155,7 @@ WHERE latest
   AND now() - expires_at >= expires_at - queued_at;
 
 -- LAG-1: a header's ACCEPTANCE-DATETIME, 14 digits with no zone (SRC-1), read
--- as US Eastern time (SRC-2, SRC-13). Null if the digits name no time.
+-- as US Eastern time (SRC-25). Null if the digits name no time.
 CREATE FUNCTION header_instant(digits text) RETURNS timestamp with time zone
     LANGUAGE sql STABLE STRICT
     RETURN (
@@ -166,8 +167,9 @@ CREATE FUNCTION header_instant(digits text) RETURNS timestamp with time zone
                             substr(digits, 13, 2)) AS stamp) AS formatted
     );
 
--- LAG-1: submissions' acceptanceDateTime, RFC 3339 (SRC-2), read as the
--- instant it states. Null if it states none.
+-- LAG-1: submissions' acceptanceDateTime, RFC 3339 (SRC-25), read as the
+-- instant it states, which is later than the header's by the Eastern offset
+-- on its date (SRC-25). Null if it states none.
 CREATE FUNCTION listed_instant(given text) RETURNS timestamp with time zone
     LANGUAGE sql STABLE STRICT
     RETURN CASE WHEN given ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
