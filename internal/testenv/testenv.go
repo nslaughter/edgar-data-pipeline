@@ -140,6 +140,15 @@ func MakeJobs(ctx context.Context, t testing.TB, js jetstream.JetStream) jetstre
 // consumer first, then the stream's subjects (NATS-5, SCHED-8).
 func MakeRecords(ctx context.Context, t testing.TB, js jetstream.JetStream) jetstream.Stream {
 	t.Helper()
+	MakeRecordsAlone(ctx, t, js)
+	MakeSchedulerPolls(ctx, t, js)
+	return GiveRecordsSubjects(ctx, t, js)
+}
+
+// MakeRecordsAlone makes the stream RECORDS, kept by interest, with no
+// consumer, and no subjects until GiveRecordsSubjects gives them.
+func MakeRecordsAlone(ctx context.Context, t testing.TB, js jetstream.JetStream) jetstream.Stream {
+	t.Helper()
 	stream, err := js.CreateStream(ctx, jetstream.StreamConfig{
 		Name:      "RECORDS",
 		Retention: jetstream.InterestPolicy,
@@ -148,7 +157,16 @@ func MakeRecords(ctx context.Context, t testing.TB, js jetstream.JetStream) jets
 	if err != nil {
 		t.Fatal(err)
 	}
-	MakeSchedulerPolls(ctx, t, js)
+	return stream
+}
+
+// GiveRecordsSubjects gives RECORDS its subjects.
+func GiveRecordsSubjects(ctx context.Context, t testing.TB, js jetstream.JetStream) jetstream.Stream {
+	t.Helper()
+	stream, err := js.Stream(ctx, "RECORDS")
+	if err != nil {
+		t.Fatal(err)
+	}
 	config := stream.CachedInfo().Config
 	config.Subjects = []string{"edgar.records.poll", "edgar.records.filing", "edgar.records.backfill"}
 	if stream, err = js.UpdateStream(ctx, config); err != nil {

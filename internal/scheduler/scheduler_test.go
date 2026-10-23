@@ -81,15 +81,17 @@ func newNamespace(t *testing.T, c client.Client) string {
 
 func newSource(t *testing.T, c client.Client, namespace, name string, cadence int32, paused bool) {
 	t.Helper()
-	source := &v1alpha1.Source{
-		ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name},
-		Spec: v1alpha1.SourceSpec{
-			Feed:           "submissions",
-			URL:            "https://data.sec.gov/submissions/CIK0000320193.json",
-			CadenceSeconds: cadence,
-			Paused:         paused,
-		},
-	}
+	createSource(t, c, namespace, name, v1alpha1.SourceSpec{
+		Feed:           "submissions",
+		URL:            "https://data.sec.gov/submissions/CIK0000320193.json",
+		CadenceSeconds: cadence,
+		Paused:         paused,
+	})
+}
+
+func createSource(t *testing.T, c client.Client, namespace, name string, spec v1alpha1.SourceSpec) {
+	t.Helper()
+	source := &v1alpha1.Source{ObjectMeta: metav1.ObjectMeta{Namespace: namespace, Name: name}, Spec: spec}
 	if err := c.Create(context.Background(), source); err != nil {
 		t.Fatal(err)
 	}
@@ -468,6 +470,95 @@ func TestOnlyTheReplicaThatHoldsTheLeaseActsAndOneStoppedReleasesIt(t *testing.T
 	}
 }
 
+// spec: SCHED-4
+func TestAStandbyReadsNoPollEventsSetsNoStatusAndQueuesNoPolls(t *testing.T) {
+	c := newClient(t)
+	ctx := context.Background()
+	release := newNamespace(t, c)
+	allowRequests(t, c)
+	newSource(t, c, release, "polled", 1, false)
+	// Another replica holds the Lease, for an hour from now.
+	holder, duration, now := "another", int32(3600), metav1.NewMicroTime(time.Now())
+	held := &coordinationv1.Lease{
+		ObjectMeta: metav1.ObjectMeta{Namespace: release, Name: "scheduler"},
+		Spec: coordinationv1.LeaseSpec{
+			HolderIdentity: &holder, LeaseDurationSeconds: &duration, AcquireTime: &now, RenewTime: &now,
+		},
+	}
+	if err := c.Create(ctx, held); err != nil {
+		t.Fatal(err)
+	}
+	_, js := testenv.NATS(t)
+	jobs := testenv.MakeJobs(ctx, t, js)
+	testenv.MakeRecords(ctx, t, js)
+	consumer, err := js.Consumer(ctx, "RECORDS", "scheduler-polls")
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := pollEvent(t, 1, "polled", "2026-10-22T14:00:10.000Z", strings.Repeat("ab", 32))
+	if _, err := js.Publish(ctx, "edgar.records.poll", event); err != nil {
+		t.Fatal(err)
+	}
+	standby := runScheduler(t, release, defaultLease, restConfig, js)
+	queued := func() (uint64, error) {
+		info, err := jobs.Info(ctx)
+		if err != nil {
+			return 0, err
+		}
+		return info.State.Msgs, nil
+	}
+
+	t.Run("while another holds the Lease, it does none of what the active replica does", func(t *testing.T) {
+		// Long enough for an active replica to have done each.
+		time.Sleep(4 * time.Second)
+		if standby.elected() {
+			t.Fatal("it became the active replica while another held the Lease")
+		}
+		if status := getSource(t, c, release, "polled").Status; len(status.Conditions) != 0 || status.LastPollTime != "" {
+			t.Errorf("it set the Source's status: %+v", status)
+		}
+		info, err := consumer.Info(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.NumPending != 1 || info.NumAckPending != 0 || info.Delivered.Consumer != 0 {
+			t.Errorf("it read from scheduler-polls: %d pending, %d unacknowledged, %d delivered",
+				info.NumPending, info.NumAckPending, info.Delivered.Consumer)
+		}
+		if polls, err := queued(); err != nil || polls != 0 {
+			t.Errorf("it queued %d polls (%v)", polls, err)
+		}
+	})
+	t.Run("once the other releases the Lease, it does each", func(t *testing.T) {
+		if err := c.Get(ctx, client.ObjectKeyFromObject(held), held); err != nil {
+			t.Fatal(err)
+		}
+		none, second := "", int32(1)
+		held.Spec.HolderIdentity, held.Spec.LeaseDurationSeconds = &none, &second
+		if err := c.Update(ctx, held); err != nil {
+			t.Fatal(err)
+		}
+		elected(t, standby, 10*time.Second)
+		hasCondition(t, c, release, "polled", v1alpha1.ConditionPolling, metav1.ConditionTrue, v1alpha1.ReasonPolling)
+		testenv.Eventually(t, 10*time.Second, func() error {
+			if last, _ := pollTimes(t, c, release, "polled"); last != "2026-10-22T14:00:10.000Z" {
+				return fmt.Errorf("the last poll's time is %q", last)
+			}
+			info, err := consumer.Info(ctx)
+			if err != nil {
+				return err
+			}
+			if info.NumPending != 0 || info.NumAckPending != 0 {
+				return fmt.Errorf("%d pending, %d unacknowledged", info.NumPending, info.NumAckPending)
+			}
+			if polls, err := queued(); err != nil || polls == 0 {
+				return fmt.Errorf("no poll queued (%v)", err)
+			}
+			return nil
+		})
+	})
+}
+
 // proxy relays TCP connections to the API server until it's cut, when it
 // closes them and refuses new ones, or until it hangs, when it keeps them
 // open, and accepts new ones, but relays nothing more, as a network that
@@ -663,7 +754,15 @@ func TestPollEventsThroughTheConsumerSetEachSourcesPollTimes(t *testing.T) {
 	c := newClient(t)
 	release := newNamespace(t, c)
 	allowRequests(t, c)
-	newSource(t, c, release, "polled", 1, false)
+	// A feed and URL apart from the other tests', so a job's can't match
+	// them by chance.
+	spec := v1alpha1.SourceSpec{
+		Feed: "latest-filings",
+		URL: "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=&company=&dateb=&owner=include" +
+			"&start=0&count=100&output=atom",
+		CadenceSeconds: 1,
+	}
+	createSource(t, c, release, "polled", spec)
 	_, js := testenv.NATS(t)
 	ctx := context.Background()
 	runScheduler(t, release, defaultLease, restConfig, js)
@@ -678,10 +777,22 @@ func TestPollEventsThroughTheConsumerSetEachSourcesPollTimes(t *testing.T) {
 		if err := streams.Err(); err != nil {
 			t.Fatal(err)
 		}
+		// With RECORDS made but not its consumer, it waits longer than it
+		// waits between looks for the consumer, and doesn't make it.
+		records := testenv.MakeRecordsAlone(ctx, t, js)
+		time.Sleep(4 * time.Second)
+		var consumers []string
+		for name := range records.ConsumerNames(ctx).Name() {
+			consumers = append(consumers, name)
+		}
+		if len(consumers) != 0 {
+			t.Errorf("made the consumers %v of RECORDS", consumers)
+		}
 	})
 
 	jobs := testenv.MakeJobs(ctx, t, js)
-	records := testenv.MakeRecords(ctx, t, js)
+	testenv.MakeSchedulerPolls(ctx, t, js)
+	records := testenv.GiveRecordsSubjects(ctx, t, js)
 	consumer, err := js.Consumer(ctx, "RECORDS", "scheduler-polls")
 	if err != nil {
 		t.Fatal(err)
@@ -765,7 +876,8 @@ func TestPollEventsThroughTheConsumerSetEachSourcesPollTimes(t *testing.T) {
 			if err := json.Unmarshal(msg.Data, &job); err != nil {
 				return err
 			}
-			if job.Kind != "poll" || job.Source != "polled" || msg.Header.Get("Nats-Msg-Id") != job.ID {
+			if job.Kind != "poll" || job.Source != "polled" || job.Feed != spec.Feed || job.URL != spec.URL ||
+				msg.Header.Get("Nats-Msg-Id") != job.ID {
 				return fmt.Errorf("job %+v, message id %q", job, msg.Header.Get("Nats-Msg-Id"))
 			}
 			return nil
