@@ -2,10 +2,12 @@
 
 **Status:** October 23, 2026. T1 to T5, T13 to T16, T19 to T22, T34,
 T35, T38, T39 to T42, T44, T47, and T48 are done, and T37 is split into T39
-to T43. The next is T23, which waits for the fetcher's deployment to be
-specified, as [`spec/deployment.md`, §9](../spec/deployment.md#9-later-versions)
-leaves it to a later version. T6, T7, and T9 wait for each company's next
-report; the investigation's daily refetches can run when the owner asks.
+to T43. The next ready is T10. T23 waits for a task, not yet in the plan,
+that specifies the fetcher's deployment, as T48 did the scheduler's, since
+[`spec/deployment.md`, §9](../spec/deployment.md#9-later-versions) leaves
+it to a later version, and the tasks that depend on T23 wait with it. T6,
+T7, and T9 wait for each company's next report; the investigation's daily
+refetches can run when the owner asks.
 
 The tasks that build the pipeline, in the order they're to be done, and
 which are done. When the owner asks for the next item, an agent takes the
