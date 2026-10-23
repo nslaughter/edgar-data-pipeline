@@ -525,8 +525,10 @@ func TestAStandbyReadsNoPollEventsSetsNoStatusAndQueuesNoPolls(t *testing.T) {
 			t.Errorf("it read from scheduler-polls: %d pending, %d unacknowledged, %d delivered",
 				info.NumPending, info.NumAckPending, info.Delivered.Consumer)
 		}
-		if polls, err := queued(); err != nil || polls != 0 {
-			t.Errorf("it queued %d polls (%v)", polls, err)
+		if polls, err := queued(); err != nil {
+			t.Error(err)
+		} else if polls != 0 {
+			t.Errorf("it queued %d polls", polls)
 		}
 	})
 	t.Run("once the other releases the Lease, it does each", func(t *testing.T) {
@@ -551,8 +553,12 @@ func TestAStandbyReadsNoPollEventsSetsNoStatusAndQueuesNoPolls(t *testing.T) {
 			if info.NumPending != 0 || info.NumAckPending != 0 {
 				return fmt.Errorf("%d pending, %d unacknowledged", info.NumPending, info.NumAckPending)
 			}
-			if polls, err := queued(); err != nil || polls == 0 {
-				return fmt.Errorf("no poll queued (%v)", err)
+			polls, err := queued()
+			if err != nil {
+				return err
+			}
+			if polls == 0 {
+				return errors.New("no poll queued")
 			}
 			return nil
 		})
