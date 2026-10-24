@@ -388,7 +388,8 @@ SEC, then check that the record shows each gap and lost nothing
   stream's consumers as soon as it has made the stream, and makes `JOBS`
   last: the fetcher publishes an event only for a job, so none comes before
   them ([NATS-5]). Its own durable consumer of `JOBS` comes with it, in the
-  later version task T49 specifies ([§9 of deployment][deployment-later]).
+  later version task T49 specifies ([§9 of deployment][deployment-later],
+  [plan][plan-observing]).
 - **Garage and PostgreSQL,** for the bucket `snapshots` and the table
   `records`, which a Job of the umbrella chart creates, granting the
   fetcher's role its privileges ([GARAGE-2], [PG-8]).
