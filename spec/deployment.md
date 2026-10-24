@@ -714,9 +714,13 @@ authority of its own, which the fetcher checks the server against, as
 Grafana does ([MON-5]), so it adds records only to the database.
 
 Which variables hold the key and the password, and how the chart gives the
-fetcher its addresses, the commit, and the release namespace, as arguments
-or in its environment, is for the chart and the fetcher to agree, as it is
-for the scheduler.
+fetcher the rest of what these statements say it gives it, as arguments or
+in its environment, is for the chart and the fetcher to agree, as it is for
+the scheduler: its Lease's name and timings ([LEASE-1]); the addresses of
+Garage, the database, and NATS; the bucket and the region; the database's
+name and the role's; where its pod mounts each certificate ([FETCHER-7],
+[FETCHER-12]); its consumers' names; the commit; and the release
+namespace.
 
 - **FETCHER-5** (invariant) The fetcher's container reads in its
   environment, each by reference to the Secret the umbrella chart renders
