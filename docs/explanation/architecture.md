@@ -1,7 +1,7 @@
 # The architecture
 
 <!-- status: Scheduler; Fetcher; Discoverer; Parse workers; Exporter; Query API; NATS JetStream; Garage; PostgreSQL 18; The controls; `edgar-asof`; The snapshot store in the cluster -->
-**Status** ([status page](../status.md)): Scheduler: Specified; built in part. Fetcher: Decided; specified in part. Discoverer: Specified. Parse workers: Decided. Exporter: Decided. Query API: Decided. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified; built in part. `edgar-asof`: Decided. The snapshot store in the cluster: Specified; built in part.
+**Status** ([status page](../status.md)): Scheduler: Specified; built in part. Fetcher: Specified. Discoverer: Specified. Parse workers: Decided. Exporter: Decided. Query API: Decided. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified; built in part. `edgar-asof`: Decided. The snapshot store in the cluster: Specified; built in part.
 <!-- end status -->
 
 This page covers the pipeline's components and the boundaries between
