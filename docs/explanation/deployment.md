@@ -549,9 +549,11 @@ Later versions add ([deployment, §9][later]):
 1. **The pipeline's other services,** as each is built, with their
    replicas, credentials, and placement, and the database role and Garage
    key of each service after the discoverer.
-2. **The durable consumers of a work queue,** each with its service. `JOBS`
-   and `ORDERS` keep a message until it's acknowledged, so a consumer of
-   either can come with its service, as the fetcher's of `JOBS` do.
+2. **No more durable consumers of the work queues.** `JOBS` and `ORDERS`
+   keep a message until it's acknowledged, so a consumer of either can come
+   with its service, as the fetcher's of `JOBS` do. Each of their subjects
+   now has its consumer, and no two consumers of a work queue may filter
+   the same subject, so none remains to add.
 3. **Changes to the record's tables and views,** with a migration, since
    the Job creates the store's table, the notices' tables, and the schema
    `dashboards` only where there are none ([PG-12], [PG-13]).

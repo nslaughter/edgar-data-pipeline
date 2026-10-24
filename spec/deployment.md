@@ -1367,13 +1367,19 @@ Later versions of this document will add:
    database role and Garage key of each service after the discoverer
    ([PG-7], [GARAGE-4]). The scheduler's and the fetcher's are this
    version's ([the scheduler](#the-scheduler),
-   [the fetcher](#the-fetcher)).
-2. **The durable consumers of a work queue,** each with its service.
-   `JOBS` and `ORDERS` are work queues, which keep a message until it's
-   acknowledged, so a consumer of one can come with its service, as the
-   fetcher's of `JOBS` do ([FETCHER-9]). A consumer of a stream kept by
-   interest comes in a version before the service that publishes what it
-   should see, as version 1.1.0's do ([NATS-5]).
+   [the fetcher](#the-fetcher)), as is how the fetcher trusts the fake
+   EDGAR's certificate authority where CI installs the fake EDGAR, which
+   the fake EDGAR's specification leaves to the version that deploys the
+   fetcher ([the fetcher and the fake EDGAR](#the-fetcher-and-the-fake-edgar)).
+2. **No more durable consumers of the work queues.** `JOBS` and `ORDERS`
+   are work queues, which keep a message until it's acknowledged, so a
+   consumer of one can come with its service, as the fetcher's of `JOBS`
+   do ([FETCHER-9]). Each subject of either now has its consumer, `JOBS`'
+   in this version and `ORDERS`' in version 1.1.0 ([NATS-5]), and a work
+   queue lets no two of its consumers filter the same subject, so none
+   remains to add. A consumer of a stream kept by interest comes in a
+   version before the service that publishes what it should see, as
+   version 1.1.0's do ([NATS-5]).
 3. **Changes to the record's tables and views.** [PG-8]'s Job creates
    `records` only where there's none, and the notices' tables and the
    schema `dashboards` only where there are none ([PG-12], [PG-13]), so a
@@ -1543,8 +1549,10 @@ guarantee, so it's a minor version: no statement's meaning changes.
 - **The area `FETCHER`,** apart from the snapshot store's `FETCH`,
   [§3](#3-statement-ids).
 - **Later versions:** [§9](#9-later-versions)'s item 1 no longer names the
-  fetcher, and item 2 speaks of every work queue's consumers, now that the
-  fetcher's are this version's.
+  fetcher as a later version, and points to how it trusts the fake EDGAR's
+  authority, which the fake EDGAR's specification leaves to this version.
+  Item 2 says no durable consumer of a work queue remains to add, now that
+  the fetcher's are this version's, and keeps its number.
 
 Nothing changes on a cluster until T23 builds the fetcher, which adds its
 consumers to the values. On a cluster that already has `JOBS`, [NATS-3]'s

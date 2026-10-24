@@ -422,8 +422,7 @@ alternative:
     from the store's `FETCH`.
 
 Its [§9][deployment-later] lists what later versions add: the pipeline's
-other services, with their replicas, credentials, and placement; the
-durable consumers of a work queue, with their services;
+other services, with their replicas, credentials, and placement;
 migrations for later versions of the record's tables and views; each
 component's requests, limits, and probes, measured on kind; Tempo, Loki,
 and Alloy; kube-state-metrics' access to the definitions of the
