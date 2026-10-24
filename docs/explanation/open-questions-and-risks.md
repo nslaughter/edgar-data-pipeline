@@ -382,9 +382,13 @@ alternative:
    0.2 seconds of its last request, would let the next one break the SEC's
    limit ([FETCH-6], [FETCH-7]).
 2. **Its two replicas on two worker nodes** ([FETCHER-2]), as the
-   scheduler's, so the loss of a node leaves the standby running.
+   scheduler's, so the loss of a node leaves the standby running. A
+   preference would let both share a node; required, a rollout's extra pod
+   needs a third worker node, which kind's three provide.
 3. **No grant but [RBAC-2]'s and its Lease's** ([FETCHER-4]), so it reads
-   no Source or Backfill and records no Kubernetes Events.
+   no Source or Backfill and records no Kubernetes Events. A grant to
+   create Events would let client-go record each change of leader, which
+   the Lease and `edgar_fetcher_leader` already show.
 4. **The user agent a required value** ([FETCHER-5]), with an `@` in it,
    so the chart never installs a fetcher that can't fetch. Optional, the
    chart would install one that sends nothing ([FETCH-17]).
@@ -409,7 +413,9 @@ alternative:
    fetch, about 7 minutes: no word needed, but a job a lost replica held
    would wait that long to be delivered again.
 9. **The fetcher makes no stream or consumer, and waits for those it
-   reads** ([FETCHER-11]), as the scheduler does.
+   reads** ([FETCHER-11]), as the scheduler does. Making its own would
+   start it sooner on a new install, but leave two places that set a
+   consumer's configuration.
 10. **The fake EDGAR's authority trusted alone** ([FETCHER-12],
     [FETCHER-13]), in place of the roots the fetcher's image holds, so a
     request from CI's cluster that reached the SEC would fail before its
@@ -421,7 +427,8 @@ alternative:
     built, which [IMG-2]'s command would then have to pass.
 12. **The names:** the Deployment and ServiceAccount `fetcher`, the value
     `fetcher.image`, the consumers above, and the area `FETCHER`, apart
-    from the store's `FETCH`.
+    from the store's `FETCH`. A shorter area wouldn't read as close to
+    `FETCH`, but wouldn't name the fetcher as plainly.
 
 Its [§9][deployment-later] lists what later versions add: the pipeline's
 other services, with their replicas, credentials, and placement;
