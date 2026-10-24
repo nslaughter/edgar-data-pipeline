@@ -370,7 +370,7 @@ EDGAR's content ([0006]).
 - **An order refused on a new install.** The streams are made only once
   the release's resources are ready, so on a new install whose values allow
   requests from the start, an order published before `ORDERS` exists is
-  refused. The notices' version 0.1.0 doesn't say that the scheduler
+  refused. The notices' version 0.1.1 doesn't say that the scheduler
   publishes it again, so its Backfill waits until the scheduler next becomes
   the active replica or requests are allowed again ([ORDER-1],
   [the scheduler's access to NATS][deployment-nats]). The chart's default

@@ -4,8 +4,8 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The charts; The fake EDGAR.
-- **Specified:** Scheduler (built in part); Fetcher; Monitoring: traces; The snapshot store in the cluster (built in part); The transfer from the cluster to git; The controls (built in part); The documentation site (built in part).
-- **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Specified:** Scheduler (built in part); Fetcher; Discoverer; Monitoring: traces; The snapshot store in the cluster (built in part); The transfer from the cluster to git; The controls (built in part); The documentation site (built in part).
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The drills.
 <!-- end status -->
 
@@ -470,8 +470,12 @@ Each poll downloads the whole body, 20 to 27 KB compressed, since
 `submissions` sends no validators ([SRC-4]); at the starting cadence,
 three companies are 0.3 requests a second, 6% of the limit, and 25,920
 records a day. A lag is only as good as its clocks, and until the header's
-time zone is settled, Apple's 8-hour difference ([SRC-2]) shows in the lag
-queries as an outlier ([0010]).
+time zone is settled, a filing's lags from its two acceptance times
+differ. 0010 expected that of Apple's alone, whose times differed by 8
+hours ([SRC-2], [0010]). Since October 16, 2026, each company's
+`submissions` gives a filing's time as it gave Apple's, later than its
+header's read as Eastern time by the Eastern offset ([SRC-25]), so every
+filing's two lags differ by that offset ([§10 of the notices][notices-lags]).
 
 **What would change it.** The record says what would. The source is
 revisited from the lags the record shows: whether to keep each company's
@@ -644,6 +648,7 @@ polls with the nightly index ([0013]).
 [0013]: ../decisions/0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md
 [design-decisions]: ../design.md#decisions
 [notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
+[notices-lags]: ../../spec/notices.md#10-times-and-lags
 [T5]: ../plan.md#investigation
 [T8]: ../plan.md#investigation
 [T10]: ../plan.md#facts
@@ -668,6 +673,7 @@ polls with the nightly index ([0013]).
 [SRC-21]: ../../investigation/edgar.md#findings-so-far
 [SRC-23]: ../../investigation/edgar.md#findings-so-far
 [SRC-24]: ../../investigation/edgar.md#findings-so-far
+[SRC-25]: ../../investigation/edgar.md#findings-so-far
 [SRC-26]: ../../investigation/edgar.md#findings-so-far
 [SRC-27]: ../../investigation/edgar.md#findings-so-far
 [SRC-28]: ../../investigation/edgar.md#findings-so-far

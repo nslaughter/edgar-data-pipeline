@@ -1,6 +1,6 @@
 # Design: the EDGAR data pipeline
 
-**Status:** Draft, October 18, 2026. This document explains the pipeline's
+**Status:** Draft, October 23, 2026. This document explains the pipeline's
 architecture and the reasons for it. It makes no rules: the specifications
 under [`spec/`](../spec/) govern, the records under
 [`docs/decisions/`](decisions/) record each significant choice, and
@@ -20,8 +20,10 @@ ways, and claims no more than these.
    known on a date follows from the filings accepted by then, however often
    the pipeline looked. The acceptance time comes from the filing's header
    ([SRC-1](../investigation/edgar.md#findings-so-far)), not from
-   `submissions`, whose times disagree with the header for one company
-   (SRC-2).
+   `submissions`, whose times are later than the header's read as US
+   Eastern time, by the Eastern offset from UTC, for each company
+   (SRC-25), and which can change the time of a filing it already lists
+   (SRC-24).
 2. **Every version it observed, never overwritten.** Each fetch is a
    record, and each distinct body is stored once by its SHA-256
    ([`spec/snapshots.md`](../spec/snapshots.md)). The SEC's summaries are
@@ -42,7 +44,7 @@ be shown: that a filing's archived files never change after acceptance
 
 | Time | Where it comes from | After an outage |
 | --- | --- | --- |
-| Acceptance | The filing's header, `ACCEPTANCE-DATETIME` (SRC-1), with `submissions`' `acceptanceDateTime` beside it (SRC-2); both kept as given, since the header's time zone is still to be established | Unaffected: it is read from the filing whenever the filing is fetched |
+| Acceptance | The filing's header, `ACCEPTANCE-DATETIME` (SRC-1), with `submissions`' `acceptanceDateTime` beside it, as the list the filing was first added from gives it (SRC-24, SRC-25); both kept as given, since which is right, and the header's time zone, are still to be established | Unaffected: it is read from the filing whenever the filing is fetched |
 | Public availability | Not stated by the SEC. It lies between acceptance and first seen, and the record measures the delay (Q4, [0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)) | Estimated from acceptance and the measured delay |
 | First seen | For each source, the pipeline's first poll that showed the filing, after the last that didn't | Bounded: after the last successful poll before the gap, and at or before the first poll after it; flagged as a gap |
 
@@ -279,7 +281,7 @@ The normative parts become specifications, one per component or boundary:
 
 ## What waits on the investigation
 
-- Which acceptance time to trust, and its time zone (SRC-1, SRC-2).
+- Which acceptance time to trust, and its time zone (SRC-1, SRC-25).
 - Whether to keep each company's `submissions` as the notice source, add
   EDGAR's latest-filings feed, or change the cadence
   ([0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)):

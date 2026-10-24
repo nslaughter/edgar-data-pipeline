@@ -185,11 +185,16 @@ late changes what the view gives and nothing stored ([notices,
 **Times are kept as given, and read as instants only in the views.** A
 filing's `acceptanceDateTime` from `submissions` is kept as text, and so
 are the 14 digits of its header's `ACCEPTANCE-DATETIME`, which give no time
-zone ([SRC-1], [SRC-2]). The view `lags` reads the first as the instant it
-states, and the header's digits as US Eastern time ([notices, §10][lags]).
-A finding that settles the header's zone changes one function in
+zone ([SRC-1], [SRC-25]). The view `lags` reads the first as the instant
+it states, and the header's digits as US Eastern time, and the two differ
+by the Eastern offset ([notices, §10][lags]). A finding that settles which
+is right, and the header's zone, changes how `lags` reads that time, in
 `notices.sql`, in a new version of the notices' specification, and nothing
-stored ([notices, open question 2][notices-questions]).
+stored: one function, or, since `submissions` can change how it gives a
+filing's time ([SRC-24]), a reading by when the filing's list was fetched
+([notices, open question 2][notices-questions]). A database that already
+holds the view takes the change through a migration, as the next
+paragraph says.
 
 The same Job that creates `records`, once the table exists, creates the
 notices' tables and views, and the functions they call, from a copy of
@@ -400,7 +405,8 @@ DuckDB, pandas, or Polars without the cluster ([0004]).
 [plan-facts]: ../plan.md#facts
 [plan-observing]: ../plan.md#observing-filings
 [SRC-1]: ../../investigation/edgar.md#findings-so-far
-[SRC-2]: ../../investigation/edgar.md#findings-so-far
+[SRC-24]: ../../investigation/edgar.md#findings-so-far
+[SRC-25]: ../../investigation/edgar.md#findings-so-far
 [backups]: ../../spec/deployment.md#instances-and-backups
 [dep-guarantees]: ../../spec/deployment.md#1-guarantees
 [dependencies]: ../../spec/deployment.md#5-dependencies

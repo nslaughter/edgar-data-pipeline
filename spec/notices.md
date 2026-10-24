@@ -1,6 +1,6 @@
 # Specification: notices
 
-**Status:** Version 0.1.0, draft, October 14, 2026. This document governs
+**Status:** Version 0.1.1, draft, October 23, 2026. This document governs
 what the discoverer makes of the fetcher's records: the filings each
 Source's polls show, each with its times as given and the polls that bound
 when each Source first showed it; each filing's files and their fetches;
@@ -32,8 +32,9 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
    header, its index page, and the XBRL instance the index page names.
    [FILE-1], [FILE-2], [FILE-3].
 2. **Each filing keeps both its acceptance times as given:** `submissions`'
-   `acceptanceDateTime`, and the digits of its header's
-   `ACCEPTANCE-DATETIME` ([0010]). [SEEN-2], [FILE-3].
+   `acceptanceDateTime`, as the list the discoverer first added the filing
+   from gives it, and the digits of its header's `ACCEPTANCE-DATETIME`
+   ([0010]). [SEEN-2], [LIST-2], [FILE-3].
 3. **The record says when each Source first showed each filing:** between
    two of its polls, which the record names, and whether a gap lies between
    them. [SEEN-2], [SEEN-3], [LAG-1].
@@ -262,7 +263,7 @@ The table `filings` has these columns:
 | `accession_number` | `text` | The filing, `##########-##-######`. The primary key. |
 | `form` | `text` | Its `form`, as the list the discoverer first read it from gives it. |
 | `filing_date` | `text` | Its `filingDate`, as that list gives it. |
-| `acceptance_date_time` | `text` | Its `acceptanceDateTime`, as that list gives it ([SRC-2]). |
+| `acceptance_date_time` | `text` | Its `acceptanceDateTime`, as that list gives it ([SRC-25]). A later list can give it another ([SRC-24]). |
 | `listed_by` | `bigint` | The record of that list's fetch, by its `id`. |
 
 The table `sightings` has these columns:
@@ -540,7 +541,7 @@ A notice's fields:
 | `accession_number` | Required in a filing notice, and only there: `##########-##-######` | The filing. |
 | `form` | Required in a filing notice, and only there: a string | Its `form`, as `filings` holds it. |
 | `filing_date` | Required in a filing notice, and only there: a string | Its `filing_date`, as `filings` holds it. |
-| `listed_acceptance` | Required in a filing notice, and only there: a string | Its `acceptance_date_time`, as `filings` holds it ([SRC-2]). |
+| `listed_acceptance` | Required in a filing notice, and only there: a string | Its `acceptance_date_time`, as `filings` holds it ([SRC-25]). |
 | `header_acceptance` | Required in a filing notice, and only there: 14 digits | The `acceptance_datetime` of its header's reading ([SRC-1]). |
 | `files` | Required in a filing notice, and only there: an object of files | Its files, under `header`, `index`, and `instance` if it has one, each with its `feed`, its `url`, and the `sha256` that `held_files` gives it: what an import's manifest names an input by ([IMP-2]). |
 | `source` | Required in a gap notice, and only there: a Source's name | The Source. |
@@ -589,19 +590,37 @@ A notice's fields:
 The record keeps each time as its source gives it ([0010]): each record's
 `requested_at` and `received_at` by the fetcher's clock
 ([§6 of the store](snapshots.md#6-records)), each filing's
-`acceptanceDateTime` as its list gives it, and the digits of its header's
+`acceptanceDateTime` as the list the discoverer first added it from gives
+it ([SEEN-2], [LIST-2]), and the digits of its header's
 `ACCEPTANCE-DATETIME`. The view `lags` reads the acceptance times as
 instants:
 
 - **`submissions`' `acceptanceDateTime`** as the instant it states, in RFC
-  3339 with a `Z` ([SRC-2]);
+  3339 with a `Z` ([SRC-25]);
 - **the header's digits,** which give no time zone ([SRC-1]), as US
-  Eastern time, `America/New_York`. Read so, Microsoft's and Walmart's
-  headers agree with their `submissions` ([SRC-2]), and all eight stored
-  headers fall within EDGAR's hours ([SRC-13]). Read so, each of Apple's
-  three stored headers is 4 hours earlier than its time in `submissions`
-  ([SRC-2]), so Apple's lags from one of the two times show as outliers
-  until a finding settles which is right ([0010]).
+  Eastern time, `America/New_York`.
+
+Read so, the two times disagree for each of the three companies. Each
+company's `submissions` gives a filing's time later than its header's
+digits read as Eastern time, by the Eastern offset from UTC on its date,
+as each of the eight stored headers shows: 4 hours in daylight time and 5
+in standard time. Moved earlier by that offset, nearly all of the three
+companies' recent filings fall within EDGAR's hours, 6:00 a.m. to 10:00
+p.m. Eastern time; read as the instants they state, most of Microsoft's
+and a third of Walmart's fall outside them ([SRC-25]). The stored versions
+don't show which time is right ([SRC-25]). So `lags` gives a lag from
+each, and a filing whose times differ by that offset has lags from
+`submissions`' time shorter than those from its header by as much, until a
+finding settles which is right ([0010]).
+
+`submissions` can also change the time it gives a filing it already
+lists: between October 7 and October 16, 2026, it moved the time of every
+filing in Microsoft's and Walmart's `filings.recent`, and in Microsoft's
+first further file, later by that offset, and changed no other column of
+them ([SRC-24]). `filings` keeps the time from the list the discoverer
+first added the filing from, and the lags read that one; a later list's
+time is in that list's version in the bucket, which the lags don't read.
+So how a filing's two times differ can depend on when that list was read.
 
 A Source first showed a filing after the request of its last poll that
 didn't show it was sent, and by the time the response of the first that did
@@ -677,10 +696,24 @@ The view `lags` has these columns:
    without a version. If new filings' fetches do, a later version queues
    them again after a delay; until then, a Backfill fetches them again
    ([FILE-4]).
-2. **The header's time zone** ([SRC-1], [SRC-2], [SRC-13]). The lags read
-   it as US Eastern time. A finding that settles it changes the function
-   `header_instant` in `notices.sql`, in a new version of this document,
-   and nothing stored.
+2. **Which acceptance time is right, and the header's time zone**
+   ([SRC-1], [SRC-24], [SRC-25]). The lags read `submissions`' time as the
+   instant it states and the header's digits as US Eastern time, and the
+   two differ by the Eastern offset. The lags can settle it: a filing is
+   public only once it's accepted ([0010]), so an acceptance time from
+   which a filing's lag has a high bound below zero is later than when
+   its Source showed it, and isn't when it was accepted. A finding that
+   settles it changes how `lags` reads that time, in `notices.sql`, in a
+   new version of this document, and nothing stored: the function
+   `listed_instant` or `header_instant`, where one reading holds for every
+   time the record keeps. Since `submissions` can change how it gives the
+   times of filings it already lists ([SRC-24]), and a function of the
+   time alone can't tell one form from another, the finding may instead
+   show when it did, and `lags` read each filing's time by when its list
+   was fetched: the `received_at` of its `listed_by` record, which changes
+   what `lags` joins too. A database that already holds the view and its
+   functions takes the change through a migration
+   ([`deployment.md`, §9](deployment.md#9-later-versions)).
 3. **Exact gaps.** A job gives neither its due time nor its Source's
    cadence, so [§5](#5-polls-coverage-and-gaps) takes each poll's window as
    the cadence. A shortened cadence can hide a poll missed at the change,
@@ -718,10 +751,37 @@ This version leaves to others what the notices rely on:
 Versions follow semantic versioning. Adding a statement, an optional field,
 a column, a view, or a check is a minor version. Changing the meaning of a
 statement, a field, or a column, or what a view gives, is a major version,
-and says how the rows already written are read. The schemas in
+and says how the rows already written are read. Changing only what it
+explains, or the findings it cites, is a patch version. The schemas in
 [`schemas/`](schemas/) that this document names are part of it, so changing
 one changes it. IDs are never reused, and a retired statement stays in the
 index.
+
+### From version 0.1.0
+
+Version 0.1.1 takes in what the first refetch showed of `submissions`'
+acceptance times ([SRC-24], [SRC-25]), whose findings superseded those
+version 0.1.0 cited for them. It changes no statement, field, column, or
+view, so it's a patch version: `lags` reads both acceptance times as
+version 0.1.0 does.
+
+- **Times and lags:** [§10](#10-times-and-lags) says why the header's
+  digits are still read as Eastern time, now that each company's
+  `submissions` gives a time later than them by the Eastern offset, not
+  Apple's alone; that the lags from the two times then differ by that
+  offset; and that the lags read the time from the list a filing was
+  first added from, since `submissions` can change it.
+- **Guarantee 2,** `filings`' `acceptance_date_time`, and a filing
+  notice's `listed_acceptance` say so too. Guarantee 2 also lists
+  [LIST-2], which adds a Backfill's filings to `filings` as [SEEN-2] adds
+  a poll's.
+- **Open question 2** asks which acceptance time is right, not only the
+  header's zone. It says how the lags can settle it, and that a finding
+  that settles it changes a function, or, since `submissions` can change
+  how it gives a filing's time, has `lags` read the time by when its list
+  was fetched.
+- **`notices.sql`**'s comments cite the new findings. Its tables, views,
+  and functions don't change.
 
 [0003]: ../docs/decisions/0003-queue-work-in-nats-jetstream.md
 [0004]: ../docs/decisions/0004-keep-the-record-in-postgresql-18.md
@@ -729,12 +789,12 @@ index.
 [0007]: ../docs/decisions/0007-control-the-pipeline-through-custom-resources.md
 [0010]: ../docs/decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
 [SRC-1]: ../investigation/edgar.md#findings-so-far
-[SRC-2]: ../investigation/edgar.md#findings-so-far
 [SRC-9]: ../investigation/edgar.md#findings-so-far
 [SRC-12]: ../investigation/edgar.md#findings-so-far
-[SRC-13]: ../investigation/edgar.md#findings-so-far
 [SRC-20]: ../investigation/edgar.md#findings-so-far
 [SRC-21]: ../investigation/edgar.md#findings-so-far
+[SRC-24]: ../investigation/edgar.md#findings-so-far
+[SRC-25]: ../investigation/edgar.md#findings-so-far
 [ACCESS-1]: controls.md#8-secaccess
 [BACKFILL-1]: controls.md#7-backfill
 [BACKFILL-3]: controls.md#7-backfill

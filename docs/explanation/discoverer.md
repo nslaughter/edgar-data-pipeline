@@ -1,7 +1,7 @@
 # The discoverer
 
 <!-- status: Discoverer -->
-**Status** ([status page](../status.md)): Discoverer: Decided; specified in part.
+**Status** ([status page](../status.md)): Discoverer: Specified.
 <!-- end status -->
 
 The discoverer reads what the fetcher fetched and makes the record of
@@ -68,8 +68,10 @@ baseline listed about 1,000 recent filings ([SRC-9]).
 For each filing a read list names, the discoverer adds the filing, unless
 the record has it already, with the `form`, `filingDate`, and
 `acceptanceDateTime` the list gives it, as given, and the poll that listed
-it ([SEEN-2]). Then, unless the record holds a sighting of the filing for
-that Source and URL, it adds one ([SEEN-2]):
+it ([SEEN-2]). A later list can give the filing another
+`acceptanceDateTime` ([SRC-24]), which the record of notices doesn't keep:
+the list's version in the bucket does. Then, unless the record holds a
+sighting of the filing for that Source and URL, it adds one ([SEEN-2]):
 
 - **`first_shown`:** this poll, the first of the Source's polls whose list
   named the filing;
@@ -245,19 +247,29 @@ scope, adds at least 3,042 requests more ([SRC-20]).
 
 The record keeps each time as its source gives it: each record's
 `requested_at` and `received_at` by the fetcher's clock, each filing's
-`acceptanceDateTime` as its list gives it, and the 14 digits of its
-header's `ACCEPTANCE-DATETIME` ([§10 of the notices][notices-lags],
-[0010]). The view `lags` reads them as instants, only there:
+`acceptanceDateTime` as the list it was first added from gives it, and the
+14 digits of its header's `ACCEPTANCE-DATETIME`
+([§10 of the notices][notices-lags], [0010]). The view `lags` reads them as
+instants, only there:
 
 - `submissions`' `acceptanceDateTime` as the instant it states, in RFC 3339
-  with a `Z` ([SRC-2]);
+  with a `Z` ([SRC-25]);
 - the header's digits, which give no time zone ([SRC-1]), as US Eastern
-  time, `America/New_York`. Read so, Microsoft's and Walmart's headers
-  agree with their `submissions` ([SRC-2]), and all eight stored headers
-  fall within EDGAR's hours ([SRC-13]). Each of Apple's three stored
-  headers is then 4 hours earlier than its time in `submissions`
-  ([SRC-2]), so Apple's lags from one of the two times show as outliers
-  until a finding settles which is right ([0010]).
+  time, `America/New_York`.
+
+Read so, the two disagree for each of the three companies: `submissions`
+gives a filing's time later than its header's by the Eastern offset on its
+date, 4 hours in daylight time and 5 in standard time. Moved earlier by
+that offset, nearly all of the companies' recent filings fall within
+EDGAR's hours, 6:00 a.m. to 10:00 p.m. Eastern time; read as the instants
+they state, most of Microsoft's and a third of Walmart's don't ([SRC-25]).
+So a filing's lags from `submissions`' time are shorter than those from its
+header by that offset, until a finding settles which is right ([0010]).
+`submissions` can also change a filing's time after listing it, as it did
+between October 7 and October 16, 2026, for every filing in Microsoft's
+and Walmart's `filings.recent`, and in Microsoft's first further file
+([SRC-24]), so how a filing's two times differ can depend on when the
+list it was first added from was read.
 
 For each sighting, `lags` gives each lag, from each acceptance time to
 when the Source first showed the filing, as a low bound and a high bound:
@@ -497,10 +509,12 @@ in both languages ([0006]).
   `submissions` lists it** (the investigation's Q4). If new filings' fetches
   end without a version, a later version queues them again after a delay
   ([open question 1 of the notices][notices-open]).
-- **The header's time zone** ([SRC-1], [SRC-2], [SRC-13]). A finding that
-  settles it changes how `lags` reads the header, in a new version of the
-  notices, and nothing stored
-  ([open question 2 of the notices][notices-open]).
+- **Which acceptance time is right, and the header's time zone** ([SRC-1],
+  [SRC-24], [SRC-25]). The lags can settle it: a filing is public only once
+  it's accepted, so a time from which a lag's high bound falls below zero
+  isn't when the filing was accepted. A finding that settles it changes how
+  `lags` reads one of the two times, in a new version of the notices, and
+  nothing stored ([open question 2 of the notices][notices-open]).
 - **Exact gaps.** A poll's due time in its job would let a later version
   count missed slots exactly ([open question 3 of the notices][notices-open]).
 - **A version a later discoverer would read differently.** How a corrected
@@ -554,9 +568,10 @@ these statements' tests await it, and T28 and T29 its metrics' and traces'
 [SRC-5]: ../../investigation/edgar.md#findings-so-far
 [SRC-9]: ../../investigation/edgar.md#findings-so-far
 [SRC-12]: ../../investigation/edgar.md#findings-so-far
-[SRC-13]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far
 [SRC-21]: ../../investigation/edgar.md#findings-so-far
+[SRC-24]: ../../investigation/edgar.md#findings-so-far
+[SRC-25]: ../../investigation/edgar.md#findings-so-far
 [SRC-26]: ../../investigation/edgar.md#findings-so-far
 [SRC-27]: ../../investigation/edgar.md#findings-so-far
 [SRC-28]: ../../investigation/edgar.md#findings-so-far

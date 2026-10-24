@@ -1,7 +1,7 @@
 # The data model and its times
 
 <!-- status: The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; Discoverer; Parse workers; Query API; `edgar-asof`; Monitoring: metrics, alerts, and dashboards -->
-**Status** ([status page](../status.md)): The snapshot store in git: Built. The snapshot store in the cluster: Specified; built in part. The transfer from the cluster to git: Specified. Discoverer: Decided; specified in part. Parse workers: Decided. Query API: Decided. `edgar-asof`: Decided. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part.
+**Status** ([status page](../status.md)): The snapshot store in git: Built. The snapshot store in the cluster: Specified; built in part. The transfer from the cluster to git: Specified. Discoverer: Specified. Parse workers: Decided. Query API: Decided. `edgar-asof`: Decided. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part.
 <!-- end status -->
 
 This page covers what the pipeline stores: the snapshot store's objects and
@@ -197,7 +197,8 @@ of its fetch, by the record's `job`.
 
 A row records what the discoverer found when it found it. A `filings` row
 keeps the form, filing date, and `acceptanceDateTime` of the list it was
-first read from ([SEEN-2]), and a `readings` row keeps what the first
+first read from ([SEEN-2]), though a later list can give the filing another
+`acceptanceDateTime` ([SRC-24]), and a `readings` row keeps what the first
 discoverer to read that version read, with its commit in `tool`. How a later
 discoverer that would read a version differently records a correction is
 still open ([open questions of the notices][notices-open]).
@@ -342,7 +343,7 @@ record is as given there; one it adds itself is by its own clock
 | A fetch's request and response | `records.requested_at`, `received_at` | The fetcher's clock | Timestamps in UTC, to the millisecond |
 | The response's `Date` and `Last-Modified` | `records.date`, `last_modified` | The SEC's response | Strings, as received |
 | A poll's window | `polls.queued_at`, `expires_at` | Its job | Timestamps |
-| Acceptance, from `submissions` | `filings.acceptance_date_time` | The list the filing was first read from | The string given, RFC 3339 with a `Z` ([SRC-2]) |
+| Acceptance, from `submissions` | `filings.acceptance_date_time` | The list the filing was first read from | The string given, RFC 3339 with a `Z` ([SRC-25]) |
 | Acceptance, from the header | `readings.acceptance_datetime` | The filing's header | 14 digits, with no time zone ([SRC-1]) |
 | Filing date | `filings.filing_date` | The list | The string given |
 | First shown, and last not shown | `sightings.first_shown`, `last_not_shown` | Two polls' records | The polls' `requested_at` and `received_at` |
@@ -357,21 +358,33 @@ The view `lags` reads the two acceptance times as instants
 ([§10 of the notices][notices-lags]):
 
 - **`submissions`' `acceptanceDateTime`** as the instant it states
-  ([SRC-2]).
-- **The header's digits** as US Eastern time, `America/New_York`. Read so,
-  Microsoft's and Walmart's headers agree with their `submissions`, and all
-  eight stored headers fall within EDGAR's hours. Apple's three are then 4
-  hours earlier than their `submissions` times, so lags from one of the two
-  show as outliers until a finding settles which is right ([SRC-2],
-  [SRC-13], [0010]).
+  ([SRC-25]), as the list the filing was first added from gives it, since
+  `submissions` can change a filing's time after listing it ([SRC-24]).
+- **The header's digits** as US Eastern time, `America/New_York`.
 
-A finding that settles the header's zone changes one function in
-`notices.sql`, in a new version of the notices specification, and nothing
-stored ([open questions of the notices][notices-open]). `edgar-asof` keeps
-the same rule: it compares or converts raw times only through an
-interpreter the caller passes. It provides one that reads `submissions`'
-time as the instant it states, and one that reads the header's digits in a
-zone the caller names, and has no default ([TIME-5] to [TIME-9]).
+Read so, the two disagree for each of the three companies: `submissions`
+gives a filing's time later than its header's by the Eastern offset on its
+date, 4 hours in daylight time and 5 in standard time. Moved earlier by
+that offset, nearly all of the companies' recent filings fall within
+EDGAR's hours; read as the instants they state, most of Microsoft's and a
+third of Walmart's don't ([SRC-25]). So a filing's lags from `submissions`'
+time are shorter than those from its header by that offset, until a
+finding settles which is right ([0010]).
+
+The lags can settle it themselves: a filing is public only once it's
+accepted, so a time from which a lag's high bound falls below zero isn't
+when the filing was accepted. A finding that settles it changes how
+`lags` reads that time, in `notices.sql`, in a new version of the notices
+specification, and nothing stored: one function, or, since `submissions`
+can change how it gives a filing's time ([SRC-24]), a reading of the time
+by when the filing's list was fetched
+([open questions of the notices][notices-open]).
+
+`edgar-asof` keeps the same rule: it compares or converts raw times only
+through an interpreter the caller passes. It provides one that reads
+`submissions`' time as the instant it states, and one that reads the
+header's digits in a zone the caller names, and has no default ([TIME-5]
+to [TIME-9]).
 
 ### Each lag is a range
 
@@ -511,16 +524,16 @@ recovery][design-outages]).
 [SOURCE-2]: ../../spec/controls.md#6-source
 [SOURCE-4]: ../../spec/controls.md#6-source
 [SRC-1]: ../../investigation/edgar.md#findings-so-far
-[SRC-2]: ../../investigation/edgar.md#findings-so-far
 [SRC-6]: ../../investigation/edgar.md#findings-so-far
 [SRC-8]: ../../investigation/edgar.md#findings-so-far
 [SRC-10]: ../../investigation/edgar.md#findings-so-far
 [SRC-11]: ../../investigation/edgar.md#findings-so-far
-[SRC-13]: ../../investigation/edgar.md#findings-so-far
 [SRC-14]: ../../investigation/edgar.md#findings-so-far
 [SRC-15]: ../../investigation/edgar.md#findings-so-far
 [SRC-16]: ../../investigation/edgar.md#findings-so-far
 [SRC-17]: ../../investigation/edgar.md#findings-so-far
+[SRC-24]: ../../investigation/edgar.md#findings-so-far
+[SRC-25]: ../../investigation/edgar.md#findings-so-far
 [STORE-1]: ../../spec/snapshots.md#the-cluster-store
 [STORE-2]: ../../spec/snapshots.md#the-cluster-store
 [STORE-3]: ../../spec/snapshots.md#the-cluster-store

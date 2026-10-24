@@ -4,8 +4,8 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The charts; The fake EDGAR.
-- **Specified:** Scheduler (built in part); Fetcher; Monitoring: traces; The snapshot store in the cluster (built in part); The transfer from the cluster to git; The controls (built in part); The documentation site (built in part).
-- **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Specified:** Scheduler (built in part); Fetcher; Discoverer; Monitoring: traces; The snapshot store in the cluster (built in part); The transfer from the cluster to git; The controls (built in part); The documentation site (built in part).
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The drills.
 <!-- end status -->
 
@@ -106,10 +106,19 @@ versions don't show which time is right for any of the three ([SRC-25]).
 `submissions` agree, and [T7] whether Apple's still differ by 8 hours
 ([investigation][plan-investigation]).
 
-Two things wait on the answer. The view of lags reads the header's digits
-as US Eastern time, and a finding that settles the zone changes one
-function in `notices.sql`, in a new version of the notices specification,
-and nothing stored ([notices' open question 2][notices-questions]). And
+Two things wait on the answer. The view of lags reads `submissions`' times
+as the instants they state, and the header's digits as US Eastern time, so
+a filing's two lags differ by the Eastern offset until a finding settles
+which is right ([§10 of the notices][notices-lags]). The lags can settle it
+themselves: a filing is public only once it's accepted, so a time from
+which a lag's high bound falls below zero isn't when the filing was
+accepted. Such a finding changes how the view reads that time, in
+`notices.sql`, in a new version of the notices specification, and nothing
+stored: one function, or, since `submissions` can change how it gives a
+filing's time ([SRC-24]), a reading of the time by when the filing's list
+was fetched. A database that already holds the view takes the change
+through a migration ([notices' open question 2][notices-questions],
+[`deployment.md`, §9][deployment-later]). And
 `edgar-asof` has no default interpreter of acceptance times ([TIME-9]):
 whether the header's digits read as Eastern time become its default waits
 on a finding that compares more headers with `submissions` than [SRC-2] and
@@ -380,9 +389,16 @@ chart creates or changes them ([0010], owner's decision 5).
    lists it** (Q4). If new filings' fetches end without a version, a later
    version queues them again after a delay; until then, a Backfill fetches
    them again.
-2. **The header's time zone.** The lags read it as US Eastern time; a
-   finding that settles it changes the function `header_instant`, and
-   nothing stored.
+2. **Which acceptance time is right, and the header's time zone.** The
+   lags read `submissions`' time as the instant it states and the header's
+   digits as US Eastern time, and the two differ by the Eastern offset
+   ([SRC-25]). A time from which a filing's lag has a high bound below zero
+   isn't when it was accepted, so the lags can settle it. A finding that
+   does changes how the view reads that time, and nothing stored: one
+   function, or, since `submissions` can change how it gives a filing's
+   time ([SRC-24]), a reading by when the filing's list was fetched. A
+   database that already holds the view takes the change through a
+   migration ([`deployment.md`, §9][deployment-later]).
 3. **Exact gaps.** A job gives neither its due time nor its Source's
    cadence, so each poll's window stands in for the cadence. A shortened
    cadence can hide a poll missed at the change, and a lengthened one can
@@ -506,8 +522,9 @@ revisit: whether to keep each company's `submissions` as the notice source
   companies' filings, not only Apple's, are later than their headers'
   digits read as Eastern time, by the Eastern offset on each date
   ([SRC-2], [SRC-25]). `submissions` can also change a filing's time after
-  it lists it ([SRC-24]). How the lags read `submissions`' times is for
-  [T44], a version of the notices.
+  it lists it ([SRC-24]). The lags read the time from the list a filing was
+  first added from, so a filing's two lags differ by that offset until a
+  finding settles which is right ([§10 of the notices][notices-lags]).
 - **A lag is only as good as its clocks.** The fetcher checks its clock
   against each response's `Date` ([0010], [METRIC-4]), which rests on an
   assumption ([above](#assumptions-not-yet-shown)).
@@ -636,7 +653,6 @@ revisit: whether to keep each company's `submissions` as the notice source
 [T31]: ../plan.md#traces-logs-and-drills
 [T32]: ../plan.md#facts
 [T38]: ../plan.md#observing-filings
-[T44]: ../plan.md#observing-filings
 [T48]: ../plan.md#observing-filings
 [agents-rules]: ../../AGENTS.md#rules
 [agents-where]: ../../AGENTS.md#where-documents-go
