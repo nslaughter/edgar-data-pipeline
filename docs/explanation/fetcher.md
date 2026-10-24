@@ -1,7 +1,7 @@
 # The fetcher
 
 <!-- status: Fetcher; The snapshot store in the cluster -->
-**Status** ([status page](../status.md)): Fetcher: Specified. The snapshot store in the cluster: Specified; built in part.
+**Status** ([status page](../status.md)): Fetcher: Decided; specified in part. The snapshot store in the cluster: Specified; built in part.
 <!-- end status -->
 
 The fetcher is the only component that sends requests to the SEC, and the
@@ -318,9 +318,14 @@ over if the active replica is lost, and one Lease holder is how "one
 process at a time" holds across a cluster, which a test on kind can show
 by deleting the active pod ([0005]). The deployment specification's version
 1.0.0 gives the Lease and its timings ([LEASE-1], [LEASE-2]). Its later
-versions add the replicas of each of the pipeline's services, such as the
-fetcher's two, and their resource requests and limits, once measured on
-kind ([§9 of deployment][deployment-later]).
+versions add the replicas of each of the pipeline's services, and their
+resource requests and limits, once measured on kind ([§9 of
+deployment][deployment-later]). Task T49 specifies the fetcher's two, with
+their placement, ServiceAccount, credentials, access to NATS, image, and
+trust of the fake EDGAR's authority where CI installs it, before T23 builds
+it ([plan][plan-observing]). Their resource requests and limits wait for
+the later version that gives each component's ([§9 of
+deployment][deployment-later]).
 
 ## How it scales
 
@@ -382,8 +387,9 @@ SEC, then check that the record shows each gap and lost nothing
   consumers it has when the event is published, so the Job makes the
   stream's consumers as soon as it has made the stream, and makes `JOBS`
   last: the fetcher publishes an event only for a job, so none comes before
-  them ([NATS-5]). Its own durable consumer of `JOBS` comes with it, in a
-  later version ([§9 of deployment][deployment-later]).
+  them ([NATS-5]). Its own durable consumer of `JOBS` comes with it, in the
+  later version task T49 specifies ([§9 of deployment][deployment-later],
+  [plan][plan-observing]).
 - **Garage and PostgreSQL,** for the bucket `snapshots` and the table
   `records`, which a Job of the umbrella chart creates, granting the
   fetcher's role its privileges ([GARAGE-2], [PG-8]).
@@ -468,8 +474,9 @@ forgotten when the standby took over ([0007]).
 | [ALERT-1] | The alert while requests are stopped. |
 | [TRACE-1], [TRACE-3], [TRACE-5], [TRACE-6], [TRACE-7] | Its spans, and no trace context sent to the SEC. |
 
-Task T23 builds the fetcher, with the checks on its requests against the
-fake EDGAR on kind ([plan][plan-observing]). Some of the table's statements
+Task T49 specifies the fetcher's deployment, and task T23 builds the
+fetcher, with the checks on its requests against the fake EDGAR on kind
+([plan][plan-observing]). Some of the table's statements
 have tests already: the rules it shares with `snapshot.py`, [FETCH-1] to
 [FETCH-14] but [FETCH-7], which the owner keeps, and [ID-1], [OBJ-1],
 [REC-9], and [REC-10], through `snapshot.py` and `verify.py`; and the
