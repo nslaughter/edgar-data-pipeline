@@ -766,10 +766,14 @@ it, whenever the consumer is made, so the consumers come with the fetcher.
 Each delivers as many unacknowledged jobs at once as JetStream's default
 allows. With one at most, a job that a lost replica took and didn't
 acknowledge would hold back each later job of its kind until JetStream
-delivered it again, 30 seconds after it was delivered
-([durable consumers](#durable-consumers)), by when a poll's job has expired
-([JOB-2]). With JetStream's default, the replica that takes the Lease over
-takes the next job at once, and the earlier one when it's delivered again.
+delivered it again: 30 seconds after the replica last said it was at work
+on the job, as the next paragraph explains, or after the job was
+delivered, if it said nothing ([durable consumers](#durable-consumers)).
+Every Source's polls would wait behind one poll's job, which, at the 10
+seconds each company's Source starts at ([0010]), has expired by then
+([JOB-2]), so the fetcher acknowledges it without a request ([JOB-5]).
+With JetStream's default, the replica that takes the Lease over takes the
+next job at once, and the earlier one when it's delivered again.
 
 A fetch can take longer than those 30 seconds: up to 4 attempts of up to 60
 seconds each, with a wait of up to 60 seconds before each retry ([FETCH-5],

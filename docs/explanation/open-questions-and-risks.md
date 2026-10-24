@@ -399,7 +399,9 @@ alternative:
    against [JOB-4].
 7. **JetStream's default for their unacknowledged jobs** ([FETCHER-9]).
    With one at most, a job a lost replica held would hold back each later
-   job of its kind until it was delivered again, 30 seconds after.
+   job of its kind until it was delivered again, 30 seconds after the
+   replica last said it was at work on it, by when, at the 10 seconds each
+   company's Source starts at, a poll's job has expired.
 8. **A word of progress while a fetch runs** ([FETCHER-10]): the active
    replica tells JetStream a job is in progress, so a fetch longer than 30
    seconds isn't delivered again meanwhile. The alternative is a longer
