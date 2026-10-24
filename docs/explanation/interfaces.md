@@ -1,7 +1,7 @@
 # The interfaces
 
 <!-- status: The controls; Scheduler; Fetcher; Discoverer; Parse workers; NATS JetStream; Query API; `edgar-asof` -->
-**Status** ([status page](../status.md)): The controls: Specified; built in part. Scheduler: Specified; built in part. Fetcher: Decided; specified in part. Discoverer: Specified. Parse workers: Decided. NATS JetStream: Built. Query API: Decided. `edgar-asof`: Decided.
+**Status** ([status page](../status.md)): The controls: Specified; built in part. Scheduler: Specified; built in part. Fetcher: Specified. Discoverer: Specified. Parse workers: Decided. NATS JetStream: Built. Query API: Decided. `edgar-asof`: Decided.
 <!-- end status -->
 
 This page covers the pipeline's three interfaces: the custom resources the
@@ -173,8 +173,9 @@ published, so the same Job makes the durable consumers of the discoverer,
 the scheduler, and the parse workers, each right after its stream, with
 `NOTICES` first and `JOBS` last, and gives a stream kept by interest its
 subjects only once its consumers exist, so it accepts a message only then
-([NATS-5]). The fetcher's consumer of `JOBS` comes with the fetcher
-([§9 of deployment][deployment-later]).
+([NATS-5]). The fetcher's consumers of `JOBS`, one for each kind of job,
+come with the fetcher, as the deployment's version 1.4.0 specifies them
+([FETCHER-9]).
 
 ### Jobs and events
 
@@ -192,7 +193,10 @@ A **job** asks the fetcher for one fetch ([jobs and events][store-jobs]):
 
 Before each request, the fetcher takes the job queued first of the first
 kind that has one waiting: `poll`, then `filing`, then `backfill` ([JOB-4]).
-It acknowledges an expired job without a request ([JOB-5]).
+It reads them through a consumer for each kind, `fetcher-polls`,
+`fetcher-filings`, and `fetcher-backfills`, which only its active replica
+reads, the polls' first ([FETCHER-9], [FETCHER-10]). It acknowledges an
+expired job without a request ([JOB-5]).
 
 An **event** announces the record of a fetch: the record's `id` in the
 table, the `job` it was made for, and the `record` itself, with every field,
@@ -261,7 +265,10 @@ guarantees in more depth.
   acknowledges the job. Given a job whose record the table already holds, it
   publishes that record's event again and acknowledges the job, without a
   request. So a job is fetched again only if its fetch wasn't recorded, and
-  an event can arrive twice, with the same `id` ([JOB-6]).
+  an event can arrive twice, with the same `id` ([JOB-6]). While it works on
+  a job, it tells JetStream the job is in progress, so a fetch longer than
+  the 30 seconds JetStream waits for an acknowledgement isn't delivered
+  again meanwhile ([FETCHER-10]).
 - **The discoverer** reads poll events one at a time, in the order the
   stream holds them ([DISC-1]). For each message it adds every row in one
   transaction, then publishes the jobs and notices that follow from it, then
@@ -375,7 +382,6 @@ What the library's specification already fixes, for an answer of its own
 [controls-values]: ../../spec/controls.md#5-the-charts-values
 [CRD-2]: ../../spec/deployment.md#definitions
 [dashboards-sql]: ../../spec/schemas/dashboards.sql
-[deployment-later]: ../../spec/deployment.md#9-later-versions
 [design-components]: ../design.md#components
 [DISC-1]: ../../spec/notices.md#processing
 [DISC-2]: ../../spec/notices.md#processing
@@ -437,3 +443,5 @@ What the library's specification already fixes, for an answer of its own
 [VAL-4]: ../../spec/controls.md#5-the-charts-values
 [VIEW-3]: ../../spec/telemetry.md#8-the-views-grafana-reads
 [SCHED-8]: ../../spec/deployment.md#its-access-to-nats
+[FETCHER-9]: ../../spec/deployment.md#the-fetchers-access-to-nats
+[FETCHER-10]: ../../spec/deployment.md#the-fetchers-access-to-nats

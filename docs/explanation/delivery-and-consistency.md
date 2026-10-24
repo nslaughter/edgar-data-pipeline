@@ -1,7 +1,7 @@
 # Delivery and consistency
 
 <!-- status: NATS JetStream; Scheduler; Fetcher; Discoverer; Parse workers; Garage; PostgreSQL 18; The snapshot store in the cluster; The snapshot store in git -->
-**Status** ([status page](../status.md)): NATS JetStream: Built. Scheduler: Specified; built in part. Fetcher: Decided; specified in part. Discoverer: Specified. Parse workers: Decided. Garage: Built. PostgreSQL 18: Built. The snapshot store in the cluster: Specified; built in part. The snapshot store in git: Built.
+**Status** ([status page](../status.md)): NATS JetStream: Built. Scheduler: Specified; built in part. Fetcher: Specified. Discoverer: Specified. Parse workers: Decided. Garage: Built. PostgreSQL 18: Built. The snapshot store in the cluster: Specified; built in part. The snapshot store in git: Built.
 <!-- end status -->
 
 How the pipeline's services hand each other work, what each stream
@@ -58,9 +58,10 @@ of the discoverer, the scheduler, and the parse workers, each with three
 replicas, so each keeps its place in its stream through the loss of a node
 too ([NATS-5]). The scheduler's consumer of poll events, `scheduler-polls`,
 comes with the scheduler, which is built before the fetcher publishes any
-([SCHED-8]), and the fetcher's consumer of `JOBS` comes with the fetcher
-([later versions][deployment-later]). The scheduler makes no stream or
-consumer itself, and waits for those it reads ([SCHED-9]).
+([SCHED-8]), and the fetcher's three consumers of `JOBS`, one for each
+kind of job, come with the fetcher ([FETCHER-9]). Neither the scheduler nor
+the fetcher makes a stream or a consumer itself, and each waits for those
+it reads ([SCHED-9], [FETCHER-11]).
 
 The two retentions differ in what a missing consumer costs. A work queue
 keeps each job until the fetcher acknowledges it, so jobs wait while no
@@ -98,6 +99,10 @@ a message only once it's done with it:
 
 - **The fetcher** adds a fetch's record, then publishes its event, then
   acknowledges the job, each once the step before has succeeded ([JOB-6]).
+  A fetch can take longer than the 30 seconds JetStream waits for an
+  acknowledgement, so while it works on a job the fetcher tells JetStream
+  the job is in progress, and JetStream doesn't deliver it again meanwhile
+  ([FETCHER-10]).
 - **The discoverer** adds the rows a message calls for, then publishes the
   jobs and notices they lead to, then acknowledges the message, so a message
   it stopped on is delivered again ([DISC-1], [DISC-2]).
@@ -125,6 +130,9 @@ Order matters in two places:
   then Backfills' ([JOB-4]). So a backfill never delays the record of new
   filings ([BACKFILL-2]), and the polls, which the chart holds to half the
   fetcher's limit ([VAL-3]), leave the other half to the rest ([JOB-4]).
+  A consumer delivers what it filters in the order its stream holds it,
+  whatever the subject, so the fetcher has a consumer of `JOBS` for each
+  kind, and asks the polls' first ([FETCHER-9], [FETCHER-10]).
 - **The discoverer reads poll events one at a time,** in the order the
   stream holds them, so each Source's in the order the fetcher published
   them ([DISC-1]); its consumer of them, `discoverer-polls`, has one
@@ -354,10 +362,12 @@ the same `tool` commit reads the same bytes ([IMP-1], [IMP-2], [IMP-3]).
 [PG-12]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [PG-13]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [PG-14]: ../../spec/deployment.md#the-notices-and-the-dashboards
-[deployment-later]: ../../spec/deployment.md#9-later-versions
 [deployment-scheduler-nats]: ../../spec/deployment.md#its-access-to-nats
 [SCHED-8]: ../../spec/deployment.md#its-access-to-nats
 [SCHED-9]: ../../spec/deployment.md#its-access-to-nats
+[FETCHER-9]: ../../spec/deployment.md#the-fetchers-access-to-nats
+[FETCHER-10]: ../../spec/deployment.md#the-fetchers-access-to-nats
+[FETCHER-11]: ../../spec/deployment.md#the-fetchers-access-to-nats
 [deployment-consumers]: ../../spec/deployment.md#durable-consumers
 [VAL-3]: ../../spec/controls.md#5-the-charts-values
 [SOURCE-4]: ../../spec/controls.md#6-source

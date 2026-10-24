@@ -100,8 +100,8 @@ files and replicated on all three servers ([NATS-3]):
 | `ORDERS` | Work queue | File | 3 |
 | `NOTICES` | Interest | File | 3 |
 
-It also specifies six durable consumers, which the same Job makes
-([NATS-5], [SCHED-8]):
+It also specifies nine durable consumers, which the same Job makes
+([NATS-5], [SCHED-8], [FETCHER-9]):
 
 | Consumer | Stream | Subjects | Read by | Unacknowledged at most |
 | --- | --- | --- | --- | --- |
@@ -111,14 +111,20 @@ It also specifies six durable consumers, which the same Job makes
 | `scheduler-notices` | `NOTICES` | `edgar.notices.gap`, `edgar.notices.backfill` | The scheduler, gap and backfill notices ([NOTICE-1], [NOTICE-2]) | JetStream's default |
 | `parse-workers-notices` | `NOTICES` | `edgar.notices.filing` | The parse workers, filing notices, as the facts specification will say | JetStream's default |
 | `scheduler-polls` | `RECORDS` | `edgar.records.poll` | The scheduler, poll events, whose records set each Source's poll times ([SOURCE-4]) | JetStream's default |
+| `fetcher-polls` | `JOBS` | `edgar.jobs.poll` | The fetcher, the polls' jobs, which it asks for first ([JOB-4]) | JetStream's default |
+| `fetcher-filings` | `JOBS` | `edgar.jobs.filing` | The fetcher, the jobs of each filing's files, which it asks for next | JetStream's default |
+| `fetcher-backfills` | `JOBS` | `edgar.jobs.backfill` | The fetcher, the jobs of each Backfill, which it asks for last ([BACKFILL-2]) | JetStream's default |
 
 The scheduler's consumer of poll events came with the scheduler, which
-[T22] built, before the fetcher publishes any ([SCHED-8]).
+[T22] built, before the fetcher publishes any ([SCHED-8]). The fetcher's
+three come with the fetcher, as the deployment's version 1.4.0 specifies
+them ([the fetcher's access to NATS][fetcher-nats]).
 
 Each is a pull consumer, which any replica of its service may read from,
 though only the scheduler's active replica reads the scheduler's
-([SCHED-4]). The scheduler makes no stream or consumer itself, and waits
-for those it reads ([SCHED-9]).
+([SCHED-4]), and only the fetcher's reads the fetcher's ([FETCHER-10]).
+Neither the scheduler nor the fetcher makes a stream or a consumer itself,
+and each waits for those it reads ([SCHED-9], [FETCHER-11]).
 Each message it delivers is acknowledged on its own, and one not
 acknowledged in time is delivered again, with no limit on how often, so a
 service that stops partway through a message gets it again. Delivery
@@ -151,9 +157,22 @@ The Job also makes the streams in the order `NOTICES`, `RECORDS`, `ORDERS`,
 so neither an event nor a notice that follows a message is published
 before its stream takes it, and neither is refused ([NATS-5]).
 
-The fetcher's consumer of `JOBS` comes with the fetcher, in a later
-version. `JOBS` is a work queue, which keeps a job until it's acknowledged,
-so its consumer can come with its service ([deployment, §9][later]).
+The fetcher's consumers of `JOBS` come with the fetcher. `JOBS` is a work
+queue, which keeps a job until it's acknowledged, whenever the consumer is
+made, so its consumers can come with their service ([deployment, §9][later]).
+The fetcher has one for each kind of job, each filtering one subject, since
+a consumer delivers what it filters in the order its stream holds it,
+whatever the subject: one consumer of all three kinds would deliver a
+Backfill's job queued before a poll's ahead of it, where the fetcher takes
+the polls' first ([JOB-4], [FETCHER-9]). A work queue lets no two of its
+consumers filter the same subject, and one subject each keeps them apart.
+Each delivers as many unacknowledged jobs at once as JetStream's default
+allows, so the replica that takes the Lease over takes the next job at once,
+rather than wait for the job a lost replica held to be delivered again. A
+fetch can take longer than the 30 seconds a job waits for its
+acknowledgement, so while it works on a job the fetcher tells JetStream the
+job is in progress, and JetStream doesn't deliver it again meanwhile
+([FETCHER-10]; [the fetcher's access to NATS][fetcher-nats]).
 
 ### Jobs that expire, and jobs that wait
 
@@ -320,7 +339,7 @@ recovery](failures-and-recovery.md). For the streams:
 | --- | --- |
 | One server, or its node | The other two keep each replicated stream, with its messages and a leader, and the pipeline goes on ([deployment, §1][dep-guarantees]). |
 | A consumer's pod, partway through a message | The message isn't acknowledged, so it's delivered again, and the steps above make the repeat harmless ([DISC-1], [DISC-2], [JOB-6]). |
-| The active fetcher | Jobs wait in `JOBS` until the standby takes the Lease over. Poll jobs that expire meanwhile are acknowledged without a request ([JOB-5]). Decision 0005 records every handover as a gap ([0005]); the notices' specification gives a gap only where the handover misses a poll ([notices, §5][gaps]). |
+| The active fetcher | Jobs wait in `JOBS` until the standby takes the Lease over, once its duration has passed without a renewal, even when Kubernetes stopped the active replica ([FETCHER-3]). The job the lost replica was at work on is delivered again 30 seconds after the replica last told JetStream the job was in progress ([FETCHER-10]). Poll jobs that expire meanwhile are acknowledged without a request ([JOB-5]). Decision 0005 records every handover as a gap ([0005]); the notices' specification gives a gap only where the handover misses a poll ([notices, §5][gaps]). |
 | JetStream, for the scheduler | A poll that can't be queued before the next one is due is skipped ([SOURCE-2]) and counted ([METRIC-3]); its slot holds no successful poll, so the record shows a gap ([notices, §5][gaps]). |
 | All three servers, restarted | The streams are kept in files on retained claims ([NATS-1], [VOL-3]), so queued work survives the restart ([outages and recovery][outages]). |
 | A consumer that doesn't exist yet | An interest stream would keep nothing for it, which is why the Job makes each stream's durable consumers right after the stream, and gives an interest stream its subjects only once they exist, so a message published sooner is refused, not kept for none, and kept only once it's published again ([NATS-5], [NATS-6]). |
@@ -355,6 +374,7 @@ take a record.
 | [NATS-5] | The Job creates or updates the durable consumers the values list, each right after its stream and before a stream kept by interest takes its subjects, with `NOTICES` first and `JOBS` last. | tests |
 | [NATS-6] | Each consumer is as the values say, on all three servers, and the Job can run again; a stream kept by interest refuses a message, or keeps it for each consumer, while the Job makes it. | kind |
 | [SCHED-8], [SCHED-9] | The values list the scheduler's consumer of poll events, made as the others are; the scheduler makes no stream or consumer. | tests |
+| [FETCHER-9] to [FETCHER-11] | The values list the fetcher's three consumers of `JOBS`, one for each kind, made as the others are; only its active replica reads them, polls' first, keeping a job it's at work on from being delivered again; the fetcher makes no stream or consumer. | tests |
 | [PLACE-1], [PLACE-2] | Each server needs a worker node of its own, and runs on one. | tests, kind |
 | [VOL-2], [VOL-3] | Its claims are of `edgar-retained`, whose data a new claim of the same name finds. | tests, kind |
 | [CHART-2], [PIN-1], [PIN-2], [PIN-4] | NATS's chart, from its project's repository, at an exact version, committed, with its images by digest. | tests |
@@ -459,5 +479,10 @@ metrics workers scale by, and steps that are safe to repeat ([0003]).
 [SCHED-4]: ../../spec/deployment.md#its-lease
 [SCHED-8]: ../../spec/deployment.md#its-access-to-nats
 [SCHED-9]: ../../spec/deployment.md#its-access-to-nats
+[FETCHER-3]: ../../spec/deployment.md#the-fetcher
+[FETCHER-9]: ../../spec/deployment.md#the-fetchers-access-to-nats
+[FETCHER-10]: ../../spec/deployment.md#the-fetchers-access-to-nats
+[FETCHER-11]: ../../spec/deployment.md#the-fetchers-access-to-nats
+[fetcher-nats]: ../../spec/deployment.md#the-fetchers-access-to-nats
 [T22]: ../plan.md#observing-filings
 [SOURCE-4]: ../../spec/controls.md#6-source

@@ -566,9 +566,10 @@ of Kubernetes resources as metrics, the controls' status among them
 
 A Kubernetes object that one of several replicas holds, and renews, to be
 the one that acts. The fetcher's Lease, `fetcher`, decides which of its two
-replicas sends requests; another replica takes it over only once its
-duration, 15 seconds by default, has passed without a renewal ([0005],
-[FETCH-16], [LEASE-1]). The scheduler's leader election uses a Lease of its
+replicas sends requests and takes jobs; another replica takes it over only
+once its duration, 15 seconds by default, has passed without a renewal,
+even when Kubernetes stopped the replica that held it ([0005], [FETCH-16],
+[LEASE-1], [FETCHER-3]). The scheduler's leader election uses a Lease of its
 own, `scheduler`, which a replica that Kubernetes stops releases, so
 another takes it over without waiting out its duration ([0007], [SCHED-3],
 [SCHED-4]).
@@ -796,6 +797,7 @@ open. A statement checked by `operator` is the owner's to keep
 [PG-4]: ../spec/deployment.md#instances-and-backups
 [METRIC-2]: ../spec/telemetry.md#4-metrics
 [LEASE-1]: ../spec/deployment.md#the-fetchers-lease
+[FETCHER-3]: ../spec/deployment.md#the-fetcher
 [LAG-1]: ../spec/notices.md#10-times-and-lags
 [STATUS-1]: ../spec/site.md#6-status
 [STATUS-2]: ../spec/site.md#6-status

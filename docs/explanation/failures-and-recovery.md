@@ -1,7 +1,7 @@
 # Failures and recovery
 
 <!-- status: Scheduler; Fetcher; Discoverer; NATS JetStream; Garage; PostgreSQL 18; The controls; Monitoring: metrics, alerts, and dashboards; The drills -->
-**Status** ([status page](../status.md)): Scheduler: Specified; built in part. Fetcher: Decided; specified in part. Discoverer: Specified. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified; built in part. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The drills: Planned.
+**Status** ([status page](../status.md)): Scheduler: Specified; built in part. Fetcher: Specified. Discoverer: Specified. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified; built in part. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The drills: Planned.
 <!-- end status -->
 
 For each failure that the design and the specifications consider: what
@@ -101,14 +101,23 @@ repeat, as [delivery and consistency](delivery-and-consistency.md) explains.
 
 ## Losing the active fetcher
 
-The fetcher runs two replicas, and the one holding the Lease `fetcher` sends
-every request ([0005], [FETCH-16]). A replica stops leading when it can't
-renew the Lease within its renewal deadline, which is shorter than the
-Lease's duration, and another takes the Lease over only once the duration
-has passed without a renewal, so the two never send at once
-([the fetcher's Lease][lease]). By default the duration is 15 seconds, the
-renewal deadline 10, and the retry period 2, and the chart refuses timings
-that client-go's leader election refuses ([LEASE-1]).
+The fetcher runs two replicas, each on a worker node of its own, and the
+one holding the Lease `fetcher` sends every request and takes every job
+([0005], [FETCH-16], [FETCHER-1], [FETCHER-2], [FETCHER-10]). A replica
+stops leading when it can't renew the Lease within its renewal deadline,
+which is shorter than the Lease's duration, and another takes the Lease
+over only once the duration has passed without a renewal, so the two never
+send at once ([the fetcher's Lease][lease]). By default the duration is 15
+seconds, the renewal deadline 10, and the retry period 2, and the chart
+refuses timings that client-go's leader election refuses ([LEASE-1]).
+
+Unlike the scheduler's, a fetcher replica that Kubernetes stops, as in an
+upgrade or a drain, doesn't release the Lease, so it too is followed by a
+pause of up to the Lease's duration ([FETCHER-3]). A replica that released
+the Lease would have to stop sending first, and release it no sooner than
+0.2 seconds after its last request, or the next replica's first request
+could break the SEC's limit; a mistake in the scheduler's handover would at
+worst queue polls twice ([the fetcher][fetcher-spec]).
 
 ```mermaid
 sequenceDiagram
@@ -126,12 +135,14 @@ sequenceDiagram
 ```
 
 - **What stops:** every request to the SEC, for up to the Lease's duration
-  after the active replica is lost ([the fetcher's Lease][lease]).
+  after the active replica is lost or stopped ([the fetcher's Lease][lease],
+  [FETCHER-3]).
 - **What's kept:** the jobs, which wait in `JOBS` until the fetcher
   acknowledges them ([the store's jobs and events]). A job the lost replica
-  was fetching is delivered again, and fetched again only if its fetch
-  wasn't recorded ([JOB-6]). A stop after a `403` is in the `SecAccess`'s
-  status, so it carries over ([ACCESS-3]).
+  was fetching is delivered again 30 seconds after the replica last told
+  JetStream it was in progress ([FETCHER-10]), and fetched again only if
+  its fetch wasn't recorded ([JOB-6]). A stop after a `403` is in the
+  `SecAccess`'s status, so it carries over ([ACCESS-3]).
 - **How it recovers:** the new holder takes the jobs, polls first ([JOB-4]).
   A poll whose job expired during the handover is acknowledged without a
   request ([JOB-5]); the jobs of filings and Backfills don't expire, so
@@ -178,9 +189,11 @@ each worker node ([PLACE-1], [PLACE-2]), so each keeps running when one
 worker node is lost: NATS keeps a copy of every stream and every durable
 consumer on each, Garage a copy of every object, and the database an
 instance ([deployment guarantees][the deployment's guarantees], [NATS-3],
-[NATS-5], [GARAGE-3], [PG-3]). Where the pipeline's own services run is for
-a later version of the deployment specification ([later
-versions][deployment-later]).
+[NATS-5], [GARAGE-3], [PG-3]). The scheduler's two replicas and the
+fetcher's each need a worker node of their own, so a lost node takes at most
+one of each, and the other takes the Lease over ([SCHED-2], [FETCHER-2]).
+Where the pipeline's other services run is for a later version of the
+deployment specification ([later versions][deployment-later]).
 
 A lost node that ran the active fetcher, the active scheduler, or the
 database's primary fails as the sections on each say. kind runs every node
@@ -494,6 +507,11 @@ blocks the SEC with a NetworkPolicy ([the design's outages and recovery],
 [GARAGE-3]: ../../spec/deployment.md#garage
 [lease]: ../../spec/deployment.md#the-fetchers-lease
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease
+[fetcher-spec]: ../../spec/deployment.md#the-fetcher
+[FETCHER-1]: ../../spec/deployment.md#the-fetcher
+[FETCHER-2]: ../../spec/deployment.md#the-fetcher
+[FETCHER-3]: ../../spec/deployment.md#the-fetcher
+[FETCHER-10]: ../../spec/deployment.md#the-fetchers-access-to-nats
 [instances and backups]: ../../spec/deployment.md#instances-and-backups
 [PG-3]: ../../spec/deployment.md#instances-and-backups
 [PG-4]: ../../spec/deployment.md#instances-and-backups

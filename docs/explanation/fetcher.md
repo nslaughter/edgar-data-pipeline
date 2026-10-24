@@ -1,7 +1,7 @@
 # The fetcher
 
 <!-- status: Fetcher; The snapshot store in the cluster -->
-**Status** ([status page](../status.md)): Fetcher: Decided; specified in part. The snapshot store in the cluster: Specified; built in part.
+**Status** ([status page](../status.md)): Fetcher: Specified. The snapshot store in the cluster: Specified; built in part.
 <!-- end status -->
 
 The fetcher is the only component that sends requests to the SEC, and the
@@ -79,7 +79,8 @@ The user agent is in one Secret, rendered from the value
 `fetcher.secUserAgent`, which no committed values file sets; the owner
 keeps it in a values file git ignores, and only the fetcher's containers
 read it ([ID-2]). The fetcher is the only pod with that Secret ([0005],
-[components][design-components]).
+[components][design-components]). The chart requires the value, with an
+`@` in it, so it never installs a fetcher that can't fetch ([FETCHER-5]).
 
 ### Conditional requests and validators
 
@@ -243,7 +244,18 @@ A handover after the active replica is lost takes up to the Lease's
 duration, which decision 0005 and the deployment's specification record as a
 gap ([the fetcher's Lease][deployment-lease], [0005]); the notices'
 specification gives a gap only where the handover misses a poll ([§5 of the
-notices][notices-gaps]). Jobs the lost replica didn't acknowledge are
+notices][notices-gaps]).
+
+So does a handover after Kubernetes stops the active replica, as in an
+upgrade or a drain: unlike the scheduler's, a fetcher replica doesn't
+release the Lease when it's stopped, and the next replica takes it over
+only once its duration has passed ([FETCHER-3]). Releasing it would end the
+pause sooner, but the replica would have to stop sending first, and release
+it no sooner than 0.2 seconds after its last request, or the next replica
+could send too soon after it, against the SEC's limit ([FETCH-6],
+[FETCH-7]). A mistake in the scheduler's handover would at worst queue
+polls twice, which the fetcher still sends within its limit
+([the fetcher in the deployment][deployment-fetcher]). Jobs the lost replica didn't acknowledge are
 delivered again ([outages and recovery][design-outages]), and those it had
 recorded are announced again, not fetched again ([JOB-6]). The chart grants
 the fetcher's ServiceAccount `create` on Leases, and `get` and `update` on
@@ -282,14 +294,14 @@ it ([REC-10]).
 
 | | What | Where | Statements |
 | --- | --- | --- | --- |
-| Reads | Jobs of kinds `poll`, `filing`, and `backfill` ([job.schema.json]) | `JOBS`, `edgar.jobs.*` | [JOB-4], [JOB-5], [JOB-6], [JOB-7] |
-| Reads | The SecAccess `cluster`: `get`, `list`, `watch` | The API server | [RBAC-2], [ACCESS-1] |
-| Writes | The SecAccess's `status`: `update`, `patch` | The API server | [RBAC-2], [ACCESS-3] |
-| Holds | The Lease `fetcher`: `create`, `get`, `update` | The API server | [LEASE-1], [FETCH-16] |
-| Reads | Its user agent, as `SEC_USER_AGENT` | Its environment, from a Secret | [FETCH-17], [ID-2] |
-| Sends | Requests | `www.sec.gov`, `data.sec.gov` | [FETCH-1] to [FETCH-13] |
-| Writes | Objects | Garage, the bucket `snapshots` | [OBJ-4], [LOG-4], [GARAGE-4] |
-| Writes and reads | Records: `INSERT` and `SELECT`, as the role `fetcher` | PostgreSQL, the table `records` | [FETCH-14], [LOG-3], [PG-7], [PG-8] |
+| Reads | Jobs of kinds `poll`, `filing`, and `backfill` ([job.schema.json]) | `JOBS`, through `fetcher-polls`, `fetcher-filings`, and `fetcher-backfills` | [JOB-4], [JOB-5], [JOB-6], [JOB-7], [FETCHER-9], [FETCHER-10] |
+| Reads | The SecAccess `cluster`: `get`, `list`, `watch` | The API server, by a ClusterRole | [RBAC-2], [ACCESS-1], [FETCHER-4] |
+| Writes | The SecAccess's `status`: `update`, `patch` | The API server, by a ClusterRole | [RBAC-2], [ACCESS-3], [FETCHER-4] |
+| Holds | The Lease `fetcher`: `create`, `get`, `update` | The API server, by a Role | [LEASE-1], [FETCH-16], [FETCHER-4] |
+| Reads | Its user agent, as `SEC_USER_AGENT`, its Garage key, and its role's password | Its environment, each from its Secret | [FETCH-17], [ID-2], [FETCHER-5] |
+| Sends | Requests | `www.sec.gov`, `data.sec.gov`, or the fake EDGAR where CI installs it | [FETCH-1] to [FETCH-13], [FETCHER-13] |
+| Writes | Objects | Garage, the bucket `snapshots`, at `http://garage:3900` | [OBJ-4], [LOG-4], [GARAGE-4], [FETCHER-6] |
+| Writes and reads | Records: `INSERT` and `SELECT`, as the role `fetcher` | PostgreSQL, the table `records`, through `postgres-rw`, verifying the server | [FETCH-14], [LOG-3], [PG-7], [PG-8], [FETCHER-7] |
 | Publishes | Events ([event.schema.json]) | `RECORDS`, `edgar.records.*` | [JOB-6] |
 | Serves | Its metrics | `/metrics`, on its port `metrics` | [METRIC-1], [METRIC-4] |
 | Exports | Its spans, by OTLP | The endpoint `OTEL_EXPORTER_OTLP_ENDPOINT` gives | [TRACE-3], [TRACE-7] |
@@ -317,15 +329,34 @@ The fetcher runs two replicas, of which one is active, through the Lease
 over if the active replica is lost, and one Lease holder is how "one
 process at a time" holds across a cluster, which a test on kind can show
 by deleting the active pod ([0005]). The deployment specification's version
-1.0.0 gives the Lease and its timings ([LEASE-1], [LEASE-2]). Its later
-versions add the replicas of each of the pipeline's services, and their
-resource requests and limits, once measured on kind ([§9 of
-deployment][deployment-later]). Task T49 specifies the fetcher's two, with
-their placement, ServiceAccount, credentials, access to NATS, image, and
-trust of the fake EDGAR's authority where CI installs it, before T23 builds
-it ([plan][plan-observing]). Their resource requests and limits wait for
-the later version that gives each component's ([§9 of
-deployment][deployment-later]).
+1.0.0 gives the Lease and its timings ([LEASE-1], [LEASE-2]), and its
+version 1.4.0 the rest of the fetcher's deployment
+([the fetcher in the deployment][deployment-fetcher]):
+
+- **A Deployment `fetcher` of two replicas** of its image, `edgar/fetcher`,
+  as the ServiceAccount `fetcher`, claiming no volume, and given the commit
+  its image is tagged with, which its records name as `tool` ([FETCHER-1]).
+- **Each replica on a worker node of its own** ([FETCHER-2]). On kind, the
+  two run on two worker nodes, and when the pod that holds the Lease is
+  deleted, the other takes it over, but not before the Lease's duration has
+  passed since its last renewal ([FETCHER-3]).
+- **Grants:** [RBAC-2]'s on the SecAccess and its status, by a ClusterRole,
+  and its Lease's, by a Role, and no others ([FETCHER-4]).
+- **Credentials:** its Garage key, its role's password, and its user agent,
+  read in its environment from their Secrets ([FETCHER-5]).
+- **Its stores:** the bucket `snapshots` through Garage's S3 API, and the
+  database's primary, whose certificate it checks against the `Cluster`'s
+  authority ([FETCHER-6], [FETCHER-7]).
+- **NATS:** its address, without a credential, and three consumers of
+  `JOBS`, one for each kind of job, which only the active replica reads
+  ([FETCHER-8] to [FETCHER-11]). [What it depends on](#what-it-depends-on)
+  says why.
+- **The fake EDGAR's authority,** which it trusts alone where CI installs
+  the fake EDGAR ([FETCHER-12], [FETCHER-13]).
+
+Their resource requests and limits, their probes, and the fetcher's NATS
+credentials wait for the later versions that give each component's
+([§9 of deployment][deployment-later]).
 
 ## How it scales
 
@@ -387,9 +418,17 @@ SEC, then check that the record shows each gap and lost nothing
   consumers it has when the event is published, so the Job makes the
   stream's consumers as soon as it has made the stream, and makes `JOBS`
   last: the fetcher publishes an event only for a job, so none comes before
-  them ([NATS-5]). Its own durable consumer of `JOBS` comes with it, in the
-  later version task T49 specifies ([§9 of deployment][deployment-later],
-  [plan][plan-observing]).
+  them ([NATS-5]). `JOBS` keeps each job until a consumer acknowledges it,
+  so the fetcher's consumers come with it ([FETCHER-9]). It has one for each
+  kind of job, `fetcher-polls`, `fetcher-filings`, and `fetcher-backfills`,
+  and asks the polls' first: a consumer delivers jobs in the order the
+  stream holds them, whatever their kind, so one consumer of all three
+  would deliver a Backfill's job queued before a poll's ahead of it, against
+  [JOB-4]. A fetch can outlast the 30 seconds JetStream waits for an
+  acknowledgement, so while it works on a job, the active replica tells
+  JetStream the job is in progress, and the job isn't delivered again
+  meanwhile ([FETCHER-10]). The fetcher makes no stream or consumer itself,
+  and waits for those it reads ([FETCHER-11]).
 - **Garage and PostgreSQL,** for the bucket `snapshots` and the table
   `records`, which a Job of the umbrella chart creates, granting the
   fetcher's role its privileges ([GARAGE-2], [PG-8]).
@@ -469,12 +508,13 @@ forgotten when the standby took over ([0007]).
 | [JOB-1], [JOB-4] to [JOB-7] | The jobs and events; which job comes next; expired and malformed jobs; record, then event, then acknowledgement. |
 | [ACCESS-1], [ACCESS-3], [BACKFILL-2], [RBAC-2] | It sends only while requests are allowed, records a stop, serves Backfills last, and may change only the SecAccess's status. |
 | [LEASE-1], [LEASE-2] | Its Lease, its timings, and their checks. |
+| [FETCHER-1] to [FETCHER-13] | Its Deployment, its replicas' placement and handover, its grants, credentials, and stores, its consumers of jobs, and its trust of the fake EDGAR's authority. |
 | [GARAGE-4], [PG-6] to [PG-9], [SECRET-1], [IMG-1] | Its bucket, database, role, and credentials, and its image. |
 | [METRIC-1], [METRIC-2], [METRIC-4] | Its metrics, its clock's skew among them. |
 | [ALERT-1] | The alert while requests are stopped. |
 | [TRACE-1], [TRACE-3], [TRACE-5], [TRACE-6], [TRACE-7] | Its spans, and no trace context sent to the SEC. |
 
-Task T49 specifies the fetcher's deployment, and task T23 builds the
+Task T49 specified the fetcher's deployment, and task T23 builds the
 fetcher, with the checks on its requests against the fake EDGAR on kind
 ([plan][plan-observing]). Some of the table's statements
 have tests already: the rules it shares with `snapshot.py`, [FETCH-1] to
@@ -483,9 +523,10 @@ have tests already: the rules it shares with `snapshot.py`, [FETCH-1] to
 schemas' statements, [STORE-1] and [JOB-1]; and those of its bucket,
 database role, and credentials, which T20 wrote with the charts
 ([GARAGE-4], [PG-6] to [PG-9], [SECRET-1]). The others' tests await the
-tasks that build what they describe: T23 the fetcher, its Lease, jobs, and
-writes among them, whose image [IMG-1]'s test, written in T21 with the fake
-EDGAR's, checks once the chart renders it; T24 [FETCH-18]; and
+tasks that build what they describe: T23 the fetcher, its Lease, jobs,
+writes, and deployment among them, whose image [IMG-1]'s test, written in
+T21 with the fake EDGAR's, checks once the chart renders it; T24
+[FETCH-18]; and
 T28 and T29 its metrics, its alert, and its traces
 ([§3 of the store][snapshots-ids], [§3 of the controls][controls-ids], [§3
 of deployment][deployment-ids], [§3 of telemetry][telemetry-ids]).
@@ -590,9 +631,23 @@ of deployment][deployment-ids], [§3 of telemetry][telemetry-ids]).
 [deployment-guarantees]: ../../spec/deployment.md#1-guarantees
 [deployment-ids]: ../../spec/deployment.md#3-statement-ids
 [deployment-lease]: ../../spec/deployment.md#the-fetchers-lease
+[deployment-fetcher]: ../../spec/deployment.md#the-fetcher
 [deployment-later]: ../../spec/deployment.md#9-later-versions
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease
 [LEASE-2]: ../../spec/deployment.md#the-fetchers-lease
+[FETCHER-1]: ../../spec/deployment.md#the-fetcher
+[FETCHER-2]: ../../spec/deployment.md#the-fetcher
+[FETCHER-3]: ../../spec/deployment.md#the-fetcher
+[FETCHER-4]: ../../spec/deployment.md#the-fetchers-grants
+[FETCHER-5]: ../../spec/deployment.md#the-fetchers-credentials-and-stores
+[FETCHER-6]: ../../spec/deployment.md#the-fetchers-credentials-and-stores
+[FETCHER-7]: ../../spec/deployment.md#the-fetchers-credentials-and-stores
+[FETCHER-8]: ../../spec/deployment.md#the-fetchers-access-to-nats
+[FETCHER-9]: ../../spec/deployment.md#the-fetchers-access-to-nats
+[FETCHER-10]: ../../spec/deployment.md#the-fetchers-access-to-nats
+[FETCHER-11]: ../../spec/deployment.md#the-fetchers-access-to-nats
+[FETCHER-12]: ../../spec/deployment.md#the-fetcher-and-the-fake-edgar
+[FETCHER-13]: ../../spec/deployment.md#the-fetcher-and-the-fake-edgar
 [NATS-3]: ../../spec/deployment.md#nats
 [NATS-5]: ../../spec/deployment.md#durable-consumers
 [GARAGE-2]: ../../spec/deployment.md#garage
