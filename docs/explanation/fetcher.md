@@ -321,7 +321,11 @@ by deleting the active pod ([0005]). The deployment specification's version
 versions add the replicas of each of the pipeline's services, and their
 resource requests and limits, once measured on kind ([§9 of
 deployment][deployment-later]). Task T49 specifies the fetcher's two, with
-the rest of its deployment, before T23 builds it ([plan][plan-observing]).
+their placement, ServiceAccount, credentials, access to NATS, image, and
+trust of the fake EDGAR's authority where CI installs it, before T23 builds
+it ([plan][plan-observing]). Their resource requests and limits wait for
+the later version that gives each component's ([§9 of
+deployment][deployment-later]).
 
 ## How it scales
 
