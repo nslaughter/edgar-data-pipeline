@@ -1,6 +1,6 @@
 # Specification: deployment
 
-**Status:** Version 1.3.0, draft, October 22, 2026. This document governs
+**Status:** Version 1.4.0, draft, October 25, 2026. This document governs
 what the pipeline's Helm charts install, in which order and at which
 versions, and how they configure what they install: the charts, operators,
 and images they pin; the custom resource definitions they install; each
@@ -8,12 +8,14 @@ component's replicas, storage, credentials, and placement; the cluster
 store's bucket, database, table, and streams, and the fetcher's Lease; the
 discoverer's streams, tables, credentials, and durable consumers, and
 Grafana's access to the record; the scheduler's Deployment, Lease,
-ServiceAccount, access to NATS, and durable consumers; the fake EDGAR that
-CI installs for tests, and how the pipeline's images are built; the kind
-cluster they're installed on; the tools that install them; and the tests
-that check them. Where a chart and this document disagree, the chart is
-wrong or this document needs a new version; say which before changing
-either.
+ServiceAccount, access to NATS, and durable consumers; the fetcher's
+Deployment, ServiceAccount, credentials, access to its stores and to NATS,
+durable consumers, and trust of the fake EDGAR's certificate authority; the
+fake EDGAR that CI installs for tests, and how the pipeline's images are
+built; the kind cluster they're installed on; the tools that install them;
+and the tests that check them. Where a chart and this document disagree,
+the chart is wrong or this document needs a new version; say which before
+changing either.
 
 It rests on the decisions to deploy on Kubernetes with Helm, on kind
 ([0001]); to install the definitions and the operators before the umbrella
@@ -27,8 +29,12 @@ Grafana, what the telemetry's version 0.1.0 leaves to it
 ([`telemetry.md`, §11](telemetry.md#left-to-other-specifications)). It
 deploys the scheduler, the controller that the controls' version 1.0.0
 describes ([`controls.md`](controls.md)), on the decision to reconcile the
-controls with it ([0007]). It installs, for CI, the fake EDGAR that the fake
-EDGAR's version 0.1.0 describes ([`fake-edgar.md`](fake-edgar.md)).
+controls with it ([0007]). It deploys the fetcher, which the snapshot
+store's version 1.0.0 describes
+([`snapshots.md`](snapshots.md#the-fetcher)), on the decision to send every
+request to the SEC through one active fetcher ([0005]). It installs, for
+CI, the fake EDGAR that the fake EDGAR's version 0.1.0 describes
+([`fake-edgar.md`](fake-edgar.md)).
 Each component's resource requests and limits, which are measured on kind,
 aren't in this version ([§9](#9-later-versions)). The pipeline it deploys
 reads filings from the U.S. Securities and Exchange Commission's EDGAR
@@ -72,7 +78,7 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
 10. **Only the fetcher writes to the cluster store, and no service can
     change a record:** each service has credentials of its own, and only
     the fetcher's may add records and objects ([LOG-3], [LOG-4]). [GARAGE-4],
-    [PG-6], [PG-7], [PG-8], [PG-9].
+    [PG-6], [PG-7], [PG-8], [PG-9], [FETCHER-5].
 11. **Only the discoverer adds to the notices' tables, no service changes
     them, and Grafana reads only the views made for it,** each with a
     database role of its own ([TABLE-3], [VIEW-3]). [PG-7], [PG-11],
@@ -83,14 +89,24 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
     [SCHED-8].
 13. **The tests on kind never reach the SEC.** CI installs the fake EDGAR,
     which answers for the SEC's hosts from the stored versions, and every
-    pod that asks for those hosts reaches it. The owner's installations
-    never include it. [FAKE-1], [FAKE-2], [FAKE-3], [FAKE-4], [FAKE-5].
+    pod that asks for those hosts reaches it. There, the fetcher trusts only
+    the certificate authority the release makes for the fake EDGAR, so a
+    request of its that reached the SEC would fail before it was sent. The
+    owner's installations never include it. [FAKE-1], [FAKE-2], [FAKE-3],
+    [FAKE-4], [FAKE-5], [FETCHER-12], [FETCHER-13].
 14. **One scheduler replica at a time acts, and the other is on another
     worker node,** ready to take the Lease over. A replica that Kubernetes
     stops hands the Lease over without waiting out its duration. The
     scheduler can do with the API server only what the controls grant it
     and its Lease needs. [SCHED-1], [SCHED-2], [SCHED-3], [SCHED-4],
     [SCHED-5], [SCHED-6], [RBAC-1].
+15. **One fetcher replica at a time sends and reads jobs, and the other is
+    on another worker node,** ready to take the Lease over once its
+    duration has passed without a renewal, so the two never send at once
+    ([FETCH-16]). The fetcher can do with the API server only what the
+    controls grant it and its Lease needs, and no other service reads its
+    credentials. [FETCHER-1], [FETCHER-2], [FETCHER-3], [FETCHER-4],
+    [FETCHER-5], [FETCHER-10], [LEASE-1], [LEASE-2], [RBAC-2].
 
 ## 2. Terms
 
@@ -120,7 +136,7 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
   such as the fetcher, from one of its own images.
 - **Active replica:** of a service whose replicas act one at a time, the
   replica that holds the service's Lease, and so does its work, such as
-  the scheduler's ([SCHED-4]).
+  the scheduler's ([SCHED-4]) or the fetcher's ([FETCH-16]).
 - **The cluster store:** the store's objects in Garage and records in
   PostgreSQL, as the snapshot store's specification describes it
   ([`snapshots.md`](snapshots.md#the-cluster-store)).
@@ -141,8 +157,10 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
 
 Every normative statement in this document has an ID, such as `PG-1`: an
 area and a number. The areas `CHART`, `PIN`, `PG`, `CRD`, `IMG`, `KIND`,
-`VOL`, `PLACE`, `NATS`, `GARAGE`, `MON`, `SECRET`, `LEASE`, `SCHED`, and
-`FAKE` belong to this document. An ID is assigned once and never reused or renumbered. A
+`VOL`, `PLACE`, `NATS`, `GARAGE`, `MON`, `SECRET`, `LEASE`, `SCHED`,
+`FETCHER`, and `FAKE` belong to this document. `FETCHER`, the fetcher's
+deployment, is an area apart from the snapshot store's `FETCH`, its rules
+for fetching. An ID is assigned once and never reused or renumbered. A
 statement that is dropped stays in the [index](#8-index), marked retired.
 
 Each statement is one of two kinds:
@@ -156,7 +174,7 @@ Each statement is one of two kinds:
   the other tests, wherever those run, and need Helm.
 - A **rule** is how the installed charts, or the tools around them, behave,
   or how a service uses what the charts give it, such as the scheduler its
-  Lease ([SCHED-4]). Tests check the installed charts in the CI job that
+  Lease ([SCHED-4]) or the fetcher its consumers ([FETCHER-10]). Tests check the installed charts in the CI job that
   installs them on kind, and are skipped where no cluster is installed. A
   rule on a tool, such as [IMG-2]'s command, is checked by tests of that
   tool, and one on a service by the service's tests.
@@ -174,9 +192,10 @@ task, and fails if the statement has a test or the plan marks the task
 done. This version's statements come before the charts they describe: T20
 builds the charts and writes their tests, apart from [IMG-1] to [IMG-3]'s,
 [IMG-5]'s, and [FAKE-1] to [FAKE-5]'s, which T21 writes with the first of
-the pipeline's images, the fake EDGAR's; [LEASE-1]'s and [LEASE-2]'s,
-which T23 writes with the fetcher; and [SCHED-1] to [SCHED-9]'s, which T22
-writes with the scheduler. Until then each awaits its task.
+the pipeline's images, the fake EDGAR's; [LEASE-1]'s, [LEASE-2]'s, and
+[FETCHER-1] to [FETCHER-13]'s, which T23 writes with the fetcher; and
+[SCHED-1] to [SCHED-9]'s, which T22 writes with the scheduler. Until then
+each awaits its task.
 
 ## 4. Layout
 
@@ -263,7 +282,7 @@ charts their own projects maintain ([0001]).
 | 1 | `deploy/prometheus-crds/` | `prometheus-crds` | `edgar` | The Prometheus operator's definitions ([0008]) |
 | 2 | `deploy/cert-manager/` | `cert-manager` | `cert-manager` | cert-manager, with its definitions, which the Barman Cloud plugin requires for its certificates |
 | 3 | `deploy/operators/` | `operators` | `cnpg-system` | The CloudNativePG operator ([0004]) and its Barman Cloud plugin, which backs the database up to Garage ([0002]), with their definitions; Garage's definition; and the pipeline's own ([`controls.md`](controls.md#4-the-resources)) |
-| 4 | `deploy/chart/` | `edgar` | `edgar` | NATS, with JetStream ([0003]); Garage ([0002]); kube-prometheus-stack ([0008]); the database ([§7](#7-postgresql)); the scheduler ([SCHED-1]); the fake EDGAR, where CI installs it ([FAKE-1]); and later the pipeline's other services and its controls |
+| 4 | `deploy/chart/` | `edgar` | `edgar` | NATS, with JetStream ([0003]); Garage ([0002]); kube-prometheus-stack ([0008]); the database ([§7](#7-postgresql)); the scheduler ([SCHED-1]); the fetcher ([FETCHER-1]); the fake EDGAR, where CI installs it ([FAKE-1]); and later the pipeline's other services and its controls |
 
 Their dependencies:
 
@@ -278,9 +297,9 @@ Their dependencies:
 | `deploy/chart/` | `kube-prometheus-stack` | `oci://ghcr.io/prometheus-community/charts` |
 
 The database itself, a CloudNativePG `Cluster` and its `ImageCatalog`, is
-in the umbrella chart's own templates ([§7](#7-postgresql)), as is the
-scheduler ([SCHED-1]). Tempo, Loki, Alloy, and the pipeline's other services
-arrive in later versions. The
+in the umbrella chart's own templates ([§7](#7-postgresql)), as are the
+scheduler ([SCHED-1]) and the fetcher ([FETCHER-1]). Tempo, Loki, Alloy,
+and the pipeline's other services arrive in later versions. The
 operators run as their charts deploy them by default, one replica each:
 while one restarts, its resources wait in the API server.
 
@@ -424,7 +443,9 @@ message. Each consumer has three replicas, as its stream has, so its place
 in the stream survives the loss of a node.
 
 The scheduler's consumer of poll events, `scheduler-polls`, comes with the
-scheduler, and is configured and made as these are ([SCHED-8]).
+scheduler, and is configured and made as these are ([SCHED-8]). So do the
+fetcher's consumers of jobs, one for each kind, which come with the fetcher
+([FETCHER-9]).
 
 Helm creates the umbrella chart's services, and waits for them to be ready,
 before its hook Jobs run ([CHART-4]), so a service may publish before the
@@ -612,6 +633,213 @@ starts.
   holds the Lease `fetcher` in the release namespace, with
   `leaseDurationSeconds` as the values give it.
 
+### The fetcher
+
+The fetcher sends every request to the SEC and writes the cluster store
+([`snapshots.md`](snapshots.md#the-fetcher), [0005]). It runs as two
+replicas, of which one at a time sends requests and takes jobs: the one that
+holds the Lease `fetcher`, through client-go's leader election ([LEASE-1],
+[FETCH-16], [0006]). The other waits on another worker node, to take the
+Lease over when the first is lost. The fetcher uses the API server, for the
+SecAccess and its Lease; NATS, for its jobs and events; Garage and the
+database, for the cluster store; and the SEC's hosts, which the fake EDGAR
+answers for where CI installs it.
+
+Unlike the scheduler's ([SCHED-4]), a fetcher replica that Kubernetes stops
+doesn't release the Lease, so another replica takes it over only once its
+duration has passed without a renewal, as when the active replica is lost
+([the fetcher's Lease](#the-fetchers-lease)). A replica that released it
+would have to stop sending first, and release it no sooner than 0.2 seconds
+after its last request, or the next replica's first request could break
+[FETCH-6] or [FETCH-7], on which the SEC's limit rests. A mistake in the
+scheduler's handover would at worst queue polls twice, which the fetcher
+still sends within its limit. So an upgrade or a drain that stops the active
+fetcher pauses fetching for up to the Lease's duration, 15 seconds by
+default, and a Source whose poll's job expires meanwhile shows a gap, as
+when the active replica is lost ([JOB-5],
+[§5 of the notices](notices.md#5-polls-coverage-and-gaps)).
+
+- **FETCHER-1** (invariant) The umbrella chart renders, in the release
+  namespace, a Deployment `fetcher` of two replicas, whose pods run as the
+  ServiceAccount `fetcher`, which the chart also renders. Its container
+  runs the fetcher's image, one of the pipeline's own, from the value
+  `fetcher.image`, `edgar/fetcher` by default ([IMG-1]), and names the port
+  it serves its metrics on `metrics` ([METRIC-1]). It claims no volume. The
+  chart gives the fetcher `images.commit`, its image's tag, which its
+  records' `tool` names ([§6 of the store](snapshots.md#6-records)).
+- **FETCHER-2** (invariant) The fetcher's pods each need a worker node of
+  their own: they carry, against each other, a required pod anti-affinity,
+  or a topology spread constraint with `whenUnsatisfiable: DoNotSchedule`,
+  on `kubernetes.io/hostname`, as the scheduler's do ([SCHED-2]).
+- **FETCHER-3** (rule) In the installed charts, the fetcher's two pods run
+  on two worker nodes. When the pod that holds the Lease `fetcher` is
+  deleted, a fetcher pod other than the deleted one holds the Lease, though
+  not before the Lease's duration has passed since the deleted pod's last
+  renewal.
+
+#### The fetcher's grants
+
+The fetcher's grants on the controls are [RBAC-2]'s: it reads the
+SecAccess, to send only while requests are allowed ([ACCESS-1]), and sets
+its `status`, to record a stop ([ACCESS-3]). The SecAccess is
+cluster-scoped, so a ClusterRole grants them. Its Lease needs what
+[LEASE-1] grants, by a Role in the release namespace. It's granted nothing
+else: it reads no Source or Backfill, whose jobs carry what it needs
+([JOB-2], [JOB-3]), and records no Kubernetes Events, as the scheduler
+records none ([SCHED-6]). Whether a replica is the active one is in its
+metrics ([METRIC-4]) and in the Lease.
+
+- **FETCHER-4** (invariant) The umbrella chart grants the fetcher's
+  ServiceAccount [RBAC-2]'s verbs, on the SecAccess and its `status`, by a
+  ClusterRole, and [LEASE-1]'s, on Leases, by a Role in the release
+  namespace. No RoleBinding or ClusterRoleBinding the charts render binds
+  the ServiceAccount to any other role.
+
+#### The fetcher's credentials and stores
+
+The fetcher proves itself to Garage with its key and to the database with
+its role's password ([GARAGE-4], [PG-7]), and identifies the owner to the
+SEC with the owner's user agent ([FETCH-2]). Each is a value of the
+umbrella chart, which the chart renders into a Secret ([SECRET-1], [ID-2]).
+The fetcher reads each in its environment, set from its Secret by
+reference, as it reads its user agent ([FETCH-17]), so none is in its
+arguments or in a literal value ([SECRET-3]). Without a user agent the
+fetcher sends nothing ([FETCH-17]), so the chart requires one, as it
+requires each credential, rather than install a fetcher that can't fetch.
+
+Garage's S3 API speaks plain HTTP in the cluster: a request carries a
+signature made with the key's secret, never the secret itself. The
+database speaks TLS, with a certificate that CloudNativePG issues from an
+authority of its own, which the fetcher checks the server against, as
+Grafana does ([MON-5]), so it adds records only to the database.
+
+Which variables hold the key and the password, and how the chart gives the
+fetcher the rest of what these statements say it gives it, as arguments or
+in its environment, is for the chart and the fetcher to agree, as it is for
+the scheduler: its Lease's name and timings ([LEASE-1]); the addresses of
+Garage, the database, and NATS; the bucket and the region; the database's
+name and the role's; where its pod mounts each certificate ([FETCHER-7],
+[FETCHER-12]); its consumers' names; the commit; and the release
+namespace.
+
+- **FETCHER-5** (invariant) The fetcher's container reads in its
+  environment, each by reference to the Secret the umbrella chart renders
+  it into: the ID and secret of the Garage key `fetcher` ([GARAGE-4]); the
+  password of the database role `fetcher` ([PG-7]); and the user agent, as
+  `SEC_USER_AGENT` ([ID-2]). It reads no other Secret in its environment,
+  and mounts none but for the certificates of [FETCHER-7] and
+  [FETCHER-12]. No other service's container reads the fetcher's key or its
+  role's password. The chart's `values.schema.json` requires
+  `fetcher.secUserAgent`, a string that contains an `@` ([FETCH-2]).
+- **FETCHER-6** (invariant) The umbrella chart gives the fetcher the
+  cluster store's bucket, `snapshots` ([GARAGE-4]), and Garage's S3 API, at
+  `http://garage:3900`, the S3 port of the Service `garage` in the release
+  namespace, with the region that the chart's values give Garage's S3 API.
+- **FETCHER-7** (invariant) The umbrella chart gives the fetcher the
+  database: it connects, at port 5432, to the Service that CloudNativePG
+  makes for the `Cluster`'s primary, the `Cluster`'s name followed by
+  `-rw`, and uses the database `edgar` as the role `fetcher` ([PG-7]). It
+  verifies the server's certificate and name, as `sslmode: verify-full`
+  does, against the `Cluster`'s certificate authority. The fetcher's pod
+  mounts the authority's certificate alone, `ca.crt`, from the Secret
+  CloudNativePG keeps it in, without the authority's key, as Grafana's
+  does ([MON-5]).
+
+#### The fetcher's access to NATS
+
+NATS asks no credential in this version ([§9](#9-later-versions)), so the
+fetcher's access to NATS is NATS's address, and the streams and consumers
+the Job makes for what it reads and publishes. It reads jobs from `JOBS`
+through consumers of its own, and publishes each event on the subject of
+its job's kind, which `RECORDS` takes ([JOB-6]).
+
+Before each request, the fetcher takes the job queued first of the first
+kind that has one waiting: `poll`, then `filing`, then `backfill` ([JOB-4]).
+A consumer delivers the messages it filters in the order its stream holds
+them, whatever their subjects, so one consumer of all three kinds would
+deliver a Backfill's job queued before a poll's ahead of it. So the fetcher
+has a consumer for each kind, and asks the polls' first. A work queue lets
+no two of its consumers filter the same subject, and one filter subject
+each keeps them apart. `JOBS` keeps each job until a consumer acknowledges
+it, whenever the consumer is made, so the consumers come with the fetcher.
+
+Each delivers as many unacknowledged jobs at once as JetStream's default
+allows. With one at most, a job that a lost replica took and didn't
+acknowledge would hold back each later job of its kind until JetStream
+delivered it again: 30 seconds after the replica last said it was at work
+on the job, as the next paragraph explains, or after the job was
+delivered, if it said nothing ([durable consumers](#durable-consumers)).
+Every Source's polls would wait behind one poll's job, which, at the 10
+seconds each company's Source starts at ([0010]), has expired by then
+([JOB-2]), so the fetcher acknowledges it without a request ([JOB-5]).
+With JetStream's default, the replica that takes the Lease over takes the
+next job at once, and the earlier one when it's delivered again.
+
+A fetch can take longer than those 30 seconds: up to 4 attempts of up to 60
+seconds each, with a wait of up to 60 seconds before each retry ([FETCH-5],
+[FETCH-8]). So while it works on a job, the fetcher tells JetStream the job
+is in progress, which starts the 30 seconds again, and JetStream doesn't
+deliver the job again while the fetcher is still at work on it. A job that
+a lost replica held is delivered again 30 seconds after the last such word.
+
+The Job makes `JOBS` last, once the release's resources are ready
+([NATS-5], [CHART-4]), so a new install's fetcher starts before its
+consumers exist, and waits for them. Until then no job can be queued, since
+JetStream refuses one published before `JOBS` exists, and once one is,
+`RECORDS`, which the Job makes earlier, takes its event.
+
+- **FETCHER-8** (invariant) The umbrella chart gives the fetcher NATS's
+  address, `nats://nats:4222`, as it gives the scheduler ([SCHED-7]). In
+  this version it gives it no credential for NATS, which asks none.
+- **FETCHER-9** (invariant) The umbrella chart's values list, on `JOBS`,
+  the fetcher's three durable consumers, each with one filter subject:
+  `fetcher-polls`, of `edgar.jobs.poll`; `fetcher-filings`, of
+  `edgar.jobs.filing`; and `fetcher-backfills`, of `edgar.jobs.backfill`.
+  Each has JetStream's default for its most unacknowledged messages, and is
+  configured as [NATS-5] configures each consumer the values list: a pull
+  consumer with `ack_policy: explicit`, `deliver_policy: all`,
+  `max_deliver: -1`, and three replicas. They're the only consumers the
+  values list on `JOBS`.
+- **FETCHER-10** (rule) Only the fetcher's active replica, the one that
+  holds the Lease `fetcher`, reads the fetcher's consumers; no other
+  replica reads them. It asks `fetcher-polls` for a job first, then
+  `fetcher-filings`, then `fetcher-backfills`, as [JOB-4] orders the jobs.
+  While it works on a job it took, it tells JetStream that the job is
+  in progress before the consumer's 30 seconds pass, so JetStream doesn't
+  deliver again a job the fetcher is still at work on, however long its
+  fetch takes.
+- **FETCHER-11** (rule) The fetcher creates, changes, and deletes no
+  stream and no consumer, which [NATS-3]'s Job alone makes, from the
+  values. Until a consumer it reads exists, it waits for it, and reads from
+  it once it does.
+
+#### The fetcher and the fake EDGAR
+
+Where CI installs the fake EDGAR, it answers for the SEC's hosts with a
+certificate that the release's own authority issues ([FAKE-3]), which no
+image's roots hold. So the chart gives the fetcher that authority's
+certificate there, and the fetcher checks the certificates of the SEC's
+hosts against it alone, in place of the roots its image holds. A request
+that reached the SEC from such a cluster, as one would if kind's DNS didn't
+answer for the SEC's names ([FAKE-4]), would then fail at its TLS
+handshake, before its headers, the user agent among them, were sent.
+Without the fake EDGAR, which the owner's installations never include
+([FAKE-1]), the fetcher checks the SEC's certificates against its image's
+roots.
+
+- **FETCHER-12** (invariant) With `fakeEdgar.enabled`, the fetcher's pod
+  mounts the certificate of the authority that issues the fake EDGAR's
+  certificate ([FAKE-3]) alone, `ca.crt`, from the Secret cert-manager
+  keeps it in, without the authority's key, and the umbrella chart gives
+  the fetcher that certificate, to check the SEC's hosts against. Without
+  `fakeEdgar.enabled`, the pod mounts nothing of the authority's, and the
+  chart gives the fetcher no certificate to check them against.
+- **FETCHER-13** (rule) Given a certificate to check the SEC's hosts
+  against, the fetcher accepts a certificate for those hosts only if it
+  chains to that certificate, whatever the roots its image holds; given
+  none, only if it chains to one of its image's roots. It sends no request
+  over a connection whose certificate it doesn't accept.
+
 ### The scheduler
 
 The scheduler is the controller that reconciles the controls
@@ -785,8 +1013,8 @@ reaches it instead. Its certificate comes from a certificate authority that
 the release makes for it through cert-manager, which the second release
 installs. A client in the cluster checks it against the authority's
 certificate alone, `ca.crt`, as Grafana checks the database's ([MON-5]).
-How the fetcher mounts that certificate comes with the version that deploys
-the fetcher ([§9](#9-later-versions)).
+Where CI installs the fake EDGAR, the fetcher trusts that authority alone
+([FETCHER-12], [FETCHER-13]).
 
 - **FAKE-1** (invariant) The umbrella chart renders the fake EDGAR, and
   what [FAKE-2] and [FAKE-3] give it, only when its value
@@ -1110,6 +1338,19 @@ keeps PostgreSQL's default, which lets every role execute it.
 | SECRET-4 | rule | review, operator | CI generates credentials per cluster, and the owner commits none. |
 | LEASE-1 | invariant | tests | The fetcher's Lease, `fetcher`, takes its timings from values, 15, 10, and 2 seconds by default, and the chart refuses those client-go's leader election refuses. |
 | LEASE-2 | rule | kind | One of the fetcher's pods holds the Lease, with the values' duration. |
+| FETCHER-1 | invariant | tests | The fetcher is a Deployment of two replicas of its image, as its own ServiceAccount, with its port `metrics`, no claim, and the commit its image is tagged with. |
+| FETCHER-2 | invariant | tests | The fetcher's pods each need a worker node of their own. |
+| FETCHER-3 | rule | kind | The fetcher's pods are on two worker nodes; when the one that holds the Lease is deleted, another holds it, but not before its duration has passed. |
+| FETCHER-4 | invariant | tests | The fetcher's ServiceAccount has RBAC-2's grants and its Lease's, and is bound to no other role. |
+| FETCHER-5 | invariant | tests | The fetcher reads its Garage key, its role's password, and its user agent in its environment from their Secrets, which no other service reads; the user agent is a required value. |
+| FETCHER-6 | invariant | tests | The fetcher is given the bucket `snapshots` and Garage's S3 API. |
+| FETCHER-7 | invariant | tests | The fetcher connects to the database's primary as `fetcher`, verifying the server against the `Cluster`'s authority. |
+| FETCHER-8 | invariant | tests | The fetcher is given NATS's address, and no NATS credential. |
+| FETCHER-9 | invariant | tests | The values list the fetcher's three durable consumers on `JOBS`, one for each kind of job, as NATS-5 configures each consumer. |
+| FETCHER-10 | rule | tests | Only the active fetcher reads its consumers, the polls' first, and a job it's at work on isn't delivered again. |
+| FETCHER-11 | rule | tests | The fetcher makes no stream or consumer, and waits for those it reads. |
+| FETCHER-12 | invariant | tests | Where CI installs the fake EDGAR, the fetcher's pod mounts that authority's certificate alone, and the fetcher is given it to check the SEC's hosts against. |
+| FETCHER-13 | rule | tests | Given that certificate, the fetcher accepts only certificates for the SEC's hosts that chain to it; given none, only those that chain to its image's roots. |
 | SCHED-1 | invariant | tests | The scheduler is a Deployment of two replicas of its image, as its own ServiceAccount, with its port `metrics`, and no claim or Secret. |
 | SCHED-2 | invariant | tests | The scheduler's pods each need a worker node of their own. |
 | SCHED-3 | invariant | tests | The scheduler's Lease, `scheduler`, takes its timings from values, 15, 10, and 2 seconds by default, and the chart refuses those client-go's leader election refuses. |
@@ -1130,17 +1371,23 @@ keeps PostgreSQL's default, which lets every role execute it.
 Later versions of this document will add:
 
 1. **The pipeline's other services,** as each is built, with their
-   replicas, credentials, and placement, such as the fetcher's two replicas
-   ([0005]), and the database role and Garage key of each service after the
-   discoverer ([PG-7], [GARAGE-4]). The scheduler's are this version's
-   ([the scheduler](#the-scheduler)). The fetcher's version also says how
-   the fetcher trusts the fake EDGAR's certificate authority where CI
-   installs the fake EDGAR ([FAKE-3]).
-2. **The fetcher's durable consumer of `JOBS`,** with the fetcher. `JOBS`
-   is a work queue, which keeps a job until it's acknowledged, so its
-   consumer can come with its service. A consumer of a stream kept by
-   interest comes in a version before the service that publishes what it
-   should see, as this version's do ([NATS-5]).
+   replicas, credentials, and placement, such as the discoverer's, and the
+   database role and Garage key of each service after the discoverer
+   ([PG-7], [GARAGE-4]). The scheduler's and the fetcher's are this
+   version's ([the scheduler](#the-scheduler),
+   [the fetcher](#the-fetcher)), as is how the fetcher trusts the fake
+   EDGAR's certificate authority where CI installs the fake EDGAR, which
+   the fake EDGAR's specification leaves to the version that deploys the
+   fetcher ([the fetcher and the fake EDGAR](#the-fetcher-and-the-fake-edgar)).
+2. **No more durable consumers of the work queues.** `JOBS` and `ORDERS`
+   are work queues, which keep a message until it's acknowledged, so a
+   consumer of one can come with its service, as the fetcher's of `JOBS`
+   do ([FETCHER-9]). Each subject of either now has its consumer, `JOBS`'
+   in this version and `ORDERS`' in version 1.1.0 ([NATS-5]), and a work
+   queue lets no two of its consumers filter the same subject, so none
+   remains to add. A consumer of a stream kept by interest comes in a
+   version before the service that publishes what it should see, as
+   version 1.1.0's do ([NATS-5]).
 3. **Changes to the record's tables and views.** [PG-8]'s Job creates
    `records` only where there's none, and the notices' tables and the
    schema `dashboards` only where there are none ([PG-12], [PG-13]), so a
@@ -1160,8 +1407,9 @@ Later versions of this document will add:
 7. **NATS's credentials,** each service's own, kept in Secrets rendered
    from required values like the others ([SECRET-1]), with permissions
    that limit each service to the subjects it publishes and the consumers
-   it reads, such as the scheduler's ([SCHED-7]). NATS asks no credential
-   in this version, so any pod that reaches it may publish to any subject.
+   it reads, such as the scheduler's and the fetcher's ([SCHED-7],
+   [FETCHER-8]). NATS asks no credential in this version, so any pod that
+   reaches it may publish to any subject.
 
 The owner decided on October 11, 2026 that each image built from this
 repository is tagged with the commit it's built from and loaded into kind
@@ -1185,6 +1433,12 @@ specified in a version of this document before it's built, and that the
 scheduler reads the records of its polls through a durable consumer of
 `edgar.records.poll` on `RECORDS`, rather than as a database role: version
 1.3.0. The owner confirmed on October 22, 2026 the details that version
+settles. The owner decided on October 24, 2026 that the fetcher's
+deployment is specified in a version of this document before it's built,
+as the scheduler's was, and confirmed the same day that it leaves the
+fetcher's resource requests and limits, its probes, and its NATS
+credentials to the later versions above, items 4 and 7: version 1.4.0.
+The owner confirmed on October 25, 2026 the details that version
 settles.
 
 ## 10. Changes to this document
@@ -1281,6 +1535,41 @@ Nothing changes on a cluster until T22 builds the scheduler, which adds
 [NATS-3]'s Job then makes the consumer on a stream that already takes its
 subjects, before the fetcher, which T23 builds, publishes any poll event.
 
+### From version 1.3.0
+
+Version 1.4.0 deploys the fetcher. It adds statements, an area, and a
+guarantee, so it's a minor version: no statement's meaning changes.
+
+- **The fetcher:** a Deployment of two replicas of its image, as a
+  ServiceAccount of its own, which claims no volume and is given the commit
+  its image is tagged with, [FETCHER-1]; each replica on a worker node of
+  its own, [FETCHER-2], and on kind [FETCHER-3], where a replica that
+  Kubernetes stops doesn't release the Lease, unlike the scheduler's;
+  [RBAC-2]'s grants and its Lease's, and no others, [FETCHER-4]; its Garage
+  key, its database role's password, and its user agent, read from their
+  Secrets, with the user agent a required value, [FETCHER-5]; the bucket
+  and Garage's S3 API, [FETCHER-6], and the database's primary, verified
+  against the `Cluster`'s authority, [FETCHER-7]; NATS's address, without a
+  credential, [FETCHER-8]; its three durable consumers of `JOBS`, one for
+  each kind of job, which only its active replica reads and which it never
+  makes, [FETCHER-9] to [FETCHER-11]; and, where CI installs the fake
+  EDGAR, that authority's certificate, which it trusts in place of its
+  image's roots, [FETCHER-12] and [FETCHER-13]. That is guarantee 15, and
+  the fetcher joins guarantees 10 and 13.
+- **The area `FETCHER`,** apart from the snapshot store's `FETCH`,
+  [§3](#3-statement-ids).
+- **Later versions:** [§9](#9-later-versions)'s item 1 no longer names the
+  fetcher as a later version, and points to how it trusts the fake EDGAR's
+  authority, which the fake EDGAR's specification leaves to this version.
+  Item 2 says no durable consumer of a work queue remains to add, now that
+  the fetcher's are this version's, and keeps its number.
+
+Nothing changes on a cluster until T23 builds the fetcher, which adds its
+consumers to the values. On a cluster that already has `JOBS`, [NATS-3]'s
+Job then makes them on the stream, which keeps each job it holds until a
+consumer acknowledges it. The fetcher takes each such job as any other, and
+acknowledges a poll's job that has expired without a request ([JOB-5]).
+
 [0001]: ../docs/decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
 [0002]: ../docs/decisions/0002-store-bodies-in-garage.md
 [0003]: ../docs/decisions/0003-queue-work-in-nats-jetstream.md
@@ -1291,6 +1580,8 @@ subjects, before the fetcher, which T23 builds, publishes any poll event.
 [0008]: ../docs/decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md
 [0010]: ../docs/decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
 [0011]: ../docs/decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md
+[ACCESS-1]: controls.md#8-secaccess
+[ACCESS-3]: controls.md#8-secaccess
 [ADMIN-1]: fake-edgar.md#7-the-admin-port
 [BACKFILL-1]: controls.md#7-backfill
 [CHART-1]: #4-layout
@@ -1311,19 +1602,42 @@ subjects, before the fetcher, which T23 builds, publishes any poll event.
 [FAKE-4]: #the-fake-edgar
 [FAKE-5]: #the-fake-edgar
 [FETCH-1]: snapshots.md#10-fetching
+[FETCH-2]: snapshots.md#10-fetching
+[FETCH-5]: snapshots.md#10-fetching
+[FETCH-6]: snapshots.md#10-fetching
+[FETCH-7]: snapshots.md#10-fetching
+[FETCH-8]: snapshots.md#10-fetching
 [FETCH-16]: snapshots.md#the-fetcher
+[FETCH-17]: snapshots.md#the-fetcher
+[FETCHER-1]: #the-fetcher
+[FETCHER-2]: #the-fetcher
+[FETCHER-3]: #the-fetcher
+[FETCHER-4]: #the-fetchers-grants
+[FETCHER-5]: #the-fetchers-credentials-and-stores
+[FETCHER-6]: #the-fetchers-credentials-and-stores
+[FETCHER-7]: #the-fetchers-credentials-and-stores
+[FETCHER-8]: #the-fetchers-access-to-nats
+[FETCHER-9]: #the-fetchers-access-to-nats
+[FETCHER-10]: #the-fetchers-access-to-nats
+[FETCHER-11]: #the-fetchers-access-to-nats
+[FETCHER-12]: #the-fetcher-and-the-fake-edgar
+[FETCHER-13]: #the-fetcher-and-the-fake-edgar
 [FILE-5]: notices.md#7-a-filings-files
 [GAP-3]: notices.md#5-polls-coverage-and-gaps
 [GARAGE-1]: #garage
 [GARAGE-2]: #garage
 [GARAGE-3]: #garage
 [GARAGE-4]: #garage
+[ID-2]: snapshots.md#the-fetcher
 [IMG-1]: #the-pipelines-own-images
 [IMG-2]: #the-pipelines-own-images
 [IMG-3]: #the-pipelines-own-images
 [IMG-4]: #the-pipelines-own-images
 [IMG-5]: #the-pipelines-own-images
 [JOB-2]: snapshots.md#jobs-and-events
+[JOB-3]: snapshots.md#jobs-and-events
+[JOB-4]: snapshots.md#jobs-and-events
+[JOB-5]: snapshots.md#jobs-and-events
 [JOB-6]: snapshots.md#jobs-and-events
 [KIND-1]: #the-kind-cluster
 [KIND-2]: #the-kind-cluster
@@ -1335,6 +1649,7 @@ subjects, before the fetcher, which T23 builds, publishes any poll event.
 [LOG-4]: snapshots.md#8-history
 [METRIC-1]: telemetry.md#4-metrics
 [METRIC-3]: telemetry.md#the-scheduler
+[METRIC-4]: telemetry.md#the-fetchers-clock
 [MON-1]: #monitoring
 [MON-5]: #monitoring
 [MON-6]: #monitoring
@@ -1370,6 +1685,7 @@ subjects, before the fetcher, which T23 builds, publishes any poll event.
 [PLACE-1]: #placement
 [PLACE-2]: #placement
 [RBAC-1]: controls.md#9-who-may-change-what
+[RBAC-2]: controls.md#9-who-may-change-what
 [RBAC-3]: controls.md#9-who-may-change-what
 [SCHED-1]: #the-scheduler
 [SCHED-2]: #the-scheduler

@@ -70,7 +70,7 @@ without the behavior it covers ([doing the next item][agents-next], step
 | Specification | Statements with tests now | Statements awaiting a task |
 | --- | --- | --- |
 | [`snapshots.md`][snapshots] 1.0.0 | Those `verify.py` checks, and `snapshot.py`'s rules, brought to this version by [T35], done October 13, 2026; the schemas': [STORE-1], [REC-13], [JOB-1]; and the scheduler's jobs, [JOB-2], written by [T22] | [T23], the fetcher and the cluster store; [T24], the discoverer's jobs and its use of `edgar-asof` ([FETCH-18]); [T36], the transfer ([XFER-1] to [XFER-3]) |
-| [`deployment.md`][deployment] 1.3.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind; and the pipeline's images' and the fake EDGAR's installation, written by [T21] ([IMG-1] to [IMG-3], [IMG-5], [FAKE-1] to [FAKE-5]); and the scheduler's Deployment, Lease, grants, and consumer, written by [T22] ([SCHED-1] to [SCHED-9]) | [T23], the fetcher's Lease ([LEASE-1], [LEASE-2]) ([§3][deployment-ids]) |
+| [`deployment.md`][deployment] 1.4.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind; and the pipeline's images' and the fake EDGAR's installation, written by [T21] ([IMG-1] to [IMG-3], [IMG-5], [FAKE-1] to [FAKE-5]); and the scheduler's Deployment, Lease, grants, and consumer, written by [T22] ([SCHED-1] to [SCHED-9]) | [T23], the fetcher's Lease, Deployment, grants, credentials, consumers, and trust of the fake EDGAR's authority ([LEASE-1], [LEASE-2], [FETCHER-1] to [FETCHER-13]) ([§3][deployment-ids]) |
 | [`controls.md`][controls] 1.0.0 | [API-1]; and, written by [T22], the generated definitions and the API server's refusals ([API-2], [API-3]), the chart's controls ([VAL-1] to [VAL-4]), the scheduler's polls and Sources' status ([SOURCE-1] to [SOURCE-4], [ACCESS-2]), and its grants ([RBAC-1], [RBAC-4]), [SOURCE-4]'s ahead of [T23] | [T23], [T24], and [T28] ([§3][controls-ids]) |
 | [`notices.md`][notices] 0.1.1 | [TABLE-1], [MSG-1] | [T24], the discoverer, with the scheduler's side of the Backfills ([§3][notices-ids]) |
 | [`telemetry.md`][telemetry] 0.1.0 | [VIEW-1] | [T28], the monitoring of observing filings; [T29], the traces ([§3][telemetry-ids]) |
@@ -270,7 +270,10 @@ commit it's built from has it ([IMG-5]). It answers for `www.sec.gov` and
 release makes for it through cert-manager ([FAKE-3]). CI points kind's DNS
 for those names at its Service, so the fetcher sends it the requests it
 would send the SEC, at the URLs [FETCH-1] allows, and no pod reaches the
-SEC ([FAKE-4], [FAKE-5]).
+SEC ([FAKE-4], [FAKE-5]). There the chart gives the fetcher that
+authority's certificate, which it checks the SEC's hosts against in place
+of its image's roots, so a request of its that reached the SEC would fail
+at its TLS handshake ([FETCHER-12], [FETCHER-13]).
 
 ```mermaid
 flowchart LR
@@ -322,7 +325,7 @@ recovering and the gaps it recorded ([outages and recovery][design-outages]).
 
 | Drill | What the design expects | Behind it |
 | --- | --- | --- |
-| Delete the active fetcher | The standby takes the Lease only once its duration has passed without a renewal, 15 seconds by default; the handover leaves a gap, by decision 0005, or only if it misses a poll, by the notices; and a stop after a `403` carries over through the SecAccess | [0005], [LEASE-1], [§5 of the notices][notices-gaps], [ACCESS-3] |
+| Delete the active fetcher | The standby takes the Lease only once its duration has passed without a renewal, 15 seconds by default; the handover leaves a gap, by decision 0005, or only if it misses a poll, by the notices; and a stop after a `403` carries over through the SecAccess | [0005], [LEASE-1], [FETCHER-3], [§5 of the notices][notices-gaps], [ACCESS-3] |
 | Fail over the database | Parsing pauses, and parse jobs wait in their stream until the database is back | [0003], [outages and recovery][design-outages] |
 | Block the SEC | Polls fail, so a gap opens in each Source's coverage, and `SourceGap` fires while it lasts longer than the Source's cadence | [GAP-2], [ALERT-2] |
 | Restore the database from its backups in Garage | The backups are shown to restore before they're relied on | [0002], [0004], [PG-4] |
@@ -530,6 +533,10 @@ clock check relies on, waits on a finding
 [SECRET-4]: ../../spec/deployment.md#credentials
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease
 [LEASE-2]: ../../spec/deployment.md#the-fetchers-lease
+[FETCHER-1]: ../../spec/deployment.md#the-fetcher
+[FETCHER-3]: ../../spec/deployment.md#the-fetcher
+[FETCHER-12]: ../../spec/deployment.md#the-fetcher-and-the-fake-edgar
+[FETCHER-13]: ../../spec/deployment.md#the-fetcher-and-the-fake-edgar
 [FAKE-1]: ../../spec/deployment.md#the-fake-edgar
 [FAKE-2]: ../../spec/deployment.md#the-fake-edgar
 [FAKE-3]: ../../spec/deployment.md#the-fake-edgar

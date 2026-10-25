@@ -33,7 +33,8 @@ CHECKS = {"verify", "tests", "kind", "review", "operator", "first import"}
 # The checks a statement can't pass without a test that carries its ID.
 TESTED_BY = {"verify", "tests", "kind"}
 # Statements whose tests a later task in docs/plan.md writes, with that task:
-# of spec/deployment.md's, T23 the fetcher, with its Lease; of
+# of spec/deployment.md's, T23 the fetcher, with its Lease, Deployment,
+# grants, credentials, consumers, and trust of the fake EDGAR's authority; of
 # spec/fake-edgar.md's, T23 the checks of the fetcher's requests to the fake
 # EDGAR on kind; of spec/controls.md's, T23 the fetcher, T24 the discoverer,
 # and T28 the monitoring, after which each ServiceAccount in RBAC-5's table
@@ -48,6 +49,7 @@ TESTED_BY = {"verify", "tests", "kind"}
 AWAITING = {
     **dict.fromkeys(["CHECK-3"], "T23"),
     **dict.fromkeys(["LEASE-1", "LEASE-2"], "T23"),
+    **dict.fromkeys([f"FETCHER-{n}" for n in range(1, 14)], "T23"),
     **dict.fromkeys(
         [
             "BACKFILL-2",

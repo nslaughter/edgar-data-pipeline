@@ -4,8 +4,8 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The charts; The fake EDGAR.
-- **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The snapshot store in the cluster (built in part); The transfer from the cluster to git; The controls (built in part); The documentation site (built in part).
-- **Decided:** Fetcher (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Specified:** Scheduler (built in part); Fetcher; Discoverer; Monitoring: traces; The snapshot store in the cluster (built in part); The transfer from the cluster to git; The controls (built in part); The documentation site (built in part).
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The drills.
 <!-- end status -->
 
@@ -362,11 +362,76 @@ default values pause requests, so an install with them has no such order
 notices that publishes a refused notice again also has the scheduler
 publish a refused order again until JetStream accepts it ([T48]).
 
+Its version 1.4.0 deploys the fetcher, before [T23] builds it
+([§10][deployment-from-1.3.0]): two replicas, each on a worker node of its
+own, one active through the Lease `fetcher`; [RBAC-2]'s grants and its
+Lease's, and no others; its Garage key, its role's password, and its user
+agent, read from their Secrets; the bucket, and the database's primary,
+verified against the `Cluster`'s authority; NATS's address, without a
+credential; three durable consumers of `JOBS`, one for each kind of job;
+and, where CI installs the fake EDGAR, trust of that authority alone
+([FETCHER-1] to [FETCHER-13]). The owner confirmed on October 25, 2026
+each of the details it settles, keeping each default; these are listed
+with their alternatives:
+
+1. **A stopped replica waits out the Lease** ([FETCHER-3]). A replica that
+   Kubernetes stops doesn't release it, so an upgrade or a drain that stops
+   the active fetcher pauses fetching for up to 15 seconds by default, and
+   can leave a gap. Releasing it, as the scheduler does, would end the pause
+   sooner, but a replica that released it while it still sent, or within
+   0.2 seconds of its last request, would let the next one break the SEC's
+   limit ([FETCH-6], [FETCH-7]).
+2. **Its two replicas on two worker nodes** ([FETCHER-2]), as the
+   scheduler's, so the loss of a node leaves the standby running. A
+   preference would let both share a node; required, a rollout's extra pod
+   needs a third worker node, which kind's three provide.
+3. **No grant but [RBAC-2]'s and its Lease's** ([FETCHER-4]), so it reads
+   no Source or Backfill and records no Kubernetes Events. A grant to
+   create Events would let client-go record each change of leader, which
+   the Lease and `edgar_fetcher_leader` already show.
+4. **The user agent a required value** ([FETCHER-5]), with an `@` in it,
+   so the chart never installs a fetcher that can't fetch. Optional, the
+   chart would install one that sends nothing ([FETCH-17]).
+5. **The database's server verified** against the `Cluster`'s authority
+   ([FETCHER-7]), as Grafana's is. TLS without the check would need no
+   certificate mounted, but would write the records to anything that
+   answered as the database.
+6. **A consumer for each kind of job** ([FETCHER-9]): `fetcher-polls`,
+   `fetcher-filings`, and `fetcher-backfills`, where the plan and the
+   deployment's §9 named one. One consumer of all three would deliver jobs
+   in the order `JOBS` holds them, a Backfill's before a later poll's,
+   against [JOB-4].
+7. **JetStream's default for their unacknowledged jobs** ([FETCHER-9]).
+   With one at most, a job a lost replica held would hold back each later
+   job of its kind until it was delivered again, 30 seconds after the
+   replica last said it was at work on it, by when, at the 10 seconds each
+   company's Source starts at, a poll's job has expired.
+8. **A word of progress while a fetch runs** ([FETCHER-10]): the active
+   replica tells JetStream a job is in progress, so a fetch longer than 30
+   seconds isn't delivered again meanwhile. The alternative is a longer
+   wait for an acknowledgement on its consumers, longer than the longest
+   fetch, about 7 minutes: no word needed, but a job a lost replica held
+   would wait that long to be delivered again.
+9. **The fetcher makes no stream or consumer, and waits for those it
+   reads** ([FETCHER-11]), as the scheduler does. Making its own would
+   start it sooner on a new install, but leave two places that set a
+   consumer's configuration.
+10. **The fake EDGAR's authority trusted alone** ([FETCHER-12],
+    [FETCHER-13]), in place of the roots the fetcher's image holds, so a
+    request from CI's cluster that reached the SEC would fail before its
+    user agent was sent. Trusted beside them, a request that reached the
+    SEC would go through.
+11. **The commit from the chart** ([FETCHER-1]): the chart gives the
+    fetcher `images.commit`, its image's tag, for its records' `tool`. The
+    alternative is the commit built into the fetcher when its image is
+    built, which [IMG-2]'s command would then have to pass.
+12. **The names:** the Deployment and ServiceAccount `fetcher`, the value
+    `fetcher.image`, the consumers above, and the area `FETCHER`, apart
+    from the store's `FETCH`. A shorter area wouldn't read as close to
+    `FETCH`, but wouldn't name the fetcher as plainly.
+
 Its [§9][deployment-later] lists what later versions add: the pipeline's
-other services, with their replicas, credentials, and placement, and, with
-the fetcher, how the fetcher trusts the fake EDGAR's certificate authority
-where CI installs the fake EDGAR ([FAKE-3]); the fetcher's durable consumer
-of `JOBS`, a work queue, which keeps a job until it's acknowledged;
+other services, with their replicas, credentials, and placement;
 migrations for later versions of the record's tables and views; each
 component's requests, limits, and probes, measured on kind; Tempo, Loki,
 and Alloy; kube-state-metrics' access to the definitions of the
@@ -470,10 +535,9 @@ confirmed on October 19, 2026 each of the ten details that its version
     `Content-Encoding` ([SERVE-3]).
 
 What it leaves to other specifications ([§11][fake-edgar-other]), the
-deployment's version 1.2.0 gives ([above](#deployment)), but for how the
-fetcher trusts the fake EDGAR's certificate authority, which comes with the
-version of the deployment that deploys the fetcher
-([§9][deployment-later]).
+deployment's version 1.2.0 gives ([above](#deployment)), and its version
+1.4.0 how the fetcher trusts the fake EDGAR's certificate authority
+([FETCHER-12], [FETCHER-13]).
 
 ### `edgar-asof`'s specifications
 
@@ -560,7 +624,9 @@ revisit: whether to keep each company's `submissions` as the notice source
   its duration has passed without a renewal, 15 seconds by default
   ([LEASE-1]). Decision 0005 records every handover as a gap ([0005]); the
   notices' specification gives a gap only where the handover misses a poll
-  ([§5 of the notices][notices-gaps]).
+  ([§5 of the notices][notices-gaps]). A replica that Kubernetes stops
+  doesn't release the Lease either, so an upgrade or a drain that stops the
+  active fetcher pauses fetching as long ([FETCHER-3]).
 - **A `403` stops everything until the owner acts.** The stop survives
   restarts and handovers, and holds until the owner acknowledges it
   ([ACCESS-3]); `SecRequestsStopped` fires meanwhile ([ALERT-1]).
@@ -669,6 +735,7 @@ revisit: whether to keep each company's `submissions` as the notice source
 [deployment-later]: ../../spec/deployment.md#9-later-versions
 [deployment-consumers]: ../../spec/deployment.md#durable-consumers
 [deployment-from-1.2.0]: ../../spec/deployment.md#from-version-120
+[deployment-from-1.3.0]: ../../spec/deployment.md#from-version-130
 [deployment-scheduler-nats]: ../../spec/deployment.md#its-access-to-nats
 [deployment-from-1.1.0]: ../../spec/deployment.md#from-version-110
 [controls]: ../../spec/controls.md
@@ -721,8 +788,10 @@ revisit: whether to keep each company's `submissions` as the notice source
 [XFER-1]: ../../spec/snapshots.md#records-the-cluster-made
 [FETCH-5]: ../../spec/snapshots.md#10-fetching
 [FETCH-6]: ../../spec/snapshots.md#10-fetching
+[FETCH-7]: ../../spec/snapshots.md#10-fetching
 [FETCH-11]: ../../spec/snapshots.md#10-fetching
 [FETCH-18]: ../../spec/snapshots.md#the-fetcher
+[FETCH-17]: ../../spec/snapshots.md#the-fetcher
 [VAL-3]: ../../spec/controls.md#5-the-charts-values
 [ACCESS-3]: ../../spec/controls.md#8-secaccess
 [KIND-2]: ../../spec/deployment.md#the-kind-cluster
@@ -732,6 +801,7 @@ revisit: whether to keep each company's `submissions` as the notice source
 [PG-7]: ../../spec/deployment.md#the-stores-database
 [PIN-3]: ../../spec/deployment.md#6-pins
 [IMG-5]: ../../spec/deployment.md#the-pipelines-own-images
+[IMG-2]: ../../spec/deployment.md#the-pipelines-own-images
 [CRD-4]: ../../spec/deployment.md#definitions
 [CRD-5]: ../../spec/deployment.md#definitions
 [MON-3]: ../../spec/deployment.md#monitoring
@@ -743,6 +813,17 @@ revisit: whether to keep each company's `submissions` as the notice source
 [PG-12]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [PG-13]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease
+[FETCHER-1]: ../../spec/deployment.md#the-fetcher
+[FETCHER-2]: ../../spec/deployment.md#the-fetcher
+[FETCHER-3]: ../../spec/deployment.md#the-fetcher
+[FETCHER-4]: ../../spec/deployment.md#the-fetchers-grants
+[FETCHER-5]: ../../spec/deployment.md#the-fetchers-credentials-and-stores
+[FETCHER-7]: ../../spec/deployment.md#the-fetchers-credentials-and-stores
+[FETCHER-9]: ../../spec/deployment.md#the-fetchers-access-to-nats
+[FETCHER-10]: ../../spec/deployment.md#the-fetchers-access-to-nats
+[FETCHER-11]: ../../spec/deployment.md#the-fetchers-access-to-nats
+[FETCHER-12]: ../../spec/deployment.md#the-fetcher-and-the-fake-edgar
+[FETCHER-13]: ../../spec/deployment.md#the-fetcher-and-the-fake-edgar
 [FAKE-1]: ../../spec/deployment.md#the-fake-edgar
 [FAKE-2]: ../../spec/deployment.md#the-fake-edgar
 [FAKE-3]: ../../spec/deployment.md#the-fake-edgar
@@ -767,9 +848,12 @@ revisit: whether to keep each company's `submissions` as the notice source
 [ADMIN-1]: ../../spec/fake-edgar.md#7-the-admin-port
 [CHECK-1]: ../../spec/fake-edgar.md#8-the-checks
 [T22]: ../plan.md#observing-filings
+[T23]: ../plan.md#observing-filings
 [JOB-6]: ../../spec/snapshots.md#jobs-and-events
+[JOB-4]: ../../spec/snapshots.md#jobs-and-events
 [ORDER-1]: ../../spec/notices.md#8-backfills
 [RBAC-1]: ../../spec/controls.md#9-who-may-change-what
+[RBAC-2]: ../../spec/controls.md#9-who-may-change-what
 [VAL-4]: ../../spec/controls.md#5-the-charts-values
 [SCHED-1]: ../../spec/deployment.md#the-scheduler
 [SCHED-2]: ../../spec/deployment.md#the-scheduler

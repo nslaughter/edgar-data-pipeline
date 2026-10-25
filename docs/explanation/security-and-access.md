@@ -1,7 +1,7 @@
 # Security and access
 
 <!-- status: The controls; The charts; Fetcher; Scheduler; Discoverer; Garage; PostgreSQL 18; Monitoring: metrics, alerts, and dashboards; The snapshot store in git -->
-**Status** ([status page](../status.md)): The controls: Specified; built in part. The charts: Built. Fetcher: Decided; specified in part. Scheduler: Specified; built in part. Discoverer: Specified. Garage: Built. PostgreSQL 18: Built. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The snapshot store in git: Built.
+**Status** ([status page](../status.md)): The controls: Specified; built in part. The charts: Built. Fetcher: Specified. Scheduler: Specified; built in part. Discoverer: Specified. Garage: Built. PostgreSQL 18: Built. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The snapshot store in git: Built.
 <!-- end status -->
 
 Each credential the pipeline uses and where it's kept, how the user agent
@@ -58,13 +58,19 @@ the owner, and no requester identity is stored
 | Who sends requests | Where the user agent comes from |
 | --- | --- |
 | `scripts/snapshot.py` | The environment's `SEC_USER_AGENT`, or else `.env.dev`, a file at the repository's root that git ignores ([FETCH-15]) |
-| The fetcher | `SEC_USER_AGENT` in its environment, set from one Secret that the chart renders from the value `fetcher.secUserAgent`. Only the fetcher's containers read it, and no committed values file sets it: the owner keeps it in a values file git ignores ([ID-2], [FETCH-17]) |
+| The fetcher | `SEC_USER_AGENT` in its environment, set by reference from one Secret that the chart renders from the value `fetcher.secUserAgent`. Only the fetcher's containers read it, and no committed values file sets it: the owner keeps it in a values file git ignores ([ID-2], [FETCH-17]). The chart requires the value, a string that contains an `@`, so it renders no fetcher that can't fetch ([FETCHER-5]) |
 | `edgar-asof`, used on its own | An argument the caller passes; the library reads none from the environment or any file ([CLIENT-2]) |
 
 In the cluster, only the active fetcher sends requests, and the services
 that read EDGAR's content through `edgar-asof` give it bodies from the store
 ([FETCH-18]). The fetcher alone mounts the Secret that holds the user agent
 ([0005]), and sends nothing without one that contains an `@` ([FETCH-17]).
+Where CI installs the fake EDGAR, the fetcher checks the certificates of the
+SEC's hosts against the certificate authority the release makes for the
+fake EDGAR alone, not the roots its image holds. So a request that reached
+the SEC from such a cluster would fail at its TLS handshake, before its
+headers, the user agent among them, were sent ([FETCHER-12],
+[FETCHER-13]).
 
 Nothing the pipeline keeps or sends elsewhere holds it. No file under
 `data/`, no row of the cluster store, and no job or event contains the
@@ -111,6 +117,12 @@ which is cluster-scoped. Beside it, its ServiceAccount may create Leases,
 and read and renew only its own, `scheduler`, as the fetcher's may only its
 own ([SCHED-3], [SCHED-6], [LEASE-1]). It's bound to no other role, so the
 scheduler can't even record a Kubernetes Event ([SCHED-6]).
+
+The fetcher's row is granted by a ClusterRole, since the `SecAccess` is
+cluster-scoped, and its Lease's grants by a Role in the release namespace.
+It's bound to no other role either, so the fetcher reads no Source or
+Backfill, whose jobs carry what it needs, and records no Kubernetes Event
+([FETCHER-4], [LEASE-1]).
 
 The chart checks the owner's values before anything reaches the cluster. It
 refuses values from which it would render a resource that the API server
@@ -187,9 +199,20 @@ holds no credential but its ServiceAccount's token: it mounts no Secret
 discoverer come with that service, in later versions of the deployment
 specification ([later versions][deployment-later]).
 
+The fetcher reads its Garage key, its role's password, and its user agent
+in its environment, each by reference to its Secret, and no other service
+reads its key or its password ([FETCHER-5]). It reaches Garage's S3 API over
+plain HTTP inside the cluster: each request carries a signature made with
+the key's secret, never the secret itself ([FETCHER-6],
+[the fetcher's credentials and stores][fetcher-stores]). It reaches the
+database's primary over TLS, and verifies the server's certificate and name
+against the `Cluster`'s certificate authority, whose certificate alone its
+pod mounts, as Grafana's does ([FETCHER-7], [MON-5]).
+
 Two boundaries inside the cluster have no statement yet. NATS asks no
 credential: [SECRET-1] lists none for it, so any pod that reaches NATS may
-publish to any subject and read from any consumer ([SCHED-7]). A later
+publish to any subject and read from any consumer ([SCHED-7],
+[FETCHER-8]). A later
 version of the deployment gives each service NATS credentials of its own,
 with permissions that limit it to the subjects it publishes and the
 consumers it reads ([later versions][deployment-later]). Nor does any
@@ -250,6 +273,14 @@ and loaded into kind's nodes, never pushed to or pulled from a registry
 [SECRET-3]: ../../spec/deployment.md#credentials
 [SECRET-4]: ../../spec/deployment.md#credentials
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease
+[fetcher-stores]: ../../spec/deployment.md#the-fetchers-credentials-and-stores
+[FETCHER-4]: ../../spec/deployment.md#the-fetchers-grants
+[FETCHER-5]: ../../spec/deployment.md#the-fetchers-credentials-and-stores
+[FETCHER-6]: ../../spec/deployment.md#the-fetchers-credentials-and-stores
+[FETCHER-7]: ../../spec/deployment.md#the-fetchers-credentials-and-stores
+[FETCHER-8]: ../../spec/deployment.md#the-fetchers-access-to-nats
+[FETCHER-12]: ../../spec/deployment.md#the-fetcher-and-the-fake-edgar
+[FETCHER-13]: ../../spec/deployment.md#the-fetcher-and-the-fake-edgar
 [SCHED-1]: ../../spec/deployment.md#the-scheduler
 [SCHED-3]: ../../spec/deployment.md#its-lease
 [SCHED-6]: ../../spec/deployment.md#its-grants
