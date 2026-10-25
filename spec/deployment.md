@@ -1,6 +1,6 @@
 # Specification: deployment
 
-**Status:** Version 1.4.0, draft, October 24, 2026. This document governs
+**Status:** Version 1.4.0, draft, October 25, 2026. This document governs
 what the pipeline's Helm charts install, in which order and at which
 versions, and how they configure what they install: the charts, operators,
 and images they pin; the custom resource definitions they install; each
@@ -1438,6 +1438,8 @@ deployment is specified in a version of this document before it's built,
 as the scheduler's was, and confirmed the same day that it leaves the
 fetcher's resource requests and limits, its probes, and its NATS
 credentials to the later versions above, items 4 and 7: version 1.4.0.
+The owner confirmed on October 25, 2026 the details that version
+settles.
 
 ## 10. Changes to this document
 

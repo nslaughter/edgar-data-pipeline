@@ -370,9 +370,9 @@ agent, read from their Secrets; the bucket, and the database's primary,
 verified against the `Cluster`'s authority; NATS's address, without a
 credential; three durable consumers of `JOBS`, one for each kind of job;
 and, where CI installs the fake EDGAR, trust of that authority alone
-([FETCHER-1] to [FETCHER-13]). The details it settles await the owner's
-confirmation, each with a proposed default, listed here with its
-alternative:
+([FETCHER-1] to [FETCHER-13]). The owner confirmed on October 25, 2026
+each of the details it settles, keeping each default; these are listed
+with their alternatives:
 
 1. **A stopped replica waits out the Lease** ([FETCHER-3]). A replica that
    Kubernetes stops doesn't release it, so an upgrade or a drain that stops
