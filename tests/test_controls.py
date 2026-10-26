@@ -97,7 +97,8 @@ RELEASES = [
 ]
 NAMESPACE = "edgar"
 # What the umbrella chart requires that its values don't set: any credentials
-# of the right forms, the archive's name, and a commit (SECRET-1, IMG-1).
+# of the right forms, the archive's name, a commit, and the fetcher's user
+# agent (SECRET-1, IMG-1, ID-2).
 REQUIRED: dict[str, Any] = {
     "credentials": {
         "garage": {"rpcSecret": "0" * 64, "adminToken": "t" * 32},
@@ -110,6 +111,7 @@ REQUIRED: dict[str, Any] = {
     },
     "database": {"backups": {"serverName": "test"}},
     "images": {"commit": "0" * 40},
+    "fetcher": {"secUserAgent": "Test Runner test@example.com"},
 }
 KINDS = {"Source", "Backfill", "SecAccess"}
 
@@ -453,6 +455,10 @@ TABLE = {
         "backfills/status": {"update", "patch"},
         "secaccesses": {"get", "list", "watch"},
     },
+    ("edgar", "fetcher"): {
+        "secaccesses": {"get", "list", "watch"},
+        "secaccesses/status": {"update", "patch"},
+    },
 }
 
 
@@ -521,6 +527,11 @@ def granted(account: tuple[str, str]) -> dict[str, set[str]]:
 @pytest.mark.spec("RBAC-1")
 def test_the_scheduler_may_read_the_controls_and_change_only_their_status() -> None:
     assert granted(("edgar", "scheduler")) == TABLE[("edgar", "scheduler")]
+
+
+@pytest.mark.spec("RBAC-2")
+def test_the_fetcher_may_read_the_secaccess_and_change_only_its_status() -> None:
+    assert granted(("edgar", "fetcher")) == TABLE[("edgar", "fetcher")]
 
 
 @pytest.mark.spec("RBAC-4")

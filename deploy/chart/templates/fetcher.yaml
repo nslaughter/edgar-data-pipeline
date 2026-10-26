@@ -1,0 +1,237 @@
+{{- /*
+The fetcher, which sends every request to the SEC and writes the cluster store
+(spec/deployment.md, section 5, the fetcher): a Deployment of two replicas of
+its image, built from the commit images.commit names, each on a worker node of
+its own, of which the one that holds the Lease fetcher sends requests and
+reads jobs (FETCHER-1, FETCHER-2, FETCHER-10). It claims no volume
+(FETCHER-1). Its ServiceAccount has the SecAccess's grants, by a ClusterRole,
+and its Lease's, by a Role, and nothing else (RBAC-2, FETCHER-4, LEASE-1). It
+reads its Garage key, its database role's password, and the owner's user
+agent in its environment, each from its Secret, and mounts only the
+certificates it checks the database's, and where CI installs the fake EDGAR
+the SEC's hosts', against, without their authorities' keys (FETCHER-5,
+FETCHER-7, FETCHER-12, ID-2). Its arguments give it the release namespace,
+its Lease's name and timings, which are first held to what client-go's leader
+election accepts (LEASE-1), the bucket and Garage's S3 API (FETCHER-6), the
+database (FETCHER-7), NATS's address, with no credential (FETCHER-8), and the
+commit its records' tool names (FETCHER-1).
+*/}}
+{{- $lease := .Values.fetcher.lease }}
+{{- include "edgar.leaseTimings" (dict "lease" $lease "name" "fetcher.lease" "statement" "LEASE-1") }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fetcher
+  labels:
+    app.kubernetes.io/name: fetcher
+    app.kubernetes.io/instance: {{ .Release.Name }}
+---
+# The owner's user agent, in this Secret alone, which only the fetcher's
+# container reads (ID-2).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: fetcher-user-agent
+  labels:
+    app.kubernetes.io/name: fetcher
+    app.kubernetes.io/instance: {{ .Release.Name }}
+type: Opaque
+stringData:
+  SEC_USER_AGENT: {{ required "fetcher.secUserAgent is required" .Values.fetcher.secUserAgent | quote }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: fetcher
+  labels:
+    app.kubernetes.io/name: fetcher
+    app.kubernetes.io/instance: {{ .Release.Name }}
+rules:
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [create]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    resourceNames: [fetcher]
+    verbs: [get, update]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fetcher
+  labels:
+    app.kubernetes.io/name: fetcher
+    app.kubernetes.io/instance: {{ .Release.Name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: fetcher
+subjects:
+  - kind: ServiceAccount
+    name: fetcher
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-fetcher
+  labels:
+    app.kubernetes.io/name: fetcher
+    app.kubernetes.io/instance: {{ .Release.Name }}
+rules:
+  - apiGroups: [edgar.nathanslaughter.com]
+    resources: [secaccesses]
+    verbs: [get, list, watch]
+  - apiGroups: [edgar.nathanslaughter.com]
+    resources: [secaccesses/status]
+    verbs: [update, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-fetcher
+  labels:
+    app.kubernetes.io/name: fetcher
+    app.kubernetes.io/instance: {{ .Release.Name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-fetcher
+subjects:
+  - kind: ServiceAccount
+    name: fetcher
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fetcher
+  labels:
+    app.kubernetes.io/name: fetcher
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fetcher
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fetcher
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      serviceAccountName: fetcher
+      # When stopped, it abandons the fetch it's at work on at once, and
+      # leaves the Lease to expire (spec/deployment.md, the fetcher).
+      terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: fetcher
+                  app.kubernetes.io/instance: {{ .Release.Name }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: fetcher
+          image: {{ printf "%s:%s" .Values.fetcher.image .Values.images.commit | quote }}
+          imagePullPolicy: Never
+          args:
+            - --namespace={{ .Release.Namespace }}
+            - --lease-name=fetcher
+            - --lease-duration={{ int64 $lease.durationSeconds }}s
+            - --lease-renew-deadline={{ int64 $lease.renewDeadlineSeconds }}s
+            - --lease-retry-period={{ int64 $lease.retryPeriodSeconds }}s
+            - --commit={{ .Values.images.commit }}
+            - --nats-url=nats://nats:4222
+            - --s3-endpoint=http://garage:3900
+            - --s3-region={{ .Values.garage.garage.s3.api.region }}
+            - --bucket=snapshots
+            - --database-host=postgres-rw
+            - --database-port=5432
+            - --database-name=edgar
+            - --database-user=fetcher
+            - --database-ca=/etc/fetcher/postgres-ca/ca.crt
+            {{- if .Values.fakeEdgar.enabled }}
+            - --sec-ca=/etc/fetcher/sec-ca/ca.crt
+            {{- end }}
+            - --metrics-address=:8080
+            - --health-address=:8081
+          env:
+            - name: SEC_USER_AGENT
+              valueFrom:
+                secretKeyRef:
+                  name: fetcher-user-agent
+                  key: SEC_USER_AGENT
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: garage-key-fetcher
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: garage-key-fetcher
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-fetcher
+                  key: password
+          ports:
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+            - name: health
+              containerPort: 8081
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: postgres-ca
+              mountPath: /etc/fetcher/postgres-ca
+              readOnly: true
+            {{- if .Values.fakeEdgar.enabled }}
+            - name: sec-ca
+              mountPath: /etc/fetcher/sec-ca
+              readOnly: true
+            {{- end }}
+      volumes:
+        # The certificate of the Cluster's authority alone, from the Secret
+        # CloudNativePG keeps it in, without the authority's key (FETCHER-7).
+        - name: postgres-ca
+          secret:
+            secretName: postgres-ca
+            items:
+              - key: ca.crt
+                path: ca.crt
+        {{- if .Values.fakeEdgar.enabled }}
+        # The certificate of the authority that issues the fake EDGAR's,
+        # alone, from the Secret cert-manager keeps it in (FETCHER-12).
+        - name: sec-ca
+          secret:
+            secretName: fake-edgar-ca
+            items:
+              - key: ca.crt
+                path: ca.crt
+        {{- end }}

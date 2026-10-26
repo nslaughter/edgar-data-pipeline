@@ -11,22 +11,10 @@ credential (SCHED-7), and its Lease's name and timings, which are first held
 to what client-go's leader election accepts (SCHED-3).
 */}}
 {{- $lease := .Values.scheduler.lease }}
+{{- include "edgar.leaseTimings" (dict "lease" $lease "name" "scheduler.lease" "statement" "SCHED-3") }}
 {{- $duration := int64 $lease.durationSeconds }}
 {{- $renew := int64 $lease.renewDeadlineSeconds }}
 {{- $retry := int64 $lease.retryPeriodSeconds }}
-{{- if or (lt $duration 1) (lt $renew 1) (lt $retry 1) }}
-{{- fail "scheduler.lease: each timing must be at least 1 second (SCHED-3)" }}
-{{- end }}
-{{- if ge $renew $duration }}
-{{- fail (printf "scheduler.lease: the renewal deadline, %d seconds, must be shorter than the duration, %d (SCHED-3)" $renew $duration) }}
-{{- end }}
-{{- if ge $retry $renew }}
-{{- fail (printf "scheduler.lease: the retry period, %d seconds, must be shorter than the renewal deadline, %d (SCHED-3)" $retry $renew) }}
-{{- end }}
-{{- /* renew > 1.2 retry, in integers: 5 renew > 6 retry. */}}
-{{- if le (mul 5 $renew) (mul 6 $retry) }}
-{{- fail (printf "scheduler.lease: the renewal deadline, %d seconds, must be more than 1.2 times the retry period, %d (SCHED-3)" $renew $retry) }}
-{{- end }}
 apiVersion: v1
 kind: ServiceAccount
 metadata:

@@ -48,31 +48,15 @@ TESTED_BY = {"verify", "tests", "kind"}
 # verify that verify.py already reports.
 AWAITING = {
     **dict.fromkeys(["CHECK-3"], "T23"),
-    **dict.fromkeys(["LEASE-1", "LEASE-2"], "T23"),
+    **dict.fromkeys(["LEASE-2"], "T23"),
+    **dict.fromkeys(["FETCHER-3"], "T23"),
     **dict.fromkeys(
         [
-            "FETCHER-1",
-            "FETCHER-2",
-            "FETCHER-3",
-            "FETCHER-4",
-            "FETCHER-5",
-            "FETCHER-6",
-            "FETCHER-7",
-            "FETCHER-8",
-            "FETCHER-9",
-            "FETCHER-12",
-        ],
-        "T23",
-    ),
-    **dict.fromkeys(
-        [
-            "RBAC-2",
             "STORE-2",
             "STORE-3",
             "OBJ-4",
             "LOG-3",
             "LOG-4",
-            "ID-2",
         ],
         "T23",
     ),
