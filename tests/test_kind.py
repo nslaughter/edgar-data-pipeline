@@ -1103,8 +1103,10 @@ def test_a_pods_get_of_a_stored_url_reaches_the_fake_edgar_over_https(url: str) 
 
 FETCHER = "app.kubernetes.io/name=fetcher,app.kubernetes.io/instance=edgar"
 # The stored URLs the tests ask the fetcher for, each by one test, none of
-# them a Source's: each filing's index, which EDGAR gave no validators.
+# them a Source's: each filing's index, which EDGAR gave no validators; and
+# each filing's index page, for a test that needs one more.
 INDEXES = sorted(url for url in load(ROOT / "data") if url.endswith("/index.json"))
+PAGES = sorted(url for url in load(ROOT / "data") if url.endswith("-index.html"))
 TIMESTAMP_SQL = """to_char({} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')"""
 
 
@@ -1521,6 +1523,34 @@ def test_the_fetchers_requests_pass_the_checks_with_a_stop_after_a_403_until_ack
     assert check(up_to, agent) == []
     assert check(after, agent) == []
     assert up_to[-1]["status"] == 403
+
+
+@pytest.mark.spec("JOB-4", "BACKFILL-2")
+@fetcher_on_kind
+def test_a_poll_queued_while_a_backfills_fetch_waits_to_retry_goes_before_the_retry() -> None:
+    allowed()
+    backfill, poll = INDEXES[8], PAGES[0]
+    before = last_entry()
+    # The Backfill's first attempt gets a 503, so its fetch waits 20 seconds
+    # before its retry (FETCH-8).
+    unavailable = {"status": 503, "headers": {"Retry-After": "20"}}
+    fake_edgar("/cues", "POST", json.dumps({"url": backfill, "responses": [unavailable]}))
+    backfill_job = new_job("backfill", backfill)
+    poll_job = new_job("poll", poll)
+    queued = [queue_job(backfill_job)]
+    wait_until(lambda: requested(backfill, before), 120, "the Backfill's first request")
+    queued.append(queue_job(poll_job))
+    acknowledged(*queued)
+
+    attempts = requested(backfill, before)
+    [polled] = requested(poll, before)
+    # The poll's request came between the Backfill's attempts (JOB-4).
+    assert [entry["status"] for entry in attempts] == [503, 200]
+    assert attempts[0]["n"] < polled["n"] < attempts[1]["n"]
+    record = record_of(backfill_job)
+    assert record is not None
+    assert (record["attempts"], record["status"]) == (2, 200)
+    assert record_of(poll_job) is not None
 
 
 @pytest.mark.spec("STORE-2")
