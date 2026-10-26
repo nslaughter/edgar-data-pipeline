@@ -33,33 +33,17 @@ CHECKS = {"verify", "tests", "kind", "review", "operator", "first import"}
 # The checks a statement can't pass without a test that carries its ID.
 TESTED_BY = {"verify", "tests", "kind"}
 # Statements whose tests a later task in docs/plan.md writes, with that task:
-# of spec/deployment.md's, T23 the fetcher, with its Lease, Deployment,
-# grants, credentials, consumers, and trust of the fake EDGAR's authority; of
-# spec/fake-edgar.md's, T23 the checks of the fetcher's requests to the fake
-# EDGAR on kind; of spec/controls.md's, T23 the fetcher, T24 the discoverer,
-# and T28 the monitoring, after which each ServiceAccount in RBAC-5's table
-# has its grants on kind; of spec/snapshots.md's, T23 the fetcher and the
-# cluster store, T24 the discoverer's jobs and its use of edgar-asof, and T36
-# the transfer; of spec/notices.md's, T24 the discoverer, with the scheduler's
-# orders and the status it sets from notices; and of spec/telemetry.md's, T28
-# the monitoring of observing filings, with the services' metrics, and T29 the
-# traces. Strict, like xfail_strict: a statement listed here that has a test
-# fails too, and so does one whose task the plan marks done, or one checked by
-# verify that verify.py already reports.
+# of spec/controls.md's, T24 the discoverer, and T28 the monitoring, after
+# which each ServiceAccount in RBAC-5's table has its grants on kind; of
+# spec/snapshots.md's, T24 the discoverer's jobs and its use of edgar-asof,
+# and T36 the transfer; of spec/notices.md's, T24 the discoverer, with the
+# scheduler's orders and the status it sets from notices; and of
+# spec/telemetry.md's, T28 the monitoring of observing filings, with the
+# services' metrics, and T29 the traces. Strict, like xfail_strict: a
+# statement listed here that has a test fails too, and so does one whose task
+# the plan marks done, or one checked by verify that verify.py already
+# reports.
 AWAITING = {
-    **dict.fromkeys(["CHECK-3"], "T23"),
-    **dict.fromkeys(["LEASE-2"], "T23"),
-    **dict.fromkeys(["FETCHER-3"], "T23"),
-    **dict.fromkeys(
-        [
-            "STORE-2",
-            "STORE-3",
-            "OBJ-4",
-            "LOG-3",
-            "LOG-4",
-        ],
-        "T23",
-    ),
     **dict.fromkeys(["SOURCE-5", "BACKFILL-1", "BACKFILL-3", "FETCH-18", "JOB-3"], "T24"),
     **dict.fromkeys(
         [
