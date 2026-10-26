@@ -176,9 +176,11 @@ func TestOnlyHTTPSURLsOnTheSECsHostsAreFetched(t *testing.T) {
 		"https://www.sec.gov.example.com/final",
 		"https://someone@www.sec.gov/final",
 		"https://www.sec.gov:8443/final",
+		"https://www.sec.gov/%ZZ",
 	} {
-		if _, err := c.Fetch(context.Background(), "submissions", url, Tool(testCommit), nil); err == nil {
-			t.Errorf("it fetched %s", url)
+		if _, err := c.Fetch(context.Background(), "submissions", url, Tool(testCommit), nil); !errors.Is(err,
+			ErrNotFetchable) {
+			t.Errorf("%s: %v", url, err)
 		}
 	}
 	if seen := s.seen(); len(seen) != 0 {

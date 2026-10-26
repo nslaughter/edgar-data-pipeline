@@ -320,6 +320,36 @@ func TestAJobThatDoesntValidateOrWhoseKindIsntItsSubjectsIsAcknowledgedWithoutAR
 	}
 }
 
+// spec: FETCH-1
+func TestAJobWhoseURLCantBeRequestedIsAcknowledgedWithoutARequest(t *testing.T) {
+	wt := newWorkerTest(t, pathBody, 0)
+	// Each begins as an https URL on one of the SEC's hosts does, so its job
+	// validates, but isn't a URL: no request can be made for it.
+	for _, url := range []string{"https://www.sec.gov/%ZZ", "https://www.sec.gov/\x00", "https://data.sec.gov/a#%"} {
+		job := newJob(messages.KindFiling, url)
+		data, err := json.Marshal(job)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := wt.schemas.ValidateJob(data); err != nil {
+			t.Fatalf("the job for %q doesn't validate: %v", url, err)
+		}
+		wt.queue(job)
+	}
+	wt.queue(newJob(messages.KindFiling, "https://www.sec.gov/after"))
+	wt.start()
+	settled(wt.ctx, t, wt.js, 10*time.Second)
+
+	if diff := cmp.Diff([]string{"/after"}, wt.urls()); diff != "" {
+		t.Errorf("the requests (-want +got):\n%s", diff)
+	}
+	if rows := wt.records.all(); len(rows) != 1 || rows[0].record.URL != "https://www.sec.gov/after" {
+		t.Errorf("the records: %+v", rows)
+	}
+	nextEvent(t, wt.events, 5*time.Second)
+	noEvent(t, wt.events, 500*time.Millisecond)
+}
+
 // spec: FETCHER-10
 func TestAJobTheWorkerIsAtWorkOnIsntDeliveredAgainHoweverLongItsFetchTakes(t *testing.T) {
 	// JetStream would deliver the job again a second after it last heard of

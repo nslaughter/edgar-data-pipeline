@@ -56,6 +56,24 @@ func IsSECURL(u *url.URL) bool {
 	return u.Scheme == "https" && SECHosts[u.Hostname()] && (u.Port() == "" || u.Port() == "443") && u.User == nil
 }
 
+// ErrNotFetchable says that a URL isn't one the fetcher may fetch.
+var ErrNotFetchable = errors.New("not a URL the fetcher may fetch")
+
+// ParseURL parses a URL the fetcher may fetch (FETCH-1). Any other gives an
+// error that wraps ErrNotFetchable: one that isn't a URL at all among them,
+// such as one with an escape that isn't one, or a control character, which
+// can begin as one of the SEC's hosts' URLs does, as a job's must.
+func ParseURL(raw string) (*url.URL, error) {
+	target, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrNotFetchable, err)
+	}
+	if !IsSECURL(target) {
+		return nil, fmt.Errorf("%w: %q isn't an https URL on one of the SEC's hosts", ErrNotFetchable, raw)
+	}
+	return target, nil
+}
+
 // ClientOptions configures a Client.
 type ClientOptions struct {
 	// UserAgent is the owner's, which every request carries (FETCH-2).
@@ -271,13 +289,15 @@ type Result struct {
 // one, whose validators make each request conditional (FETCH-4). Before
 // each attempt, it waits until a request may be sent: while requests aren't
 // allowed, a fetch between attempts waits, and makes its next attempt once
-// they are, as the owner decided. It returns an error only if ctx is done
-// before the fetch ends, when the fetch is abandoned, without a record, as
-// the owner decided.
+// they are, as the owner decided. It returns an error that wraps
+// ErrNotFetchable, without a request, for a URL it may not fetch, which the
+// Worker never gives it (ParseURL). Otherwise it returns an error only if
+// ctx is done before the fetch ends, when the fetch is abandoned, without a
+// record, as the owner decided.
 func (c *Client) Fetch(ctx context.Context, feed, rawURL, tool string, previous *Version) (Result, error) {
-	target, err := url.Parse(rawURL)
-	if err != nil || !IsSECURL(target) {
-		return Result{}, fmt.Errorf("%q isn't an https URL on one of the SEC's hosts", rawURL)
+	target, err := ParseURL(rawURL)
+	if err != nil {
+		return Result{}, err
 	}
 	headers := map[string]string{}
 	if previous != nil && previous.ETag != nil {

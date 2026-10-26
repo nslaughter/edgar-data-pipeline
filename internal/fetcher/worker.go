@@ -178,7 +178,8 @@ func next(consumers []jetstream.Consumer) (jetstream.Msg, error) {
 // handle takes one job through to its acknowledgement, telling JetStream
 // meanwhile that it's at work on it (FETCHER-10). A job that doesn't
 // validate, or whose kind isn't its subject's, it acknowledges without a
-// request or a record (JOB-7). For a job whose record the table holds, it
+// request or a record (JOB-7), as it does one whose URL isn't a URL it may
+// fetch (FETCH-1). For a job whose record the table holds, it
 // publishes that record's event again (JOB-6); one that has expired it
 // acknowledges without a request (JOB-5). It fetches any other, then
 // records the stop if the fetch got a 403 (ACCESS-3), stores the object,
@@ -203,6 +204,14 @@ func (w *Worker) handle(ctx context.Context, msg jetstream.Msg) {
 		return
 	}
 	log = log.WithValues("job", job.ID, "feed", job.Feed, "url", job.URL)
+	if _, err := ParseURL(job.URL); err != nil {
+		// Its URL begins as an https URL on one of the SEC's hosts does, as
+		// the schema has it, but isn't a URL, so no request can be made for
+		// it, then or after it's delivered again (FETCH-1).
+		log.Info("Acknowledged a job whose URL can't be requested, without a request", "reason", err.Error())
+		w.ack(ctx, msg, log)
+		return
+	}
 
 	var stored *Stored
 	if err := w.hold(ctx, log, "read the job's record", func(ctx context.Context) (err error) {
