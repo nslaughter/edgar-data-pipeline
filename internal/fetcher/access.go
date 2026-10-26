@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	toolscache "k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -47,9 +48,13 @@ var (
 type SecAccess struct {
 	cache  cache.Cache
 	client client.Client
-	synced bool
 
 	mu sync.Mutex
+	// synced is whether the informer has read the SecAccess, and fail, until
+	// it has, stops the informer with the error of a request that failed to
+	// read it (Start).
+	synced bool
+	fail   context.CancelCauseFunc
 	// stop is a stop this replica has begun to record, which its informer
 	// doesn't show yet.
 	stop *v1alpha1.Stop
@@ -62,11 +67,13 @@ func NewSecAccess(config *rest.Config) (*SecAccess, error) {
 	if err := v1alpha1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
+	s := &SecAccess{}
 	informers, err := cache.New(config, cache.Options{
 		Scheme: scheme,
 		ByObject: map[client.Object]cache.ByObject{
 			&v1alpha1.SecAccess{}: {Field: fields.OneTermEqualSelector("metadata.name", v1alpha1.SecAccessName)},
 		},
+		DefaultWatchErrorHandler: s.failed,
 	})
 	if err != nil {
 		return nil, err
@@ -75,26 +82,50 @@ func NewSecAccess(config *rest.Config) (*SecAccess, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &SecAccess{cache: informers, client: writer}, nil
+	s.cache, s.client = informers, writer
+	return s, nil
 }
 
 // Start runs the informer until ctx is done, and returns once it has read
-// the SecAccess, or ctx is done first.
+// the SecAccess, or ctx is done first. If a request to read it fails first,
+// it stops the informer and returns the request's error, rather than try
+// again while the replica holds the Lease, as the owner confirmed
+// (T23-D17).
 func (s *SecAccess) Start(ctx context.Context) error {
 	if _, err := s.cache.GetInformer(ctx, &v1alpha1.SecAccess{}); err != nil {
 		return err
 	}
-	go func() {
-		// It stops only once ctx is done.
-		_ = s.cache.Start(ctx)
-	}()
-	if !s.cache.WaitForCacheSync(ctx) {
-		return ctx.Err()
-	}
+	running, fail := context.WithCancelCause(ctx)
 	s.mu.Lock()
-	s.synced = true
+	s.fail = fail
 	s.mu.Unlock()
+	go func() {
+		// It stops only once running is done.
+		_ = s.cache.Start(running)
+	}()
+	read := s.cache.WaitForCacheSync(running)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !read || running.Err() != nil {
+		fail(nil)
+		return context.Cause(running)
+	}
+	s.synced = true
 	return nil
+}
+
+// failed is the informer's handler of a request to list or watch the
+// SecAccess that failed. Until the informer has read the SecAccess, it
+// stops the informer with the request's error, so Start returns it; after,
+// the informer tries again, as it does by default.
+func (s *SecAccess) failed(ctx context.Context, r *toolscache.Reflector, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.synced && s.fail != nil {
+		s.fail(err)
+		return
+	}
+	toolscache.DefaultWatchErrorHandler(ctx, r, err)
 }
 
 // Allowed says whether requests are allowed, as the informer last read the

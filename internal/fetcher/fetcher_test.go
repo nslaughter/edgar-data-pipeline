@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	toolscache "k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -514,44 +515,92 @@ func TestAStopRefusesRequestsFromWhenItsRecordedBeforeTheInformerShowsIt(t *test
 	}
 }
 
-// leaseOnly passes on a replica's requests to the API server for its Lease,
-// and fails every other, as when it can't read the SecAccess's resource.
-type leaseOnly struct{ next http.RoundTripper }
+// refusing passes on a replica's requests to the API server, and fails
+// those whose paths it refuses.
+type refusing struct {
+	next    http.RoundTripper
+	refused func(path string) bool
+}
 
-func (l leaseOnly) RoundTrip(r *http.Request) (*http.Response, error) {
-	if !strings.HasPrefix(r.URL.Path, "/apis/coordination.k8s.io/") {
-		return nil, errors.New("cut off from all but the Lease")
+func (r refusing) RoundTrip(req *http.Request) (*http.Response, error) {
+	if r.refused(req.URL.Path) {
+		return nil, errors.New("refused")
 	}
-	return l.next.RoundTrip(r)
+	return r.next.RoundTrip(req)
 }
 
 func TestAReplicaThatCantReadTheSecAccessStopsAndLeavesTheLeaseToAnother(t *testing.T) {
-	ctx := context.Background()
-	c := newKubeClient(t)
-	release := newNamespace(t, c)
-	allowRequests(t, c)
-	s := newStores(t)
-	cutOff := rest.CopyConfig(apiServer(t))
-	cutOff.Wrap(func(next http.RoundTripper) http.RoundTripper { return leaseOnly{next} })
-	timings := lease{duration: 3 * time.Second, renew: 2 * time.Second, retry: time.Second}
-	failed := runReplica(t, release, timings, cutOff, s, newSECServer(t, pathBody), nil)
-	holds(t, c, release, failed, 10*time.Second)
-	select {
-	case <-failed.done:
-	case <-time.After(10 * time.Second):
-		t.Fatal("the replica that couldn't read the SecAccess went on holding the Lease")
-	}
-	if failed.err == nil {
-		t.Error("the replica that couldn't read the SecAccess stopped without an error")
-	}
+	secAccesses := "/apis/" + v1alpha1.GroupVersion.String() + "/secaccesses"
+	for _, cut := range []struct {
+		name    string
+		refused func(path string) bool
+	}{
+		// It can't learn the SecAccess's resource.
+		{"cut off from all but the Lease", func(path string) bool {
+			return !strings.HasPrefix(path, "/apis/coordination.k8s.io/")
+		}},
+		// It learns the resource, but can't list or watch the SecAccess.
+		{"its reads of the SecAccess refused", func(path string) bool {
+			return strings.HasPrefix(path, secAccesses)
+		}},
+	} {
+		t.Run(cut.name, func(t *testing.T) {
+			ctx := context.Background()
+			c := newKubeClient(t)
+			release := newNamespace(t, c)
+			allowRequests(t, c)
+			s := newStores(t)
+			cutOff := rest.CopyConfig(apiServer(t))
+			cutOff.Wrap(func(next http.RoundTripper) http.RoundTripper { return refusing{next, cut.refused} })
+			timings := lease{duration: 3 * time.Second, renew: 2 * time.Second, retry: time.Second}
+			failed := runReplica(t, release, timings, cutOff, s, newSECServer(t, pathBody), nil)
+			holds(t, c, release, failed, 10*time.Second)
+			select {
+			case <-failed.done:
+			case <-time.After(10 * time.Second):
+				t.Fatal("the replica that couldn't read the SecAccess went on holding the Lease")
+			}
+			if failed.err == nil {
+				t.Error("the replica that couldn't read the SecAccess stopped without an error")
+			}
 
-	other := runReplica(t, release, timings, apiServer(t), s, newSECServer(t, pathBody), nil)
-	queue(ctx, t, s.js, newJob(messages.KindFiling, "https://www.sec.gov/filing"))
-	holds(t, c, release, other, timings.duration+5*timings.retry)
-	sends(t, other.server, 1, 10*time.Second)
-	if got := len(failed.server.seen()); got != 0 {
-		t.Errorf("the replica that couldn't read the SecAccess sent %d requests", got)
+			other := runReplica(t, release, timings, apiServer(t), s, newSECServer(t, pathBody), nil)
+			queue(ctx, t, s.js, newJob(messages.KindFiling, "https://www.sec.gov/filing"))
+			holds(t, c, release, other, timings.duration+5*timings.retry)
+			sends(t, other.server, 1, 10*time.Second)
+			if got := len(failed.server.seen()); got != 0 {
+				t.Errorf("the replica that couldn't read the SecAccess sent %d requests", got)
+			}
+		})
 	}
+}
+
+// spec: ACCESS-1
+func TestOnceTheSecAccessIsReadAWatchThatFailsLeavesTheInformerReadingIt(t *testing.T) {
+	c := newKubeClient(t)
+	allowRequests(t, c)
+	access, err := NewSecAccess(apiServer(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := access.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// A watch that fails once the informer has read the SecAccess, as when
+	// the API server restarts.
+	reflector := toolscache.NewReflector(&toolscache.ListWatch{}, &v1alpha1.SecAccess{},
+		toolscache.NewStore(toolscache.MetaNamespaceKeyFunc), 0)
+	access.failed(ctx, reflector, errors.New("a watch that failed"))
+
+	setSecAccess(t, c, v1alpha1.SecAccessSpec{Paused: true}, nil)
+	testenv.Eventually(t, 10*time.Second, func() error {
+		if err := access.Allowed(); !errors.Is(err, ErrRequestsPaused) {
+			return fmt.Errorf("once the SecAccess was paused: %v", err)
+		}
+		return nil
+	})
 }
 
 // spec: FETCH-17, FETCH-2
