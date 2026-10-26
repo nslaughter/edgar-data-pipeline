@@ -348,6 +348,83 @@ func TestRequestsStartAtLeastAFifthOfASecondApart(t *testing.T) {
 	}
 }
 
+// spec: FETCH-6
+func TestARequestWrittenLateLendsTheNextNoneOfItsTime(t *testing.T) {
+	s := newSECServer(t, serves(appleBody))
+	opts := s.options()
+	opts.MinInterval = 0
+	// While late is set, a request goes out 150 milliseconds after it may
+	// start, as when a goroutine resumes late on a busy node: here, as
+	// Permit is asked whether it may be sent.
+	var late atomic.Bool
+	opts.Permit = func() error {
+		if late.Load() {
+			time.Sleep(150 * time.Millisecond)
+		}
+		return nil
+	}
+	c := NewClient(opts)
+	fetchOnce(t, c, submissions, nil)
+	late.Store(true)
+	fetchOnce(t, c, submissions, nil)
+	late.Store(false)
+	// The third follows the second's response at once, and still starts
+	// MinInterval after the second did, not after the second's turn came.
+	fetchOnce(t, c, submissions, nil)
+
+	seen := s.seen()
+	if len(seen) != 3 {
+		t.Fatalf("%d requests", len(seen))
+	}
+	for i := 1; i < len(seen); i++ {
+		if gap := seen[i].at.Sub(seen[i-1].at); gap < MinInterval-2*time.Millisecond {
+			t.Errorf("requests %d and %d arrived %s apart", i-1, i, gap)
+		}
+	}
+}
+
+// spec: FETCH-6
+func TestAWaitThatEndsLateLendsTheNextRequestNoneOfItsTime(t *testing.T) {
+	c := NewClient(ClientOptions{UserAgent: testUserAgent})
+	// The Client's clock is the test's own, and each of its waits ends as
+	// late as the test has it, as a goroutine's can on a busy node.
+	now := time.Date(2026, 10, 26, 12, 0, 0, 0, time.UTC)
+	begin := now
+	var late time.Duration
+	c.now = func() time.Time { return now }
+	c.pause = func(_ context.Context, d time.Duration) error {
+		now = now.Add(d + late)
+		return nil
+	}
+	// start has a request, asked for after the time given, start, and says
+	// when it did.
+	start := func(after time.Duration) time.Duration {
+		t.Helper()
+		now = now.Add(after)
+		if err := c.start(&attempt{ctx: context.Background()}); err != nil {
+			t.Fatal(err)
+		}
+		return now.Sub(begin)
+	}
+
+	first := start(0)
+	// The second, asked for 10 milliseconds on, may start at 200, but its
+	// wait ends at 350.
+	late = 150 * time.Millisecond
+	second := start(10 * time.Millisecond)
+	if second != 350*time.Millisecond {
+		t.Fatalf("the second started at %s", second)
+	}
+	// The third, asked for at 400, after a quick response, waits until 550.
+	late = 0
+	third := start(50 * time.Millisecond)
+	for _, gap := range []time.Duration{second - first, third - second} {
+		if gap < MinInterval {
+			t.Errorf("requests started at %s, %s, and %s", first, second, third)
+		}
+	}
+}
+
 // failure is a way an attempt fails that's retried (FETCH-8).
 type failure struct {
 	name string
@@ -726,6 +803,37 @@ func TestAFetchWaitsWhileRequestsArentAllowedThenMakesItsNextAttempt(t *testing.
 	allow(true)
 	result := <-done
 	if len(s.seen()) != 2 || dials.Load() != 2 || result.Record.Attempts != 2 {
+		t.Fatalf("%d requests, over %d connections, %d attempts", len(s.seen()), dials.Load(), result.Record.Attempts)
+	}
+	names(t, result, appleBody)
+}
+
+// spec: ACCESS-1, FETCH-16
+func TestARequestRefusedAsItsAboutToBeWrittenIsNotSentAndIsNoAttempt(t *testing.T) {
+	s := newSECServer(t, serves(appleBody))
+	opts := s.options()
+	// Requests stop being allowed once the first connection is made, before
+	// its request is written, for one look.
+	var refuse atomic.Bool
+	var dials atomic.Int32
+	dial := opts.Dial
+	opts.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
+		if dials.Add(1) == 1 {
+			refuse.Store(true)
+		}
+		return dial(ctx, network, address)
+	}
+	opts.Permit = func() error {
+		if refuse.CompareAndSwap(true, false) {
+			return ErrRequestsPaused
+		}
+		return nil
+	}
+	c := NewClient(opts)
+
+	result := fetchOnce(t, c, submissions, nil)
+	// The first connection carried no request, and its attempt was none.
+	if len(s.seen()) != 1 || dials.Load() != 2 || result.Record.Attempts != 1 {
 		t.Fatalf("%d requests, over %d connections, %d attempts", len(s.seen()), dials.Load(), result.Record.Attempts)
 	}
 	names(t, result, appleBody)

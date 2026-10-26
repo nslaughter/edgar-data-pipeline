@@ -108,11 +108,11 @@ type ClientOptions struct {
 // Client sends the fetcher's requests to the SEC's hosts, as the fetching
 // rules have them. Each request carries the user agent and asks for gzip
 // (FETCH-2, FETCH-3), and goes over a connection of its own, whose
-// certificate it has checked (FETCHER-13). Each starts at least MinInterval
-// after the one before, counted from when it's written, once its
-// connection's TLS handshake is done, so a handshake that takes longer
-// brings no two requests closer as they arrive (FETCH-6). And each is sent
-// only if Permit allows it then.
+// certificate it has checked (FETCHER-13). Each is written at least
+// MinInterval after the one before was, once its connection's TLS handshake
+// is done, so a handshake that takes longer brings no two requests closer
+// as they arrive, and nor does a wait that ends late (FETCH-6). And each is
+// sent only if Permit allows it then.
 type Client struct {
 	userAgent  string
 	roots      *x509.CertPool
@@ -123,8 +123,13 @@ type Client struct {
 	backoff    time.Duration
 	clock      func() time.Time
 	permitPoll time.Duration
+	interval   time.Duration
 	limiter    *rate.Limiter
 	http       *http.Client
+	// now and pause are the clock and the waits that space requests
+	// (FETCH-6): time.Now and sleep, but in a test of a wait that ends late.
+	now   func() time.Time
+	pause func(ctx context.Context, d time.Duration) error
 }
 
 // NewClient returns a Client.
@@ -139,6 +144,9 @@ func NewClient(opts ClientOptions) *Client {
 		backoff:    opts.BackoffUnit,
 		clock:      opts.Clock,
 		permitPoll: opts.PermitPoll,
+		interval:   opts.MinInterval,
+		now:        time.Now,
+		pause:      sleep,
 	}
 	if c.permit == nil {
 		c.permit = func() error { return nil }
@@ -161,11 +169,10 @@ func NewClient(opts ClientOptions) *Client {
 	if c.permitPoll == 0 {
 		c.permitPoll = 100 * time.Millisecond
 	}
-	interval := opts.MinInterval
-	if interval == 0 {
-		interval = MinInterval
+	if c.interval == 0 {
+		c.interval = MinInterval
 	}
-	c.limiter = rate.NewLimiter(rate.Every(interval), 1)
+	c.limiter = rate.NewLimiter(rate.Every(c.interval), 1)
 	c.http = &http.Client{
 		Transport: &http.Transport{
 			Proxy: nil,
@@ -211,8 +218,9 @@ func (a *attempt) state() (sent time.Time, refused bool) {
 
 // dialTLS makes a connection for one request: a TCP connection to one of
 // the SEC's hosts, then a TLS handshake that checks its certificate against
-// the Client's roots, then a wait until a request may start (FETCH-6) and
-// may be sent at all (Permit). Only then does the request go out.
+// the Client's roots. The connection's first write, its request's, waits
+// until the request may start (FETCH-6) and may be sent at all (Permit):
+// only then does the request go out.
 func (c *Client) dialTLS(ctx context.Context, network, address string) (net.Conn, error) {
 	a, _ := ctx.Value(attemptKey{}).(*attempt)
 	if a == nil {
@@ -236,21 +244,72 @@ func (c *Client) dialTLS(ctx context.Context, network, address string) (net.Conn
 		_ = raw.Close()
 		return nil, err
 	}
-	if err := c.limiter.Wait(a.ctx); err != nil {
-		_ = conn.Close()
-		return nil, err
+	return &requestConn{Conn: &timeoutConn{Conn: conn, timeout: c.timeout}, client: c, attempt: a}, nil
+}
+
+// start lets a request go as it's about to be written: once it may start,
+// MinInterval after the one before (FETCH-6), and only if Permit allows it
+// then. Only then does it take its turn from the limiter, as the clock reads
+// then, so the next request's interval counts from when this one is
+// written. A turn reserved before the wait, as the limiter's Wait reserves
+// one, would count from when it was due instead, so that a wait that ended
+// late, or a request written late after it, would bring the next request
+// closer.
+func (c *Client) start(a *attempt) error {
+	for {
+		if err := c.ready(a.ctx); err != nil {
+			return err
+		}
+		a.mu.Lock()
+		if err := c.permit(); err != nil {
+			a.refused = true
+			a.mu.Unlock()
+			return err
+		}
+		// Another request, made at the same time, may have taken the turn
+		// since; then this one waits for the next.
+		taken := c.limiter.AllowN(c.now(), 1)
+		if taken && a.sent.IsZero() {
+			a.sent = c.clock()
+		}
+		a.mu.Unlock()
+		if taken {
+			return nil
+		}
 	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if err := c.permit(); err != nil {
-		a.refused = true
-		_ = conn.Close()
-		return nil, err
+}
+
+// ready waits until a request may start, without taking its turn, or until
+// ctx is done.
+func (c *Client) ready(ctx context.Context) error {
+	for {
+		missing := 1 - c.limiter.TokensAt(c.now())
+		if missing <= 0 {
+			return nil
+		}
+		if err := c.pause(ctx, time.Duration(math.Ceil(missing*float64(c.interval)))); err != nil {
+			return err
+		}
 	}
-	if a.sent.IsZero() {
-		a.sent = c.clock()
+}
+
+// requestConn holds back its connection's first write, its request's,
+// until the Client's start lets the request go; if it doesn't, nothing is
+// written.
+type requestConn struct {
+	net.Conn
+	client  *Client
+	attempt *attempt
+	once    sync.Once
+	err     error
+}
+
+func (c *requestConn) Write(b []byte) (int, error) {
+	c.once.Do(func() { c.err = c.client.start(c.attempt) })
+	if c.err != nil {
+		return 0, c.err
 	}
-	return &timeoutConn{Conn: conn, timeout: c.timeout}, nil
+	return c.Conn.Write(b)
 }
 
 // timeoutConn gives each read and each write of a connection the Client's
