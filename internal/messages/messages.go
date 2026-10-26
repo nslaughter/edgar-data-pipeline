@@ -136,6 +136,37 @@ func (s *Schemas) ValidateJob(data []byte) error {
 	return validate(s.job, data)
 }
 
+// DecodeJob checks a job's JSON against job.schema.json, and decodes it from
+// the values the schema checked: each property by its name exactly as the
+// schema spells it. A field whose name differs from one of them, if only in
+// case, is one it doesn't know, and ignores (JOB-7), where encoding/json
+// alone would take that field's value in place of the property's.
+func (s *Schemas) DecodeJob(data []byte) (Job, error) {
+	instance, err := jsonschema.UnmarshalJSON(bytes.NewReader(data))
+	if err != nil {
+		return Job{}, err
+	}
+	if err := s.job.Validate(instance); err != nil {
+		return Job{}, err
+	}
+	// The schema holds a job to an object, and each of these to a string.
+	object, _ := instance.(map[string]any)
+	field := func(name string) string {
+		value, _ := object[name].(string)
+		return value
+	}
+	return Job{
+		ID:        field("id"),
+		Kind:      field("kind"),
+		Feed:      field("feed"),
+		URL:       field("url"),
+		Source:    field("source"),
+		Backfill:  field("backfill"),
+		QueuedAt:  field("queued_at"),
+		ExpiresAt: field("expires_at"),
+	}, nil
+}
+
 // DecodeEvent checks an event's JSON against event.schema.json, and decodes
 // it.
 func (s *Schemas) DecodeEvent(data []byte) (Event, error) {

@@ -189,14 +189,11 @@ func next(consumers []jetstream.Consumer) (jetstream.Msg, error) {
 func (w *Worker) handle(ctx context.Context, msg jetstream.Msg) {
 	defer w.working(msg)()
 	log := w.Log.WithValues("subject", msg.Subject())
-	var job messages.Job
-	if err := w.Schemas.ValidateJob(msg.Data()); err != nil {
+	// Decoded from the values the schema checked, by their names exactly,
+	// so a field it doesn't know, whatever its case, is ignored (JOB-7).
+	job, err := w.Schemas.DecodeJob(msg.Data())
+	if err != nil {
 		log.Info("Acknowledged a job that doesn't validate, without a request", "reason", err.Error())
-		w.ack(ctx, msg, log)
-		return
-	}
-	if err := json.Unmarshal(msg.Data(), &job); err != nil {
-		log.Info("Acknowledged a job that doesn't decode, without a request", "reason", err.Error())
 		w.ack(ctx, msg, log)
 		return
 	}

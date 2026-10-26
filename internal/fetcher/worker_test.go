@@ -291,20 +291,32 @@ func TestAJobThatDoesntValidateOrWhoseKindIsntItsSubjectsIsAcknowledgedWithoutAR
 	pollWithoutSource := newJob(messages.KindPoll, "https://www.sec.gov/no-source")
 	pollWithoutSource.Source = ""
 	wt.queue(pollWithoutSource)
-	// A field it doesn't know, it ignores, and fetches the job.
-	known, err := json.Marshal(newJob(messages.KindBackfill, "https://www.sec.gov/known"))
+	// A field it doesn't know, it ignores, and fetches the job: one whose
+	// name differs from a known one's only in case among them, after it.
+	job := newJob(messages.KindBackfill, "https://www.sec.gov/known")
+	known, err := json.Marshal(job)
 	if err != nil {
 		t.Fatal(err)
 	}
-	publish(ctx, t, wt.js, "edgar.jobs.backfill", []byte(strings.Replace(string(known), "{", `{"later":1,`, 1)))
+	unknown := strings.Replace(string(known), "{", `{"later":1,`, 1)
+	unknown = strings.TrimSuffix(unknown, "}") + `,"ID":"not-a-uuid","URL":"https://www.sec.gov/elsewhere","Feed":"other"}`
+	if err := wt.schemas.ValidateJob([]byte(unknown)); err != nil {
+		t.Fatalf("the job with fields it doesn't know doesn't validate: %v", err)
+	}
+	publish(ctx, t, wt.js, "edgar.jobs.backfill", []byte(unknown))
 	wt.start()
 	settled(ctx, t, wt.js, 10*time.Second)
 
 	if diff := cmp.Diff([]string{"/known"}, wt.urls()); diff != "" {
 		t.Errorf("the requests (-want +got):\n%s", diff)
 	}
-	if rows := wt.records.all(); len(rows) != 1 {
-		t.Errorf("%d records", len(rows))
+	rows := wt.records.all()
+	if len(rows) != 1 {
+		t.Fatalf("%d records", len(rows))
+	}
+	if rows[0].job != job.ID || rows[0].record.Feed != job.Feed || rows[0].record.URL != job.URL {
+		t.Errorf("the record of job %s, feed %s, URL %s, not the job's", rows[0].job, rows[0].record.Feed,
+			rows[0].record.URL)
 	}
 }
 
