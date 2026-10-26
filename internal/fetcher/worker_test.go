@@ -312,12 +312,31 @@ func TestAJobThatDoesntValidateOrWhoseKindIsntItsSubjectsIsAcknowledgedWithoutAR
 func TestAJobTheWorkerIsAtWorkOnIsntDeliveredAgainHoweverLongItsFetchTakes(t *testing.T) {
 	// JetStream would deliver the job again a second after it last heard of
 	// it; the fetch takes three.
+	arrived := make(chan struct{})
 	wt := newWorkerTest(t, func(w http.ResponseWriter, r *http.Request) {
+		close(arrived)
 		time.Sleep(3 * time.Second)
 		pathBody(w, r)
 	}, time.Second)
 	wt.queue(newJob(messages.KindFiling, "https://www.sec.gov/slow"))
 	wt.start()
+	<-arrived
+	// Meanwhile another asks the consumer for a job, as another replica
+	// would once it held the Lease: none comes.
+	consumer, err := wt.js.Consumer(wt.ctx, messages.StreamJobs, messages.ConsumerFetcherFilings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(2500 * time.Millisecond); time.Now().Before(deadline); {
+		batch, err := consumer.FetchNoWait(1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for msg := range batch.Messages() {
+			t.Fatalf("delivered again while the worker was at work on it: %s", msg.Data())
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
 	settled(wt.ctx, t, wt.js, 15*time.Second)
 
 	info := consumerState(wt.ctx, t, wt.js, messages.ConsumerFetcherFilings)
