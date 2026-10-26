@@ -1,15 +1,20 @@
 package fetcher
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -516,33 +521,69 @@ func TestAStopRefusesRequestsFromWhenItsRecordedBeforeTheInformerShowsIt(t *test
 }
 
 // refusing passes on a replica's requests to the API server, and fails
-// those whose paths it refuses.
+// those whose paths it refuses, as answer does.
 type refusing struct {
 	next    http.RoundTripper
 	refused func(path string) bool
+	answer  func(*http.Request) (*http.Response, error)
 }
 
 func (r refusing) RoundTrip(req *http.Request) (*http.Response, error) {
 	if r.refused(req.URL.Path) {
-		return nil, errors.New("refused")
+		return r.answer(req)
 	}
 	return r.next.RoundTrip(req)
 }
 
+// refused fails a request with an error the informer doesn't try again
+// itself.
+func refused(*http.Request) (*http.Response, error) {
+	return nil, errors.New("refused")
+}
+
+// connectionRefused fails a request as when the API server isn't
+// listening, which the informer tries again itself (Start).
+func connectionRefused(*http.Request) (*http.Response, error) {
+	return nil, &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)}
+}
+
+// tooManyRequests answers a request as the API server does one it's too
+// busy for, with a 429 and no Retry-After, which the informer tries again
+// itself (Start).
+func tooManyRequests(req *http.Request) (*http.Response, error) {
+	body, err := json.Marshal(metav1.Status{
+		TypeMeta: metav1.TypeMeta{Kind: "Status", APIVersion: "v1"},
+		Status:   metav1.StatusFailure, Message: "too many requests",
+		Reason: metav1.StatusReasonTooManyRequests, Code: http.StatusTooManyRequests,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &http.Response{
+		Status: "429 Too Many Requests", StatusCode: http.StatusTooManyRequests, Proto: "HTTP/1.1",
+		ProtoMajor: 1, ProtoMinor: 1, Header: http.Header{"Content-Type": {"application/json"}},
+		Body: io.NopCloser(bytes.NewReader(body)), ContentLength: int64(len(body)), Request: req,
+	}, nil
+}
+
 func TestAReplicaThatCantReadTheSecAccessStopsAndLeavesTheLeaseToAnother(t *testing.T) {
 	secAccesses := "/apis/" + v1alpha1.GroupVersion.String() + "/secaccesses"
+	readsOfTheSecAccess := func(path string) bool { return strings.HasPrefix(path, secAccesses) }
 	for _, cut := range []struct {
 		name    string
 		refused func(path string) bool
+		answer  func(*http.Request) (*http.Response, error)
 	}{
 		// It can't learn the SecAccess's resource.
 		{"cut off from all but the Lease", func(path string) bool {
 			return !strings.HasPrefix(path, "/apis/coordination.k8s.io/")
-		}},
-		// It learns the resource, but can't list or watch the SecAccess.
-		{"its reads of the SecAccess refused", func(path string) bool {
-			return strings.HasPrefix(path, secAccesses)
-		}},
+		}, refused},
+		// It learns the resource, but can't list or watch the SecAccess: an
+		// error the informer gives its handler of failed requests, and two
+		// it tries again itself, without end.
+		{"its reads of the SecAccess refused", readsOfTheSecAccess, refused},
+		{"its reads of the SecAccess answered with 429s", readsOfTheSecAccess, tooManyRequests},
+		{"its reads of the SecAccess refused a connection", readsOfTheSecAccess, connectionRefused},
 	} {
 		t.Run(cut.name, func(t *testing.T) {
 			ctx := context.Background()
@@ -551,7 +592,9 @@ func TestAReplicaThatCantReadTheSecAccessStopsAndLeavesTheLeaseToAnother(t *test
 			allowRequests(t, c)
 			s := newStores(t)
 			cutOff := rest.CopyConfig(apiServer(t))
-			cutOff.Wrap(func(next http.RoundTripper) http.RoundTripper { return refusing{next, cut.refused} })
+			cutOff.Wrap(func(next http.RoundTripper) http.RoundTripper {
+				return refusing{next, cut.refused, cut.answer}
+			})
 			timings := lease{duration: 3 * time.Second, renew: 2 * time.Second, retry: time.Second}
 			failed := runReplica(t, release, timings, cutOff, s, newSECServer(t, pathBody), nil)
 			holds(t, c, release, failed, 10*time.Second)
@@ -585,7 +628,7 @@ func TestOnceTheSecAccessIsReadAWatchThatFailsLeavesTheInformerReadingIt(t *test
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if err := access.Start(ctx); err != nil {
+	if err := access.Start(ctx, 10*time.Second); err != nil {
 		t.Fatal(err)
 	}
 	// A watch that fails once the informer has read the SecAccess, as when

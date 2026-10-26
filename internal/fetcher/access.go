@@ -3,7 +3,9 @@ package fetcher
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
@@ -88,10 +90,14 @@ func NewSecAccess(config *rest.Config) (*SecAccess, error) {
 
 // Start runs the informer until ctx is done, and returns once it has read
 // the SecAccess, or ctx is done first. If a request to read it fails first,
-// it stops the informer and returns the request's error, rather than try
-// again while the replica holds the Lease, as the owner confirmed
-// (T23-D17).
-func (s *SecAccess) Start(ctx context.Context) error {
+// or the informer still hasn't read it once the time within has passed, it
+// stops the informer and returns why, rather than try again while the
+// replica holds the Lease, as the owner confirmed (T23-D17). The bound
+// (T23-D24) ends what the handler of failed requests can't: client-go's
+// informer, which streams its first read by default, tries again a read
+// that gets a 429, or whose connection is refused, without end and without
+// calling the handler (failed).
+func (s *SecAccess) Start(ctx context.Context, within time.Duration) error {
 	if _, err := s.cache.GetInformer(ctx, &v1alpha1.SecAccess{}); err != nil {
 		return err
 	}
@@ -103,11 +109,15 @@ func (s *SecAccess) Start(ctx context.Context) error {
 		// It stops only once running is done.
 		_ = s.cache.Start(running)
 	}()
-	read := s.cache.WaitForCacheSync(running)
+	reading, cancel := context.WithTimeoutCause(running, within,
+		fmt.Errorf("the informer hadn't read the SecAccess within %s", within))
+	defer cancel()
+	read := s.cache.WaitForCacheSync(reading)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !read || running.Err() != nil {
-		fail(nil)
+		// Why reading ended: running's cause, if it's done, or the bound.
+		fail(context.Cause(reading))
 		return context.Cause(running)
 	}
 	s.synced = true

@@ -182,14 +182,15 @@ var errNotLeading = errors.New("this replica doesn't hold the Lease")
 // Lease, within the renewal deadline of its last renewal, and requests are
 // allowed (FETCH-16, ACCESS-1). It returns an error, having sent nothing, if
 // it can't begin to read the SecAccess, as when a request to the API server
-// for the SecAccess's resource fails.
+// for the SecAccess's resource fails, or it hasn't read the SecAccess within
+// the renewal deadline.
 func lead(shutdown, leading context.Context, config *rest.Config, opts Options, schemas *messages.Schemas,
 	lock *renewals) error {
 	access, err := NewSecAccess(config)
 	if err != nil {
 		return fmt.Errorf("reading the SecAccess: %w", err)
 	}
-	if err := access.Start(leading); err != nil {
+	if err := access.Start(leading, opts.RenewDeadline); err != nil {
 		return fmt.Errorf("reading the SecAccess: %w", err)
 	}
 	permit := func() error {
