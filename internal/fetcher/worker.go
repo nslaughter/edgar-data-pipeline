@@ -245,15 +245,23 @@ func (w *Worker) handle(ctx context.Context, msg jetstream.Msg, earlier []jetstr
 		}
 	}
 
-	var previous *Version
-	if err := w.hold(ctx, log, "read the URL's latest version", func(ctx context.Context) (err error) {
-		previous, err = w.Records.LatestVersion(ctx, job.URL)
-		return err
-	}); err != nil {
+	// latest reads the URL's latest version in the store, whose validators
+	// the fetch's requests send (FETCH-4): before its first attempt, and
+	// again before a retry once a job taken during its wait may have
+	// recorded a later one (between).
+	latest := func(ctx context.Context) (previous *Version, err error) {
+		err = w.hold(ctx, log, "read the URL's latest version", func(ctx context.Context) (err error) {
+			previous, err = w.Records.LatestVersion(ctx, job.URL)
+			return err
+		})
+		return previous, err
+	}
+	previous, err := latest(ctx)
+	if err != nil {
 		w.abandon(msg, log)
 		return
 	}
-	result, err := w.Client.Fetch(ctx, job.Feed, job.URL, w.Tool, previous, w.between(earlier))
+	result, err := w.Client.Fetch(ctx, job.Feed, job.URL, w.Tool, previous, w.between(earlier, latest))
 	if err != nil {
 		w.abandon(msg, log)
 		return
@@ -320,19 +328,23 @@ func (w *Worker) handle(ctx context.Context, msg jetstream.Msg, earlier []jetstr
 // before its own between its attempts, so a poll's fetch takes none. While
 // a request may not be sent, it takes no job, as Run takes none, and waits.
 // Should the consumers fail to give a job, the fetch goes on as though none
-// were waiting.
-func (w *Worker) between(earlier []jetstream.Consumer) Wait {
-	return func(ctx context.Context, d time.Duration) error {
+// were waiting. Once it has taken a job, it reads the URL's latest version
+// again through latest as the wait ends, since that job may have recorded
+// a later one, as a filing's job and a Backfill's can be for the same file;
+// otherwise it gives the version it was given.
+func (w *Worker) between(earlier []jetstream.Consumer, latest func(context.Context) (*Version, error)) Wait {
+	return func(ctx context.Context, d time.Duration, previous *Version) (*Version, error) {
 		over := time.Now().Add(d)
-		failed := false
+		failed, took := false, false
 		for {
 			if err := ctx.Err(); err != nil {
-				return err
+				return nil, err
 			}
 			if w.Permit() == nil {
 				msg, i, err := next(earlier)
 				if msg != nil {
 					w.handle(ctx, msg, earlier[:i])
+					took = true
 					continue
 				}
 				if err != nil && !failed && ctx.Err() == nil {
@@ -340,7 +352,10 @@ func (w *Worker) between(earlier []jetstream.Consumer) Wait {
 					failed = true
 				}
 				if !time.Now().Before(over) {
-					return nil
+					if !took {
+						return previous, nil
+					}
+					return latest(ctx)
 				}
 			}
 			pause := w.Idle

@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"github.com/nats-io/nats.go/jetstream"
 
 	"github.com/nslaughter/edgar-data-pipeline/api/v1alpha1"
@@ -373,6 +374,58 @@ func TestDuringAFetchsWaitNoJobIsTakenWhileRequestsArentAllowed(t *testing.T) {
 	settled(wt.ctx, t, wt.js, 10*time.Second)
 	if diff := cmp.Diff([]string{"/backfill", "/poll", "/backfill"}, wt.urls()); diff != "" {
 		t.Errorf("the requests (-want +got):\n%s", diff)
+	}
+}
+
+// spec: FETCH-4, REC-5, JOB-4
+func TestARetryAfterAJobOfItsURLDuringItsWaitSendsTheValidatorsOfTheVersionThatJobRecorded(t *testing.T) {
+	const path = "/Archives/edgar/data/320193/000032019326000001/index.json"
+	url := "https://www.sec.gov" + path
+	retried := newUnavailable(path, "2")
+	// The file has changed since the version the store holds: it's now b.
+	wt := newWorkerTest(t, func(w http.ResponseWriter, r *http.Request) {
+		if retried.answer(w, r) {
+			return
+		}
+		w.Header().Set("ETag", `"b"`)
+		if r.Header.Get("If-None-Match") == `"b"` {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		_, _ = io.WriteString(w, "version b")
+	}, 0)
+	a := digest("version a")
+	wt.records.rows = []fakeRow{{job: uuid.NewString(), record: Record{Feed: "submissions", URL: url,
+		RequestedAt: timestamp(time.Now()), Attempts: 1, Status: ptr(http.StatusOK), ETag: ptr(`"a"`), SHA256: &a,
+		Bytes: ptr(int64(len("version a"))), Object: ptr(ObjectName(a))}}}
+	backfill := newJob(messages.KindBackfill, url)
+	wt.queue(backfill)
+	wt.start()
+	await(t, retried.failed, 10*time.Second, "first attempt of the Backfill's fetch")
+	// During its wait, a filing's job for the same file, which records b.
+	filing := newJob(messages.KindFiling, url)
+	wt.queue(filing)
+	settled(wt.ctx, t, wt.js, 10*time.Second)
+
+	var sent []string
+	for _, r := range wt.server.seen() {
+		sent = append(sent, r.header.Get("If-None-Match"))
+	}
+	if diff := cmp.Diff([]string{`"a"`, `"a"`, `"b"`}, sent); diff != "" {
+		t.Errorf("the validators the Backfill's attempts and the filing's sent (-want +got):\n%s", diff)
+	}
+	rows := wt.records.all()
+	if len(rows) != 3 || rows[1].job != filing.ID || rows[2].job != backfill.ID {
+		t.Fatalf("the records: %+v", rows)
+	}
+	b := digest("version b")
+	if r := rows[1].record; value(r.Status) != http.StatusOK || value(r.SHA256) != b {
+		t.Errorf("the filing's record: status %v, sha256 %v", value(r.Status), value(r.SHA256))
+	}
+	// The Backfill's 304 names b, the latest version recorded before it.
+	if r := rows[2].record; value(r.Status) != http.StatusNotModified || value(r.SHA256) != b || r.Attempts != 2 {
+		t.Errorf("the Backfill's record: status %v, sha256 %v, attempts %d", value(r.Status), value(r.SHA256),
+			r.Attempts)
 	}
 }
 

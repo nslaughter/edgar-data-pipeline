@@ -345,17 +345,21 @@ type Result struct {
 
 // Wait is what a fetch does between its attempts, in place of FETCH-8's
 // wait before a retry: it waits at least d, and returns an error only once
-// ctx is done. The Worker's takes the jobs of earlier kinds meanwhile
-// (Worker.between).
-type Wait func(ctx context.Context, d time.Duration) error
+// ctx is done. It's given the URL's latest version in the store as the
+// fetch last had it, and gives the latest as the wait ends, whose
+// validators the next attempt sends (FETCH-4), and which a 304 to it names
+// (REC-5). The Worker's takes the jobs of earlier kinds meanwhile
+// (Worker.between), one of which may record a later version of the URL.
+type Wait func(ctx context.Context, d time.Duration, previous *Version) (*Version, error)
 
 // Fetch makes one fetch of a URL, recorded under its feed: up to Attempts
 // attempts, each a request, and the record of the last (FETCH-8,
 // FETCH-14). previous is the URL's latest version in the store, if it has
 // one, whose validators make each request conditional (FETCH-4). Before
 // each retry, it calls wait with FETCH-8's wait, or else sleeps that long,
-// and makes the retry once wait returns. It calls wait only between
-// attempts, never between the requests of one, such as a redirect's.
+// and makes the retry once wait returns, with the validators of the
+// version wait gives. It calls wait only between attempts, never between
+// the requests of one, such as a redirect's.
 // Before each attempt, it waits until a request may be sent: while requests
 // aren't allowed, a fetch between attempts waits, and makes its next
 // attempt once they are, as the owner decided. A retry refused as it was
@@ -371,24 +375,19 @@ func (c *Client) Fetch(ctx context.Context, feed, rawURL, tool string, previous 
 		return Result{}, err
 	}
 	if wait == nil {
-		wait = sleep
-	}
-	// Each validator goes back in the bytes it came in (fromLatin1).
-	headers := map[string]string{}
-	if previous != nil && previous.ETag != nil {
-		headers["If-None-Match"] = toLatin1(*previous.ETag)
-	}
-	if previous != nil && previous.LastModified != nil {
-		headers["If-Modified-Since"] = toLatin1(*previous.LastModified)
+		wait = func(ctx context.Context, d time.Duration, previous *Version) (*Version, error) {
+			return previous, sleep(ctx, d)
+		}
 	}
 	// delay is FETCH-8's wait before the next attempt, a retry.
 	var delay time.Duration
 	for n := 1; ; {
 		if n > 1 {
-			if err := wait(ctx, delay); err != nil {
+			if previous, err = wait(ctx, delay, previous); err != nil {
 				return Result{}, err
 			}
 		}
+		headers := validators(previous)
 		if err := c.permitted(ctx); err != nil {
 			return Result{}, err
 		}
@@ -432,6 +431,20 @@ func (c *Client) Fetch(ctx context.Context, feed, rawURL, tool string, previous 
 		delay = retryDelay(retryAfter, n, c.clock(), c.backoff)
 		n++
 	}
+}
+
+// validators gives the headers that make a request conditional on a
+// version, with its validators, if it has any (FETCH-4). Each goes back in
+// the bytes it came in (fromLatin1).
+func validators(previous *Version) map[string]string {
+	headers := map[string]string{}
+	if previous != nil && previous.ETag != nil {
+		headers["If-None-Match"] = toLatin1(*previous.ETag)
+	}
+	if previous != nil && previous.LastModified != nil {
+		headers["If-Modified-Since"] = toLatin1(*previous.LastModified)
+	}
+	return headers
 }
 
 // permitted waits until a request may be sent, or until ctx is done.

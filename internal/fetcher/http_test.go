@@ -845,9 +845,9 @@ func TestBetweenItsAttemptsAFetchWaitsAsTheWaitItsGivenDoes(t *testing.T) {
 		requests int
 	}
 	var calls []call
-	wait := func(_ context.Context, d time.Duration) error {
+	wait := func(_ context.Context, d time.Duration, previous *Version) (*Version, error) {
 		calls = append(calls, call{d, len(s.seen())})
-		return nil
+		return previous, nil
 	}
 
 	began := time.Now()
@@ -867,6 +867,59 @@ func TestBetweenItsAttemptsAFetchWaitsAsTheWaitItsGivenDoes(t *testing.T) {
 		t.Fatalf("%d requests, over %d connections, %d attempts", len(s.seen()), dials.Load(), result.Record.Attempts)
 	}
 	names(t, result, appleBody)
+}
+
+// spec: FETCH-4, REC-5
+func TestARetrySendsTheValidatorsOfTheVersionItsWaitGives(t *testing.T) {
+	var n atomic.Int32
+	s := newSECServer(t, func(w http.ResponseWriter, _ *http.Request) {
+		if n.Add(1) == 1 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusNotModified)
+	})
+	earlier := &Version{ETag: ptr(`"a"`), SHA256: digest("a"), Bytes: 1, Object: ObjectName(digest("a"))}
+	// The version a job taken during the wait recorded.
+	later := &Version{ETag: ptr(`"b"`), LastModified: ptr("Mon, 26 Oct 2026 09:00:00 GMT"), SHA256: digest("b"),
+		Bytes: 1, Object: ObjectName(digest("b"))}
+	var given *Version
+	wait := func(_ context.Context, _ time.Duration, previous *Version) (*Version, error) {
+		given = previous
+		return later, nil
+	}
+	result, err := NewClient(s.options()).Fetch(context.Background(), "submissions", submissions, Tool(testCommit),
+		earlier, wait)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if given != earlier {
+		t.Errorf("the wait was given %+v, not the version the first attempt asked about", given)
+	}
+	seen := s.seen()
+	if len(seen) != 2 {
+		t.Fatalf("%d requests", len(seen))
+	}
+	for i, want := range []*Version{earlier, later} {
+		if got := seen[i].header.Get("If-None-Match"); got != *want.ETag {
+			t.Errorf("request %d's If-None-Match: %q, not %q", i+1, got, *want.ETag)
+		}
+		since := ""
+		if want.LastModified != nil {
+			since = *want.LastModified
+		}
+		if got := seen[i].header.Get("If-Modified-Since"); got != since {
+			t.Errorf("request %d's If-Modified-Since: %q, not %q", i+1, got, since)
+		}
+	}
+	// The 304 names the version its request asked about.
+	r := result.Record
+	if value(r.Status) != http.StatusNotModified || value(r.SHA256) != later.SHA256 || value(r.ETag) != `"b"` ||
+		r.Error != nil {
+		t.Errorf("the record: status %v, sha256 %v, etag %v, error %v", value(r.Status), value(r.SHA256),
+			value(r.ETag), value(r.Error))
+	}
 }
 
 // spec: ACCESS-1, FETCH-16

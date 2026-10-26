@@ -57,7 +57,10 @@ polls or new filings' fetches, and a filing's retries don't delay polls.
 A job taken during a wait takes only the kinds before its own between its
 own attempts, so a poll's takes none, and the fetch it was taken during
 goes on once it has ended. Meanwhile the fetcher holds each of those jobs
-in progress ([FETCHER-10]).
+in progress ([FETCHER-10]). A job taken during a wait can be for the
+fetch's own URL, as a filing's and a Backfill's can be for the same file,
+so the retry sends the validators of the URL's latest version as the wait
+ends, which a `304` to it names ([FETCH-4], [REC-5]).
 
 A poll's job expires when its Source's next poll is due, and the other
 kinds don't expire ([JOB-2], [JOB-3]). The fetcher acknowledges an expired
