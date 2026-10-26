@@ -151,6 +151,231 @@ func TestPollsAreTakenFirstThenFilingsThenBackfills(t *testing.T) {
 	}
 }
 
+// unavailable answers the first request for its path with a 503 and a
+// Retry-After, a temporary failure that's retried (FETCH-8), and closes
+// failed once it has.
+type unavailable struct {
+	path       string
+	retryAfter string
+	once       sync.Once
+	failed     chan struct{}
+}
+
+func newUnavailable(path, retryAfter string) *unavailable {
+	return &unavailable{path: path, retryAfter: retryAfter, failed: make(chan struct{})}
+}
+
+// answer answers a request if it's the first for the path, and says
+// whether it did.
+func (u *unavailable) answer(w http.ResponseWriter, r *http.Request) bool {
+	first := false
+	if r.URL.Path == u.path {
+		u.once.Do(func() { first = true })
+	}
+	if !first {
+		return false
+	}
+	w.Header().Set("Retry-After", u.retryAfter)
+	w.WriteHeader(http.StatusServiceUnavailable)
+	close(u.failed)
+	return true
+}
+
+// await waits until ch is closed, or fails the test once the time given has
+// passed.
+func await(t *testing.T, ch <-chan struct{}, within time.Duration, what string) {
+	t.Helper()
+	select {
+	case <-ch:
+	case <-time.After(within):
+		t.Fatalf("no %s within %s", what, within)
+	}
+}
+
+// paths gives each record's URL's path, in the order they were added.
+func paths(rows []fakeRow) []string {
+	var found []string
+	for _, row := range rows {
+		found = append(found, strings.TrimPrefix(row.record.URL, "https://www.sec.gov"))
+	}
+	return found
+}
+
+// announced gives the paths of the URLs of the next n events' jobs, in the
+// order they were published.
+func announced(t *testing.T, events jetstream.Consumer, n int) []string {
+	t.Helper()
+	var found []string
+	for range n {
+		e := nextEvent(t, events, 5*time.Second)
+		found = append(found, strings.TrimPrefix(e.event.Job.URL, "https://www.sec.gov"))
+	}
+	return found
+}
+
+// spec: JOB-4, BACKFILL-2, FETCHER-10, FETCH-8
+func TestBetweenAFetchsAttemptsTheJobsOfEarlierKindsAreTakenFirst(t *testing.T) {
+	kinds := []string{messages.KindPoll, messages.KindFiling, messages.KindBackfill}
+	for k, kind := range kinds {
+		t.Run("a "+kind+"'s retry", func(t *testing.T) {
+			// JetStream would deliver a job again a second after it last
+			// heard of it; the fetch waits three before its retry.
+			retried := newUnavailable("/retried", "3")
+			wt := newWorkerTest(t, func(w http.ResponseWriter, r *http.Request) {
+				if !retried.answer(w, r) {
+					pathBody(w, r)
+				}
+			}, time.Second)
+			job := newJob(kind, "https://www.sec.gov/retried")
+			wt.queue(job)
+			wt.start()
+			await(t, retried.failed, 10*time.Second, "first attempt")
+
+			// During its wait, a job of each kind before its own.
+			for j := range k {
+				wt.queue(newJob(kinds[j], "https://www.sec.gov/"+kinds[j]))
+			}
+			// Meanwhile another asks the job's consumer for a job, as another
+			// replica would once it held the Lease: none comes.
+			consumer, err := wt.js.Consumer(wt.ctx, messages.StreamJobs, Consumers[k])
+			if err != nil {
+				t.Fatal(err)
+			}
+			for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
+				batch, err := consumer.FetchNoWait(1)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for msg := range batch.Messages() {
+					t.Fatalf("delivered again during its fetch's wait: %s", msg.Data())
+				}
+				time.Sleep(250 * time.Millisecond)
+			}
+			// Then, still during its wait, a job of its own kind and of each
+			// kind after it, the later kinds queued first.
+			for j := len(kinds) - 1; j >= k; j-- {
+				wt.queue(newJob(kinds[j], "https://www.sec.gov/"+kinds[j]))
+			}
+			settled(wt.ctx, t, wt.js, 15*time.Second)
+
+			// Those of the earlier kinds go before the retry, polls first,
+			// and the others after it.
+			want := []string{"/retried"}
+			for j := range k {
+				want = append(want, "/"+kinds[j])
+			}
+			want = append(want, "/retried")
+			for j := k; j < len(kinds); j++ {
+				want = append(want, "/"+kinds[j])
+			}
+			if diff := cmp.Diff(want, wt.urls()); diff != "" {
+				t.Fatalf("the order of the requests (-want +got):\n%s", diff)
+			}
+			// The retry waited its wait in full (FETCH-8).
+			seen := wt.server.seen()
+			if gap := seen[k+1].at.Sub(seen[0].at); gap < 3*time.Second {
+				t.Errorf("the retry came %s after the first attempt, within its wait of 3 seconds", gap)
+			}
+			// Each job's record, then its event, in that order, and the
+			// retried job's once, of its second attempt.
+			rows := wt.records.all()
+			if diff := cmp.Diff(want[1:], paths(rows)); diff != "" {
+				t.Errorf("the order of the records (-want +got):\n%s", diff)
+			}
+			if diff := cmp.Diff(want[1:], announced(t, wt.events, len(rows))); diff != "" {
+				t.Errorf("the order of the events (-want +got):\n%s", diff)
+			}
+			if r := rows[k]; r.job != job.ID || r.record.Attempts != 2 || value(r.record.Status) != http.StatusOK {
+				t.Errorf("the retried job's record: %+v", r)
+			}
+			info := consumerState(wt.ctx, t, wt.js, Consumers[k])
+			if info.NumRedelivered != 0 || info.Delivered.Consumer != 2 {
+				t.Errorf("%s delivered %d jobs, %d of them again", Consumers[k], info.Delivered.Consumer,
+					info.NumRedelivered)
+			}
+		})
+	}
+}
+
+// spec: JOB-4, BACKFILL-2
+func TestAJobTakenDuringAWaitTakesOnlyEarlierKindsAndTheFetchGoesOnOnceItHasEnded(t *testing.T) {
+	backfill := newUnavailable("/backfill", "1")
+	filing := newUnavailable("/filing-1", "1")
+	wt := newWorkerTest(t, func(w http.ResponseWriter, r *http.Request) {
+		if !backfill.answer(w, r) && !filing.answer(w, r) {
+			pathBody(w, r)
+		}
+	}, 0)
+	wt.queue(newJob(messages.KindBackfill, "https://www.sec.gov/backfill"))
+	wt.start()
+	await(t, backfill.failed, 10*time.Second, "first attempt of the Backfill's fetch")
+	wt.queue(newJob(messages.KindFiling, "https://www.sec.gov/filing-1"))
+	await(t, filing.failed, 10*time.Second, "first attempt of the filing's fetch")
+	// During the filing's wait, which ends after the Backfill's, another
+	// filing's job and a poll's.
+	wt.queue(newJob(messages.KindFiling, "https://www.sec.gov/filing-2"))
+	wt.queue(newJob(messages.KindPoll, "https://www.sec.gov/poll"))
+	settled(wt.ctx, t, wt.js, 10*time.Second)
+
+	// The filing takes the poll's job, and not the other filing's, between
+	// its attempts. Once it has ended, the Backfill's wait is over, and it
+	// takes the other filing's job before its retry.
+	want := []string{"/backfill", "/filing-1", "/poll", "/filing-1", "/filing-2", "/backfill"}
+	if diff := cmp.Diff(want, wt.urls()); diff != "" {
+		t.Fatalf("the order of the requests (-want +got):\n%s", diff)
+	}
+	recorded := []string{"/poll", "/filing-1", "/filing-2", "/backfill"}
+	rows := wt.records.all()
+	if diff := cmp.Diff(recorded, paths(rows)); diff != "" {
+		t.Errorf("the order of the records (-want +got):\n%s", diff)
+	}
+	if diff := cmp.Diff(recorded, announced(t, wt.events, len(rows))); diff != "" {
+		t.Errorf("the order of the events (-want +got):\n%s", diff)
+	}
+}
+
+// spec: JOB-4, BACKFILL-2, ACCESS-1
+func TestDuringAFetchsWaitNoJobIsTakenWhileRequestsArentAllowed(t *testing.T) {
+	access := &fakeAccess{}
+	failed := make(chan struct{})
+	var first sync.Once
+	wt := newWorkerTest(t, func(w http.ResponseWriter, r *http.Request) {
+		fail := false
+		if r.URL.Path == "/backfill" {
+			first.Do(func() { fail = true })
+		}
+		if !fail {
+			pathBody(w, r)
+			return
+		}
+		// Paused as the Backfill's first attempt fails.
+		access.pause(true)
+		w.Header().Set("Retry-After", "0")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		close(failed)
+	}, 0)
+	wt.access = access
+	wt.queue(newJob(messages.KindBackfill, "https://www.sec.gov/backfill"))
+	wt.start()
+	await(t, failed, 10*time.Second, "first attempt")
+	wt.queue(newJob(messages.KindPoll, "https://www.sec.gov/poll"))
+	time.Sleep(time.Second)
+
+	if info := consumerState(wt.ctx, t, wt.js, messages.ConsumerFetcherPolls); info.Delivered.Consumer != 0 {
+		t.Errorf("%d polls' jobs taken while requests were paused", info.Delivered.Consumer)
+	}
+	if diff := cmp.Diff([]string{"/backfill"}, wt.urls()); diff != "" {
+		t.Fatalf("the requests while they were paused (-want +got):\n%s", diff)
+	}
+	// Once they're allowed, the poll's job, which waited, goes before the
+	// Backfill's retry.
+	access.pause(false)
+	settled(wt.ctx, t, wt.js, 10*time.Second)
+	if diff := cmp.Diff([]string{"/backfill", "/poll", "/backfill"}, wt.urls()); diff != "" {
+		t.Errorf("the requests (-want +got):\n%s", diff)
+	}
+}
+
 // spec: JOB-5
 func TestAJobThatHasExpiredIsAcknowledgedWithoutARequestOrARecord(t *testing.T) {
 	wt := newWorkerTest(t, pathBody, 0)
@@ -588,6 +813,75 @@ func TestAFetchInProgressWhenTheWorkerStopsIsAbandonedWithoutARecord(t *testing.
 			settled(wt.ctx, t, wt.js, 10*time.Second)
 			if rows := wt.records.all(); len(rows) != 1 {
 				t.Errorf("%d records", len(rows))
+			}
+		})
+	}
+}
+
+// spec: JOB-4, BACKFILL-2, FETCHER-10
+func TestFetchesInProgressDuringAWaitWhenTheWorkerStopsAreAbandonedWithoutARecord(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		stop func(*workerTest)
+		// ackWait is how long JetStream waits for a job's acknowledgement
+		// before it delivers the job again: past the test, but for a job
+		// asked to be delivered again at once.
+		ackWait time.Duration
+	}{
+		{"as Kubernetes stops the pod", (*workerTest).stop, 0},
+		{"as the replica loses the Lease", (*workerTest).lose, time.Second},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			backfill := newUnavailable("/backfill", "60")
+			arrived := make(chan struct{})
+			var held sync.Once
+			wt := newWorkerTest(t, func(w http.ResponseWriter, r *http.Request) {
+				if backfill.answer(w, r) {
+					return
+				}
+				hold := false
+				if r.URL.Path == "/poll" {
+					held.Do(func() { hold = true })
+				}
+				if hold {
+					close(arrived)
+					<-r.Context().Done()
+					return
+				}
+				pathBody(w, r)
+			}, c.ackWait)
+			jobs := []messages.Job{
+				newJob(messages.KindPoll, "https://www.sec.gov/poll"),
+				newJob(messages.KindBackfill, "https://www.sec.gov/backfill"),
+			}
+			wt.queue(jobs[1])
+			wt.start()
+			await(t, backfill.failed, 10*time.Second, "first attempt of the Backfill's fetch")
+			// The Backfill's fetch waits a minute before its retry, and a
+			// poll's job, queued meanwhile, is fetched.
+			wt.queue(jobs[0])
+			await(t, arrived, 10*time.Second, "request of the poll's fetch during the Backfill's wait")
+			c.stop(wt)
+			if rows := wt.records.all(); len(rows) != 0 {
+				t.Fatalf("%d records of fetches abandoned", len(rows))
+			}
+
+			// The next active replica fetches both again.
+			wt.start()
+			got := announced(t, wt.events, 2)
+			settled(wt.ctx, t, wt.js, 10*time.Second)
+			rows := wt.records.all()
+			if len(rows) != 2 {
+				t.Fatalf("%d records", len(rows))
+			}
+			for _, job := range jobs {
+				if found, err := wt.records.ByJob(wt.ctx, job.ID); err != nil || found == nil {
+					t.Errorf("no record of the job for %s: %v", job.URL, err)
+				}
+			}
+			slices.Sort(got)
+			if diff := cmp.Diff([]string{"/backfill", "/poll"}, got); diff != "" {
+				t.Errorf("the events (-want +got):\n%s", diff)
 			}
 		})
 	}

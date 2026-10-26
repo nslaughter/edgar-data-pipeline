@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -60,7 +61,7 @@ func serves(content string) http.HandlerFunc {
 
 func fetchOnce(t *testing.T, c *Client, url string, previous *Version) Result {
 	t.Helper()
-	result, err := c.Fetch(context.Background(), "submissions", url, Tool(testCommit), previous)
+	result, err := c.Fetch(context.Background(), "submissions", url, Tool(testCommit), previous, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,8 +179,8 @@ func TestOnlyHTTPSURLsOnTheSECsHostsAreFetched(t *testing.T) {
 		"https://www.sec.gov:8443/final",
 		"https://www.sec.gov/%ZZ",
 	} {
-		if _, err := c.Fetch(context.Background(), "submissions", url, Tool(testCommit), nil); !errors.Is(err,
-			ErrNotFetchable) {
+		if _, err := c.Fetch(context.Background(), "submissions", url, Tool(testCommit), nil, nil); !errors.Is(
+			err, ErrNotFetchable) {
 			t.Errorf("%s: %v", url, err)
 		}
 	}
@@ -789,7 +790,7 @@ func TestAFetchWaitsWhileRequestsArentAllowedThenMakesItsNextAttempt(t *testing.
 
 	done := make(chan Result)
 	go func() {
-		result, err := c.Fetch(context.Background(), "submissions", submissions, Tool(testCommit), nil)
+		result, err := c.Fetch(context.Background(), "submissions", submissions, Tool(testCommit), nil, nil)
 		if err != nil {
 			t.Error(err)
 		}
@@ -803,6 +804,66 @@ func TestAFetchWaitsWhileRequestsArentAllowedThenMakesItsNextAttempt(t *testing.
 	allow(true)
 	result := <-done
 	if len(s.seen()) != 2 || dials.Load() != 2 || result.Record.Attempts != 2 {
+		t.Fatalf("%d requests, over %d connections, %d attempts", len(s.seen()), dials.Load(), result.Record.Attempts)
+	}
+	names(t, result, appleBody)
+}
+
+// spec: FETCH-8, JOB-4
+func TestBetweenItsAttemptsAFetchWaitsAsTheWaitItsGivenDoes(t *testing.T) {
+	var n atomic.Int32
+	s := newSECServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if n.Add(1) == 1 {
+			w.Header().Set("Retry-After", "30")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		serves(appleBody)(w, r)
+	})
+	opts := s.options()
+	// The retry is refused once, as it's about to be written.
+	var refuse atomic.Bool
+	var dials atomic.Int32
+	dial := opts.Dial
+	opts.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
+		if dials.Add(1) == 2 {
+			refuse.Store(true)
+		}
+		return dial(ctx, network, address)
+	}
+	opts.Permit = func() error {
+		if refuse.CompareAndSwap(true, false) {
+			return ErrRequestsPaused
+		}
+		return nil
+	}
+	c := NewClient(opts)
+	// Each call of the wait: how long it was given, and the requests the
+	// server had received by then.
+	type call struct {
+		d        time.Duration
+		requests int
+	}
+	var calls []call
+	wait := func(_ context.Context, d time.Duration) error {
+		calls = append(calls, call{d, len(s.seen())})
+		return nil
+	}
+
+	began := time.Now()
+	result, err := c.Fetch(context.Background(), "submissions", submissions, Tool(testCommit), nil, wait)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// In place of FETCH-8's 30 seconds after the first attempt, and again,
+	// with none, once the retry was refused; never before the first attempt.
+	if want := []call{{30 * time.Second, 1}, {0, 1}}; !slices.Equal(want, calls) {
+		t.Errorf("the waits: %+v, not %+v", calls, want)
+	}
+	if took := time.Since(began); took > 10*time.Second {
+		t.Errorf("the fetch took %s, as though it waited itself", took)
+	}
+	if len(s.seen()) != 2 || dials.Load() != 3 || result.Record.Attempts != 2 {
 		t.Fatalf("%d requests, over %d connections, %d attempts", len(s.seen()), dials.Load(), result.Record.Attempts)
 	}
 	names(t, result, appleBody)
@@ -893,7 +954,7 @@ func TestAFetchWhoseContextEndsIsAbandonedWithoutARecord(t *testing.T) {
 		cancel()
 	}()
 
-	result, err := c.Fetch(ctx, "submissions", submissions, Tool(testCommit), nil)
+	result, err := c.Fetch(ctx, "submissions", submissions, Tool(testCommit), nil, nil)
 	if !errors.Is(err, context.Canceled) || result.Record.RequestedAt != "" {
 		t.Errorf("%v: %+v", err, result.Record)
 	}

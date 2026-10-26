@@ -343,21 +343,35 @@ type Result struct {
 	Object []byte
 }
 
+// Wait is what a fetch does between its attempts, in place of FETCH-8's
+// wait before a retry: it waits at least d, and returns an error only once
+// ctx is done. The Worker's takes the jobs of earlier kinds meanwhile
+// (Worker.between).
+type Wait func(ctx context.Context, d time.Duration) error
+
 // Fetch makes one fetch of a URL, recorded under its feed: up to Attempts
 // attempts, each a request, and the record of the last (FETCH-8,
 // FETCH-14). previous is the URL's latest version in the store, if it has
 // one, whose validators make each request conditional (FETCH-4). Before
-// each attempt, it waits until a request may be sent: while requests aren't
-// allowed, a fetch between attempts waits, and makes its next attempt once
-// they are, as the owner decided. It returns an error that wraps
-// ErrNotFetchable, without a request, for a URL it may not fetch, which the
-// Worker never gives it (ParseURL). Otherwise it returns an error only if
-// ctx is done before the fetch ends, when the fetch is abandoned, without a
-// record, as the owner decided.
-func (c *Client) Fetch(ctx context.Context, feed, rawURL, tool string, previous *Version) (Result, error) {
+// each retry, it calls wait with FETCH-8's wait, or else sleeps that long,
+// and makes the retry once wait returns. It calls wait only between
+// attempts, never between the requests of one, such as a redirect's.
+// Before each attempt, it waits until a request may be sent: while requests
+// aren't allowed, a fetch between attempts waits, and makes its next
+// attempt once they are, as the owner decided. A retry refused as it was
+// about to be written calls wait again, with no time to wait, before it's
+// made. It returns an error that wraps ErrNotFetchable, without a request,
+// for a URL it may not fetch, which the Worker never gives it (ParseURL).
+// Otherwise it returns an error only if ctx is done before the fetch ends,
+// when the fetch is abandoned, without a record, as the owner decided.
+func (c *Client) Fetch(ctx context.Context, feed, rawURL, tool string, previous *Version, wait Wait) (Result,
+	error) {
 	target, err := ParseURL(rawURL)
 	if err != nil {
 		return Result{}, err
+	}
+	if wait == nil {
+		wait = sleep
 	}
 	// Each validator goes back in the bytes it came in (fromLatin1).
 	headers := map[string]string{}
@@ -367,7 +381,14 @@ func (c *Client) Fetch(ctx context.Context, feed, rawURL, tool string, previous 
 	if previous != nil && previous.LastModified != nil {
 		headers["If-Modified-Since"] = toLatin1(*previous.LastModified)
 	}
+	// delay is FETCH-8's wait before the next attempt, a retry.
+	var delay time.Duration
 	for n := 1; ; {
+		if n > 1 {
+			if err := wait(ctx, delay); err != nil {
+				return Result{}, err
+			}
+		}
 		if err := c.permitted(ctx); err != nil {
 			return Result{}, err
 		}
@@ -381,8 +402,10 @@ func (c *Client) Fetch(ctx context.Context, feed, rawURL, tool string, previous 
 		sent, refused := a.state()
 		if sent.IsZero() && refused && ctx.Err() == nil {
 			// Nothing was sent, since Permit refused the request as it was
-			// about to be: it's no attempt, and waits until one may be.
+			// about to be: it's no attempt, and waits until one may be. A
+			// retry's wait is over, so it waits for none.
 			closeBody(resp)
+			delay = 0
 			continue
 		}
 		if sent.IsZero() {
@@ -406,9 +429,7 @@ func (c *Client) Fetch(ctx context.Context, feed, rawURL, tool string, previous 
 		if !retry || n >= c.attempts {
 			return result, nil
 		}
-		if err := sleep(ctx, retryDelay(retryAfter, n, c.clock(), c.backoff)); err != nil {
-			return Result{}, err
-		}
+		delay = retryDelay(retryAfter, n, c.clock(), c.backoff)
 		n++
 	}
 }

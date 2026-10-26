@@ -44,10 +44,11 @@ type Worker struct {
 	Log      logr.Logger
 
 	// Idle is the wait before it asks for jobs again when none is waiting,
-	// or before it looks again whether it may take one; Hold the wait
-	// between tries of a step that failed, such as a write; InProgress how
-	// often it tells JetStream it's at work on a job; and Wait the wait
-	// between looks for its consumers. The tests give shorter ones.
+	// during a fetch's wait too, or before it looks again whether it may
+	// take one; Hold the wait between tries of a step that failed, such as
+	// a write; InProgress how often it tells JetStream it's at work on a
+	// job; and Wait the wait between looks for its consumers. The tests give
+	// shorter ones.
 	Idle       time.Duration
 	Hold       time.Duration
 	InProgress time.Duration
@@ -90,10 +91,11 @@ func (w *Worker) defaults() {
 // Run takes jobs until ctx is done. It makes no stream and no consumer: until
 // its consumers exist, it waits for them (FETCHER-11). It takes no job while
 // a request may not be sent, as while requests aren't allowed, so jobs wait
-// in JOBS, as the owner decided. Before each request, it takes the job
-// queued first of the first kind that has one waiting: it asks fetcher-polls
-// for a job, then fetcher-filings, then fetcher-backfills (JOB-4,
-// BACKFILL-2, FETCHER-10).
+// in JOBS, as the owner decided. It takes the job queued first of the first
+// kind that has one waiting: it asks fetcher-polls for a job, then
+// fetcher-filings, then fetcher-backfills (JOB-4, BACKFILL-2, FETCHER-10).
+// Between a fetch's attempts, it takes those of the kinds before the
+// fetch's, in the same order, as the owner decided (between).
 func (w *Worker) Run(ctx context.Context) {
 	w.defaults()
 	var consumers []jetstream.Consumer
@@ -107,7 +109,7 @@ func (w *Worker) Run(ctx context.Context) {
 			_ = sleep(ctx, w.Idle)
 			continue
 		}
-		msg, err := next(consumers)
+		msg, i, err := next(consumers)
 		if err != nil {
 			if ctx.Err() == nil {
 				w.Log.Error(err, "Couldn't ask the consumers for a job")
@@ -120,7 +122,7 @@ func (w *Worker) Run(ctx context.Context) {
 			_ = sleep(ctx, w.Idle)
 			continue
 		}
-		w.handle(ctx, msg)
+		w.handle(ctx, msg, consumers[:i])
 	}
 }
 
@@ -157,22 +159,24 @@ func (w *Worker) lookUp(ctx context.Context) ([]jetstream.Consumer, error) {
 	return found, nil
 }
 
-// next asks each consumer in turn for a job, and gives the first it gets, or
-// nil if none is waiting.
-func next(consumers []jetstream.Consumer) (jetstream.Msg, error) {
-	for _, consumer := range consumers {
+// next asks each consumer in turn for a job, and gives the first it gets,
+// with the place of the consumer that gave it, or nil if none is waiting.
+// So the consumers before that place are those of the kinds before the
+// job's (JOB-4).
+func next(consumers []jetstream.Consumer) (jetstream.Msg, int, error) {
+	for i, consumer := range consumers {
 		batch, err := consumer.FetchNoWait(1)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		for msg := range batch.Messages() {
-			return msg, nil
+			return msg, i, nil
 		}
 		if err := batch.Error(); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 	}
-	return nil, nil
+	return nil, 0, nil
 }
 
 // handle takes one job through to its acknowledgement, telling JetStream
@@ -184,10 +188,12 @@ func next(consumers []jetstream.Consumer) (jetstream.Msg, error) {
 // acknowledges without a request (JOB-5). It fetches any other, then
 // records the stop if the fetch got a 403 (ACCESS-3), stores the object,
 // adds the record, and publishes the event, each once the step before has
-// succeeded, and only then acknowledges the job (FETCH-14, JOB-6). If ctx
-// is done first, it abandons the job, without a record, and the job is
-// delivered again (abandon).
-func (w *Worker) handle(ctx context.Context, msg jetstream.Msg) {
+// succeeded, and only then acknowledges the job (FETCH-14, JOB-6). Between
+// its fetch's attempts, it takes the jobs of earlier, the consumers of the
+// kinds before the job's (between). If ctx is done first, it abandons the
+// job, without a record, and the job is delivered again (abandon), as each
+// job taken between the attempts is.
+func (w *Worker) handle(ctx context.Context, msg jetstream.Msg, earlier []jetstream.Consumer) {
 	defer w.working(msg)()
 	log := w.Log.WithValues("subject", msg.Subject())
 	// Decoded from the values the schema checked, by their names exactly,
@@ -247,7 +253,7 @@ func (w *Worker) handle(ctx context.Context, msg jetstream.Msg) {
 		w.abandon(msg, log)
 		return
 	}
-	result, err := w.Client.Fetch(ctx, job.Feed, job.URL, w.Tool, previous)
+	result, err := w.Client.Fetch(ctx, job.Feed, job.URL, w.Tool, previous, w.between(earlier))
 	if err != nil {
 		w.abandon(msg, log)
 		return
@@ -303,6 +309,49 @@ func (w *Worker) handle(ctx context.Context, msg jetstream.Msg) {
 	w.ack(ctx, msg, log)
 }
 
+// between gives the Wait of a fetch whose job's kind comes after those of
+// the consumers of earlier. In place of FETCH-8's wait, it takes the job
+// queued first of the first of those kinds that has one waiting, and works
+// it to its end, during the wait and again once it's over, until none is
+// waiting, as the owner decided (JOB-4, BACKFILL-2). So a retry is sent no
+// sooner than its wait allows, and only once each job taken during its wait
+// has ended: a Backfill's never while a poll's or a filing's job waits, and
+// a filing's never while a poll's does. A job it takes takes only the kinds
+// before its own between its attempts, so a poll's fetch takes none. While
+// a request may not be sent, it takes no job, as Run takes none, and waits.
+// Should the consumers fail to give a job, the fetch goes on as though none
+// were waiting.
+func (w *Worker) between(earlier []jetstream.Consumer) Wait {
+	return func(ctx context.Context, d time.Duration) error {
+		over := time.Now().Add(d)
+		failed := false
+		for {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if w.Permit() == nil {
+				msg, i, err := next(earlier)
+				if msg != nil {
+					w.handle(ctx, msg, earlier[:i])
+					continue
+				}
+				if err != nil && !failed && ctx.Err() == nil {
+					w.Log.Error(err, "Couldn't ask the consumers for a job during a fetch's wait")
+					failed = true
+				}
+				if !time.Now().Before(over) {
+					return nil
+				}
+			}
+			pause := w.Idle
+			if left := time.Until(over); left > 0 && left < pause {
+				pause = left
+			}
+			_ = sleep(ctx, pause)
+		}
+	}
+}
+
 // announce publishes the event of a job's record on the subject of the job's
 // kind, which RECORDS takes, with the job as it was queued (JOB-6).
 func (w *Worker) announce(ctx context.Context, log logr.Logger, queued []byte, job messages.Job, stored Stored) error {
@@ -347,7 +396,8 @@ func (w *Worker) hold(ctx context.Context, log logr.Logger, what string, step fu
 
 // working tells JetStream that the Worker is at work on the job, each
 // InProgress, until the function it returns is called, so the job isn't
-// delivered again however long its fetch takes (FETCHER-10).
+// delivered again however long its fetch takes, the jobs taken between its
+// attempts included, each of which it tells of too (FETCHER-10).
 func (w *Worker) working(msg jetstream.Msg) func() {
 	done := make(chan struct{})
 	stopped := make(chan struct{})
