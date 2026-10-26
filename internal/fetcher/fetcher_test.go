@@ -597,7 +597,7 @@ func TestOnceTheSecAccessIsReadAWatchThatFailsLeavesTheInformerReadingIt(t *test
 	setSecAccess(t, c, v1alpha1.SecAccessSpec{Paused: true}, nil)
 	testenv.Eventually(t, 10*time.Second, func() error {
 		if err := access.Allowed(); !errors.Is(err, ErrRequestsPaused) {
-			return fmt.Errorf("once the SecAccess was paused: %v", err)
+			return fmt.Errorf("once the SecAccess was paused: %w", err)
 		}
 		return nil
 	})
