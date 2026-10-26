@@ -355,7 +355,10 @@ fetcher sends it the requests it would send the SEC, at the URLs it's
 allowed, and no pod of the installed charts reaches the SEC ([FAKE-4],
 [FAKE-5]). There the fetcher trusts that authority alone, in place of the
 roots its image holds ([FETCHER-12], [FETCHER-13]), as
-[the fetcher](#the-fetcher) below explains. What the fake EDGAR serves, and
+[the fetcher](#the-fetcher) below explains. So CI installs the umbrella
+chart with requests allowed, as the owner decided, where the chart's
+default values pause them, and the Sources' polls run through each test on
+kind ([VAL-4], [T23][plan-observing]). What the fake EDGAR serves, and
 how tests cue it and read its log, are on [Testing and
 verification](testing-and-verification.md#the-fake-edgar).
 
@@ -512,9 +515,9 @@ The statements came before the charts they describe. Task T20 built the
 charts and wrote their tests. Task T21 wrote those of the pipeline's images
 and the fake EDGAR's installation, [IMG-1] to [IMG-3], [IMG-5], and
 [FAKE-1] to [FAKE-5], with the first of the pipeline's images. Task T22
-wrote those of [SCHED-1] to [SCHED-9] with the scheduler, and those of
-[LEASE-1], [LEASE-2], and [FETCHER-1] to [FETCHER-13] await T23, which
-builds the fetcher ([deployment, §3][ids]). The tests on kind, the fake EDGAR they run against, and the
+wrote those of [SCHED-1] to [SCHED-9] with the scheduler, and task T23
+those of [LEASE-1], [LEASE-2], and [FETCHER-1] to [FETCHER-13] with the
+fetcher ([deployment, §3][ids]). The tests on kind, the fake EDGAR they run against, and the
 drills are on [Testing and verification](testing-and-verification.md).
 
 ## What later versions add
@@ -604,6 +607,7 @@ Later versions add ([deployment, §9][later]):
 [API-2]: ../../spec/controls.md#4-the-resources
 [RBAC-1]: ../../spec/controls.md#9-who-may-change-what
 [RBAC-2]: ../../spec/controls.md#9-who-may-change-what
+[VAL-4]: ../../spec/controls.md#5-the-charts-values
 [RBAC-3]: ../../spec/controls.md#9-who-may-change-what
 [RBAC-6]: ../../spec/controls.md#9-who-may-change-what
 [VAL-1]: ../../spec/controls.md#5-the-charts-values

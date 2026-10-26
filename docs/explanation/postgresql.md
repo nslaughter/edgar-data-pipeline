@@ -337,12 +337,14 @@ what fills the host's disk
 | The whole database | It's restored from its backups in Garage ([volumes]), which a drill is still to show ([0002]). |
 | A malformed row, or a change to a row | The constraints refuse the first, and the grants the second ([STORE-2], [TABLE-2], [LOG-3], [TABLE-3]). |
 
-Decision 0003 expects fetching to go on while the database fails over, with
-the parse workers' work waiting in its stream ([0003]), and the design says
-a failover pauses parsing, not fetching ([outages and recovery][outages]).
-The fetcher adds each fetch's record to the table before it publishes the
-event and acknowledges the job, though ([JOB-6]), and no statement yet says
-what it does while the database can't take a record. The database's
+Decision 0003 expected fetching to go on while the database fails over,
+with the parse workers' work waiting in its stream ([0003]). The fetcher
+adds each fetch's record to the table before it publishes the event and
+acknowledges the job, though ([JOB-6]), and the owner decided that while
+the database can't take a record, the fetcher holds the fetch, tries the
+record again until the database takes it, and sends no other request
+([T23][plan-observing]). So a failover pauses fetching as well as parsing
+([outages and recovery][outages]). The database's
 replication lag and failovers are metrics of a later version of the
 telemetry ([telemetry, left to other specifications][telemetry-left]).
 

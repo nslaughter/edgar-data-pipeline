@@ -117,8 +117,8 @@ It also specifies nine durable consumers, which the same Job makes
 
 The scheduler's consumer of poll events came with the scheduler, which
 [T22] built, before the fetcher publishes any ([SCHED-8]). The fetcher's
-three come with the fetcher, as the deployment's version 1.4.0 specifies
-them ([the fetcher's access to NATS][fetcher-nats]).
+three came with the fetcher, which [T23] built, as the deployment's version
+1.4.0 specifies them ([the fetcher's access to NATS][fetcher-nats]).
 
 Each is a pull consumer, which any replica of its service may read from,
 though only the scheduler's active replica reads the scheduler's
@@ -345,12 +345,14 @@ recovery](failures-and-recovery.md). For the streams:
 | A consumer that doesn't exist yet | An interest stream would keep nothing for it, which is why the Job makes each stream's durable consumers right after the stream, and gives an interest stream its subjects only once they exist, so a message published sooner is refused, not kept for none, and kept only once it's published again ([NATS-5], [NATS-6]). |
 | A malformed message | It's acknowledged without being acted on, and counted ([JOB-7], [MSG-2]). |
 
-Decision 0003 expects fetching to go on while PostgreSQL fails over, with
+Decision 0003 expected fetching to go on while PostgreSQL fails over, with
 the parse workers' work waiting in its stream until the database is back
 ([0003]). The fetcher's own steps pass through the database, though: it
 adds each record before it publishes the event and acknowledges the job
-([JOB-6]), and no statement yet says what it does while the database can't
-take a record.
+([JOB-6]). The owner decided that while the database can't take a record,
+the fetcher holds the fetch, tries the record again until it can, and
+sends no other request, and does the same while NATS can't take an event
+([T23][plan-observing]), so a failover pauses fetching too.
 
 ## What it depends on
 
@@ -485,4 +487,5 @@ metrics workers scale by, and steps that are safe to repeat ([0003]).
 [FETCHER-11]: ../../spec/deployment.md#the-fetchers-access-to-nats
 [fetcher-nats]: ../../spec/deployment.md#the-fetchers-access-to-nats
 [T22]: ../plan.md#observing-filings
+[T23]: ../plan.md#observing-filings
 [SOURCE-4]: ../../spec/controls.md#6-source

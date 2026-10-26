@@ -69,13 +69,13 @@ without the behavior it covers ([doing the next item][agents-next], step
 
 | Specification | Statements with tests now | Statements awaiting a task |
 | --- | --- | --- |
-| [`snapshots.md`][snapshots] 1.0.0 | Those `verify.py` checks, and `snapshot.py`'s rules, brought to this version by [T35], done October 13, 2026; the schemas': [STORE-1], [REC-13], [JOB-1]; and the scheduler's jobs, [JOB-2], written by [T22] | [T23], the fetcher and the cluster store; [T24], the discoverer's jobs and its use of `edgar-asof` ([FETCH-18]); [T36], the transfer ([XFER-1] to [XFER-3]) |
-| [`deployment.md`][deployment] 1.4.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind; and the pipeline's images' and the fake EDGAR's installation, written by [T21] ([IMG-1] to [IMG-3], [IMG-5], [FAKE-1] to [FAKE-5]); and the scheduler's Deployment, Lease, grants, and consumer, written by [T22] ([SCHED-1] to [SCHED-9]) | [T23], the fetcher's Lease, Deployment, grants, credentials, consumers, and trust of the fake EDGAR's authority ([LEASE-1], [LEASE-2], [FETCHER-1] to [FETCHER-13]) ([§3][deployment-ids]) |
-| [`controls.md`][controls] 1.0.0 | [API-1]; and, written by [T22], the generated definitions and the API server's refusals ([API-2], [API-3]), the chart's controls ([VAL-1] to [VAL-4]), the scheduler's polls and Sources' status ([SOURCE-1] to [SOURCE-4], [ACCESS-2]), and its grants ([RBAC-1], [RBAC-4]), [SOURCE-4]'s ahead of [T23] | [T23], [T24], and [T28] ([§3][controls-ids]) |
+| [`snapshots.md`][snapshots] 1.0.0 | Those `verify.py` checks, and `snapshot.py`'s rules, brought to this version by [T35], done October 13, 2026; the schemas': [STORE-1], [REC-13], [JOB-1]; the scheduler's jobs, [JOB-2], written by [T22]; and the fetcher's and the cluster store's, written by [T23] ([STORE-2], [STORE-3], [OBJ-4], [LOG-3], [LOG-4], [FETCH-16], [FETCH-17], [ID-2], [JOB-4] to [JOB-7]) | [T24], the discoverer's jobs and its use of `edgar-asof` ([FETCH-18]); [T36], the transfer ([XFER-1] to [XFER-3]) |
+| [`deployment.md`][deployment] 1.4.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind; and the pipeline's images' and the fake EDGAR's installation, written by [T21] ([IMG-1] to [IMG-3], [IMG-5], [FAKE-1] to [FAKE-5]); and the scheduler's Deployment, Lease, grants, and consumer, written by [T22] ([SCHED-1] to [SCHED-9]); and the fetcher's Lease, Deployment, grants, credentials, consumers, and trust of the fake EDGAR's authority, written by [T23] ([LEASE-1], [LEASE-2], [FETCHER-1] to [FETCHER-13]) | None |
+| [`controls.md`][controls] 1.0.0 | [API-1]; and, written by [T22], the generated definitions and the API server's refusals ([API-2], [API-3]), the chart's controls ([VAL-1] to [VAL-4]), the scheduler's polls and Sources' status ([SOURCE-1] to [SOURCE-4], [ACCESS-2]), and its grants ([RBAC-1], [RBAC-4]), [SOURCE-4]'s ahead of [T23]; and, written by [T23], the fetcher's use of the SecAccess, its Backfills last, and its grants ([ACCESS-1], [ACCESS-3], [BACKFILL-2], [RBAC-2]) | [T24] and [T28] ([§3][controls-ids]) |
 | [`notices.md`][notices] 0.1.1 | [TABLE-1], [MSG-1] | [T24], the discoverer, with the scheduler's side of the Backfills ([§3][notices-ids]) |
 | [`telemetry.md`][telemetry] 0.1.0 | [VIEW-1] | [T28], the monitoring of observing filings; [T29], the traces ([§3][telemetry-ids]) |
 | [`site.md`][site] 0.1.0 | The site's statements checked by `tests`, written by [T40], and [PAGE-4]'s, written by [T42] once every topic had its page | None |
-| [`fake-edgar.md`][fake-edgar] 0.1.0 | The schemas': [CUE-3], [REQ-3]; and the fake EDGAR's, with the checks of `snapshot.py`'s requests to it, written by [T21] | [T23], the checks of the fetcher's requests to it on kind ([CHECK-3]) ([§3][fake-edgar-ids]) |
+| [`fake-edgar.md`][fake-edgar] 0.1.0 | The schemas': [CUE-3], [REQ-3]; the fake EDGAR's, with the checks of `snapshot.py`'s requests to it, written by [T21]; and the checks of the fetcher's requests to it on kind, written by [T23] ([CHECK-3]) | None |
 
 ## What the tests check today
 
@@ -156,6 +156,28 @@ the budget summed exactly however many digits the sum needs ([VAL-1] to
 [VAL-4]), and the grants on them across the four charts ([RBAC-1],
 [RBAC-4]).
 
+**The fetcher, against a local server, NATS, and a real API server.** The
+fetcher's Go tests run it against a local server that answers as the SEC's
+hosts over HTTPS, with a certificate for them from an authority of the
+tests' own; an embedded NATS server with the chart's streams and
+consumers; the table and the bucket in memory, whose writes fail on cue;
+and, for its Lease and the SecAccess, envtest's API server ([T23]). They
+check the fetching rules the fetcher shares with `snapshot.py`, from the
+user agent to one record per fetch ([FETCH-1] to [FETCH-14] but
+[FETCH-7]), and that it trusts only the certificate it's given for the
+SEC's hosts, or else its image's roots ([FETCHER-13]); that it takes jobs
+polls first and Backfills last, acknowledges an expired or malformed job
+without a request, announces a recorded one again without one, and records,
+announces, then acknowledges each other, holding a write that fails until
+it succeeds ([JOB-4] to [JOB-7], [BACKFILL-2]); that it waits for its
+consumers and makes none, and tells JetStream a long fetch is in progress
+([FETCHER-10], [FETCHER-11]); and that only the replica that holds the
+Lease sends, one cut off from the API server stopping before another could
+take the Lease over, one stopped leaving the Lease to expire, and that it
+sends only while requests are allowed, a stop after a `403` holding across
+a handover until it's acknowledged ([FETCH-16], [ACCESS-1], [ACCESS-3],
+[FETCH-9]). Without the owner's user agent it sends nothing ([FETCH-17]).
+
 **The charts, rendered and installed.** The deployment's invariants are
 checked by rendering each of the four charts with `helm template`; the
 hook Jobs' scripts, against fakes of `nats`, of `psql`, and of Garage's
@@ -172,8 +194,9 @@ that the Go module and its generated code are current, and runs `go vet`,
 golangci-lint, and the Go tests ([0006], [T22]). A fifth job, `kind`, creates
 a kind cluster, builds the pipeline's images and loads them into it, points
 its DNS for the SEC's hosts at the fake EDGAR, installs the four charts,
-the fake EDGAR among them, and upgrades them, and runs the tests of the
-installed charts ([FAKE-4]). A pull request merges only once the jobs
+the fake EDGAR among them, with requests allowed, as the owner decided, and
+upgrades them, and runs the tests of the installed charts ([FAKE-4],
+[T23]). A pull request merges only once the jobs
 pass that a ruleset on `main` requires; only the owner changes the ruleset
 ([commits and pull requests][agents-commits]).
 
@@ -187,7 +210,6 @@ rebuild of the facts. Each comes with the task that builds what it tests.
 | Layer | What it checks | Task |
 | --- | --- | --- |
 | Tests on kind | The `kind` statements of each service, against the installed charts, as [T20]'s are of the charts | Each task that builds a service |
-| The fake EDGAR | The fetching rules, from every request the fetcher sends | [T23] |
 | `promtool test rules` | The alert rules | [T28], [T33] |
 | The drills | Recovery from outages caused on purpose, and the restore of the database | [T31] |
 | The rebuild | The facts, imported again from stored bodies | [T31] |
@@ -222,7 +244,19 @@ stored URL reaches it over HTTPS and gets the version `data/` holds
 ([FAKE-4], [FAKE-5]); that the pipeline's images run as built from the
 commit installed ([IMG-3]); that the scheduler's two pods run on two
 worker nodes, one holding its Lease, which another takes over before its
-duration when that pod is deleted ([SCHED-5]); that one fetcher pod holds the Lease ([LEASE-2]); that each ServiceAccount can
+duration when that pod is deleted ([SCHED-5]); that the fetcher's two pods
+run on two worker nodes, one holding its Lease, which another takes over
+only once its duration has passed when that pod is deleted, each pod
+sending only while it holds it ([LEASE-2], [FETCHER-3], [FETCH-16]); that
+the fetcher's requests carry the user agent of its Secret and pass the
+checks of the fetching rules, a cued `403` stopping them until a test
+acknowledges the stop, as the owner does, with `helm upgrade`, after which
+the jobs queued meanwhile go polls first and Backfills last ([FETCH-17],
+[CHECK-3], [ACCESS-1], [ACCESS-3], [JOB-4], [BACKFILL-2]); that it
+acknowledges an expired or malformed job without a request, and announces
+a recorded one again without one ([JOB-5] to [JOB-7]); that a body is
+stored once, under its name, and only the fetcher's key may write the
+bucket ([OBJ-4], [LOG-4]); that each ServiceAccount can
 do exactly what the table of grants allows ([RBAC-5]); and that the
 notices' and dashboards' views give what their sections define ([GAP-2],
 [LAG-1], [VIEW-4]). The cluster store's own invariants, that every object

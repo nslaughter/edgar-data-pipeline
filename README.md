@@ -91,8 +91,8 @@ each once the one before it is ready
 ([`spec/deployment.md`](spec/deployment.md)): the Prometheus operator's
 definitions; cert-manager; the operators, CloudNativePG and its Barman Cloud
 plugin, with the remaining definitions; and the umbrella chart, with NATS
-JetStream, Garage, PostgreSQL 18, kube-prometheus-stack, and the scheduler,
-with the pipeline's controls. It needs Docker, kind, kubectl, and Helm 4.
+JetStream, Garage, PostgreSQL 18, kube-prometheus-stack, the scheduler, and
+the fetcher, with the pipeline's controls. It needs Docker, kind, kubectl, and Helm 4.
 
 ```sh
 kind create cluster --config deploy/kind.yaml
@@ -120,8 +120,10 @@ values allow it. A control changes only through the values, with
 `helm upgrade`.
 
 `deploy/edgar-values.yaml`, which git ignores, holds what the umbrella chart
-requires and no committed file sets: each credential, and a name for the
-database's archive in Garage, new for each cluster.
+requires and no committed file sets: each credential; a name for the
+database's archive in Garage, new for each cluster; and the user agent the
+fetcher sends the SEC, `fetcher.secUserAgent`, your name and a contact
+address, as `SEC_USER_AGENT` holds `snapshot.py`'s.
 [`deploy/chart/values.schema.json`](deploy/chart/values.schema.json) gives
 their places and forms, and CI's [workflow](.github/workflows/ci.yml)
 generates a set for each cluster it creates. An upgrade runs `helm upgrade`
@@ -129,8 +131,10 @@ in the same order; with `EDGAR_CHARTS_UPGRADED=true`, as CI sets, the tests
 also require each release to have been upgraded. CI also installs a fake
 EDGAR, which answers for the SEC's hosts from the stored versions under
 `data/`, so the tests on kind never reach the SEC, and points the cluster's
-DNS for those hosts at it; with `EDGAR_FAKE_EDGAR=true`, as CI sets, the
-tests require it. The owner's installations never include it. `deploy/kind.yaml` keeps
+DNS for those hosts at it, and allows requests, which reach only the fake
+EDGAR there; with `EDGAR_FAKE_EDGAR=true`, as CI sets, the tests require it,
+and the fetcher's tests run, one of which acknowledges a stop after a `403`
+with `helm upgrade`. The owner's installations never include it. `deploy/kind.yaml` keeps
 every volume's data in `/var/tmp/edgar-kind/volumes` on the machine that
 runs kind's nodes, so a cluster created again finds it; on macOS, that's Docker's Linux VM, not the
 Mac's own disk. The tests of the installed charts run against the cluster the context
