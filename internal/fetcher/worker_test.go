@@ -3,16 +3,19 @@ package fetcher
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/go-logr/logr/funcr"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go/jetstream"
@@ -374,6 +377,60 @@ func TestDuringAFetchsWaitNoJobIsTakenWhileRequestsArentAllowed(t *testing.T) {
 	settled(wt.ctx, t, wt.js, 10*time.Second)
 	if diff := cmp.Diff([]string{"/backfill", "/poll", "/backfill"}, wt.urls()); diff != "" {
 		t.Errorf("the requests (-want +got):\n%s", diff)
+	}
+}
+
+// unanswered is a consumer of JOBS that can't be asked for a job, as while
+// NATS doesn't answer.
+type unanswered struct {
+	jetstream.Consumer
+	asked atomic.Int32
+}
+
+func (u *unanswered) FetchNoWait(int) (jetstream.MessageBatch, error) {
+	u.asked.Add(1)
+	return nil, errors.New("NATS doesn't answer")
+}
+
+func TestAFetchsWaitGoesOnAsThoughNoJobWereWaitingWhenTheConsumersCantBeAsked(t *testing.T) {
+	var mu sync.Mutex
+	var logged []string
+	log := funcr.New(func(_, args string) {
+		mu.Lock()
+		defer mu.Unlock()
+		logged = append(logged, args)
+	}, funcr.Options{})
+	w := &Worker{Permit: func() error { return nil }, Idle: 10 * time.Millisecond, Log: log}
+	consumer := &unanswered{}
+	read := false
+	latest := func(context.Context) (*Version, error) {
+		read = true
+		return nil, nil
+	}
+	previous := &Version{SHA256: digest("a")}
+
+	began := time.Now()
+	got, err := w.between([]jetstream.Consumer{consumer}, latest)(context.Background(), 300*time.Millisecond, previous)
+	took := time.Since(began)
+	// The wait ends no sooner than it would have, without an error, so the
+	// fetch makes its retry.
+	if err != nil {
+		t.Fatalf("the wait returned %v", err)
+	}
+	if took < 300*time.Millisecond {
+		t.Errorf("the wait ended after %s, within its 300 milliseconds", took)
+	}
+	if got != previous || read {
+		t.Errorf("the wait gave %+v, and read the URL's latest version again: %t", got, read)
+	}
+	// It asked again throughout, and logged the first failure alone.
+	if asked := consumer.asked.Load(); asked < 2 {
+		t.Errorf("it asked the consumer %d times during the wait", asked)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(logged) != 1 || !strings.Contains(logged[0], "Couldn't ask the consumers for a job during a fetch's wait") {
+		t.Errorf("it logged %q", logged)
 	}
 }
 
