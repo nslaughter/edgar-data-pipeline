@@ -157,16 +157,33 @@ func TestPollsAreTakenFirstThenFilingsThenBackfills(t *testing.T) {
 
 // unavailable answers the first request for its path with a 503 and a
 // Retry-After, a temporary failure that's retried (FETCH-8), and closes
-// failed once it has.
+// failed once it has, when it notes answered. Held, it closes arrived once
+// that request has arrived, and answers it only once released.
 type unavailable struct {
 	path       string
 	retryAfter string
 	once       sync.Once
 	failed     chan struct{}
+	answered   time.Time
+	arrived    chan struct{}
+	released   chan struct{}
 }
 
 func newUnavailable(path, retryAfter string) *unavailable {
 	return &unavailable{path: path, retryAfter: retryAfter, failed: make(chan struct{})}
+}
+
+// hold has u hold its answer to the first request for its path until the
+// function it gives is called, as the test's cleanup calls it, so a test
+// may queue jobs before the fetch's wait begins. Called after the server is
+// made, its cleanup runs before the server's, which waits for the answer.
+func (u *unavailable) hold(t *testing.T) (release func()) {
+	t.Helper()
+	u.arrived, u.released = make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	release = func() { once.Do(func() { close(u.released) }) }
+	t.Cleanup(release)
+	return release
 }
 
 // answer answers a request if it's the first for the path, and says
@@ -179,8 +196,13 @@ func (u *unavailable) answer(w http.ResponseWriter, r *http.Request) bool {
 	if !first {
 		return false
 	}
+	if u.arrived != nil {
+		close(u.arrived)
+		<-u.released
+	}
 	w.Header().Set("Retry-After", u.retryAfter)
 	w.WriteHeader(http.StatusServiceUnavailable)
+	u.answered = time.Now()
 	close(u.failed)
 	return true
 }
@@ -230,17 +252,24 @@ func TestBetweenAFetchsAttemptsTheJobsOfEarlierKindsAreTakenFirst(t *testing.T) 
 					pathBody(w, r)
 				}
 			}, time.Second)
+			release := retried.hold(t)
 			job := newJob(kind, "https://www.sec.gov/retried")
 			wt.queue(job)
 			wt.start()
-			await(t, retried.failed, 10*time.Second, "first attempt")
 
-			// During its wait, a job of each kind before its own.
+			// While its first attempt waits for its answer, a job of each
+			// kind before its own, so each is waiting when its wait begins.
+			// Queued during the wait, a poll's job could come just after the
+			// Worker had asked fetcher-polls, and a filing's then rightly go
+			// first.
+			await(t, retried.arrived, 10*time.Second, "first attempt")
 			for j := range k {
 				wt.queue(newJob(kinds[j], "https://www.sec.gov/"+kinds[j]))
 			}
-			// Meanwhile another asks the job's consumer for a job, as another
-			// replica would once it held the Lease: none comes.
+			release()
+			await(t, retried.failed, 10*time.Second, "answer to the first attempt")
+			// During its wait, another asks the job's consumer for a job, as
+			// another replica would once it held the Lease: none comes.
 			consumer, err := wt.js.Consumer(wt.ctx, messages.StreamJobs, Consumers[k])
 			if err != nil {
 				t.Fatal(err)
@@ -277,8 +306,8 @@ func TestBetweenAFetchsAttemptsTheJobsOfEarlierKindsAreTakenFirst(t *testing.T) 
 			}
 			// The retry waited its wait in full (FETCH-8).
 			seen := wt.server.seen()
-			if gap := seen[k+1].at.Sub(seen[0].at); gap < 3*time.Second {
-				t.Errorf("the retry came %s after the first attempt, within its wait of 3 seconds", gap)
+			if gap := seen[k+1].at.Sub(retried.answered); gap < 3*time.Second {
+				t.Errorf("the retry came %s after the first attempt's answer, within its wait of 3 seconds", gap)
 			}
 			// Each job's record, then its event, in that order, and the
 			// retried job's once, of its second attempt.
