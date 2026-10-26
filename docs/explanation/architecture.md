@@ -299,7 +299,9 @@ database before it publishes the event and acknowledges the job ([JOB-6]),
 and the owner decided that the fetcher holds a fetch whose record the
 database can't take, trying it again until the database does, and sends no
 other request meanwhile ([T23][plan-observing]). So a failover pauses
-fetching as well as parsing ([outages and recovery][design-outages]).
+fetching as well as parsing ([outages and recovery][design-outages]), and
+the owner decided that a decision record that supersedes 0003's
+consequence comes with the store's next version ([T23][plan-observing]).
 
 ### One fetcher, and only one (0005)
 

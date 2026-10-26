@@ -219,7 +219,9 @@ Garage can be shown ([PG-3], [PLACE-1], [0004]).
   take the record, it holds the fetch it has made, tries the record again
   until the database takes it, and sends no other request, as the owner
   decided ([T23]). Decision 0003 had expected fetching to go on while
-  PostgreSQL fails over ([0003]).
+  PostgreSQL fails over ([0003]); a decision record that supersedes that
+  consequence comes with the store's next version, as the owner decided
+  ([T23]).
 - **What's kept:** every message not yet acknowledged, and the database's
   archive: its WAL, and a base backup at least once a day, in Garage's
   `database-backups` bucket ([PG-4]).

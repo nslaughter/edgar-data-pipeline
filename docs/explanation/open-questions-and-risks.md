@@ -559,7 +559,11 @@ revisit: whether to keep each company's `submissions` as the notice source
 ([T11]). And a version of the snapshot store's specification that states
 what the fetcher does while a write can't be made, as the owner decided
 with [T23]: it holds the fetch and tries the write again, sending nothing
-else meanwhile.
+else meanwhile. The owner decided that the same version states that a
+fetch between attempts waits while requests aren't allowed, and that a
+fetch in progress when its replica stops is abandoned without a record,
+and that a decision record proposed with it supersedes [0003]'s
+consequence that fetching continues while PostgreSQL fails over.
 
 ## Risks the documents name
 

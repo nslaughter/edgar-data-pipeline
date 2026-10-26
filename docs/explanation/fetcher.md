@@ -416,7 +416,9 @@ before it publishes the event and acknowledges the job ([FETCH-14],
 the fetcher holds the fetch it has made, tries the write again until it
 succeeds, and sends no other request meanwhile, so nothing fetched is lost
 unless the replica is too; a later version of the store's specification
-states it ([T23][plan-observing]). So a database failover pauses fetching
+states it, with the owner's decisions on a fetch between attempts while
+requests aren't allowed and on one in progress when its replica stops
+([T23][plan-observing]). So a database failover pauses fetching
 as well as parsing, for as long as it lasts, and the record shows each
 Source's slots that passed meanwhile as gaps
 ([outages and recovery][design-outages]).
@@ -503,8 +505,10 @@ forgotten when the standby took over ([0007]).
   the clock's skew is alerted on
   ([open question 1 of telemetry][telemetry-open]).
 - **A version of the store's specification that states what the fetcher
-  does while a write can't be made,** as the owner decided
-  ([T23][plan-observing]).
+  does while a write can't be made,** between attempts while requests
+  aren't allowed, and when its replica stops, as the owner decided, with a
+  decision record that supersedes [0003]'s consequence that fetching
+  continues while PostgreSQL fails over ([T23][plan-observing]).
 - **An alert on a Source with no poll at all,** such as on a new install
   whose fetcher never fetches, which `SourceGap` doesn't cover. It waits
   for a later version of the telemetry specification

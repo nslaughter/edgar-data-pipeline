@@ -344,7 +344,9 @@ acknowledges the job, though ([JOB-6]), and the owner decided that while
 the database can't take a record, the fetcher holds the fetch, tries the
 record again until the database takes it, and sends no other request
 ([T23][plan-observing]). So a failover pauses fetching as well as parsing
-([outages and recovery][outages]). The database's
+([outages and recovery][outages]), and a decision record that supersedes
+0003's consequence comes with the store's next version, as the owner also
+decided. The database's
 replication lag and failovers are metrics of a later version of the
 telemetry ([telemetry, left to other specifications][telemetry-left]).
 

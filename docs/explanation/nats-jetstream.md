@@ -352,7 +352,9 @@ adds each record before it publishes the event and acknowledges the job
 ([JOB-6]). The owner decided that while the database can't take a record,
 the fetcher holds the fetch, tries the record again until it can, and
 sends no other request, and does the same while NATS can't take an event
-([T23][plan-observing]), so a failover pauses fetching too.
+([T23][plan-observing]), so a failover pauses fetching too. A decision
+record that supersedes 0003's consequence comes with the store's next
+version, as the owner also decided.
 
 ## What it depends on
 
