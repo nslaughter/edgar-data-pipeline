@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/time/rate"
 )
@@ -299,12 +300,13 @@ func (c *Client) Fetch(ctx context.Context, feed, rawURL, tool string, previous 
 	if err != nil {
 		return Result{}, err
 	}
+	// Each validator goes back in the bytes it came in (fromLatin1).
 	headers := map[string]string{}
 	if previous != nil && previous.ETag != nil {
-		headers["If-None-Match"] = *previous.ETag
+		headers["If-None-Match"] = toLatin1(*previous.ETag)
 	}
 	if previous != nil && previous.LastModified != nil {
-		headers["If-Modified-Since"] = *previous.LastModified
+		headers["If-Modified-Since"] = toLatin1(*previous.LastModified)
 	}
 	for n := 1; ; {
 		if err := c.permitted(ctx); err != nil {
@@ -411,7 +413,7 @@ func (c *Client) read(resp *http.Response, target *url.URL, received time.Time, 
 // without a retry (FETCH-12). A body cut short keeps nothing, and is retried
 // (FETCH-13).
 func body(resp *http.Response, record *Record) (object []byte, retry bool) {
-	encoding := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding")))
+	encoding := strings.ToLower(strings.TrimSpace(fromLatin1(resp.Header.Get("Content-Encoding"))))
 	gzipped := encoding == "gzip" || encoding == "x-gzip"
 	if !gzipped && encoding != "" && encoding != "identity" {
 		record.Error = ptr("unsupported Content-Encoding: " + encoding)
@@ -486,14 +488,57 @@ func compress(data []byte) []byte {
 	return out.Bytes()
 }
 
-// header gives a header's value as the response gave it, or nil if it gave
-// none.
+// header gives a header's value as the response gave it, as text
+// (fromLatin1), or nil if it gave none.
 func header(h http.Header, name string) *string {
 	values := h.Values(name)
 	if len(values) == 0 {
 		return nil
 	}
-	return ptr(values[0])
+	return ptr(fromLatin1(values[0]))
+}
+
+// fromLatin1 gives a header's value as text: each of its bytes as the
+// character of that code point, as ISO-8859-1 has it, and as snapshot.py's
+// http.client reads a header. A value in ASCII, as the SEC's are, is
+// unchanged. One with a byte above 0x7F, which HTTP allows (RFC 9110,
+// section 5.5), becomes UTF-8, the only text a record's string and an
+// event's JSON can hold, where the byte alone isn't.
+func fromLatin1(raw string) string {
+	if isASCII(raw) {
+		return raw
+	}
+	text := make([]rune, len(raw))
+	for i := range len(raw) {
+		text[i] = rune(raw[i])
+	}
+	return string(text)
+}
+
+// toLatin1 gives text that fromLatin1 gave back in the bytes it was read
+// from, as http.client sends a header. Text with a character beyond
+// ISO-8859-1, which fromLatin1 never gives, is sent as it is.
+func toLatin1(text string) string {
+	if isASCII(text) {
+		return text
+	}
+	raw := make([]byte, 0, len(text))
+	for _, r := range text {
+		if r > 0xFF {
+			return text
+		}
+		raw = append(raw, byte(r))
+	}
+	return string(raw)
+}
+
+func isASCII(s string) bool {
+	for i := range len(s) {
+		if s[i] >= utf8.RuneSelf {
+			return false
+		}
+	}
+	return true
 }
 
 // retryDelay is the wait before the attempt after attempt n: the response's

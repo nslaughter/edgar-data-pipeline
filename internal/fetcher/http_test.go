@@ -722,6 +722,47 @@ func TestAFetchWaitsWhileRequestsArentAllowedThenMakesItsNextAttempt(t *testing.
 	names(t, result, appleBody)
 }
 
+// spec: FETCH-4
+func TestAHeadersBytesAreKeptAsISO88591TextAndAValidatorIsSentBackAsItCame(t *testing.T) {
+	// HTTP allows a header's value bytes above 0x7F (RFC 9110, section 5.5),
+	// which on their own aren't UTF-8, the only text a record's string and an
+	// event's JSON can hold.
+	const etag = "\"caf\xe9\""
+	s := newSECServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("If-None-Match") == etag {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		conn, buf, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		defer func() { _ = conn.Close() }()
+		_, _ = fmt.Fprintf(buf, "HTTP/1.1 200 OK\r\nETag: %s\r\nContent-Type: text/plain; name=caf\xe9\r\n"+
+			"Content-Length: %d\r\nConnection: close\r\n\r\n%s", etag, len(appleBody), appleBody)
+		_ = buf.Flush()
+	})
+	c := NewClient(s.options())
+
+	result := fetchOnce(t, c, submissions, nil)
+	names(t, result, appleBody)
+	r := result.Record
+	// Each byte is the character of its code point, as ISO-8859-1 has it, and
+	// as snapshot.py's http.client reads a header.
+	if value(r.ETag) != "\"café\"" || value(r.ContentType) != "text/plain; name=café" {
+		t.Errorf("the headers recorded: %q, %q", value(r.ETag), value(r.ContentType))
+	}
+
+	again := fetchOnce(t, c, submissions, &Version{ETag: r.ETag, SHA256: *r.SHA256, Bytes: *r.Bytes, Object: *r.Object})
+	if sent := s.seen()[1].header.Get("If-None-Match"); sent != etag {
+		t.Errorf("If-None-Match: %q, not the ETag's bytes as they came, %q", sent, etag)
+	}
+	if value(again.Record.Status) != http.StatusNotModified || value(again.Record.SHA256) != *r.SHA256 {
+		t.Errorf("the record: %+v", again.Record)
+	}
+}
+
 func TestAFetchWhoseContextEndsIsAbandonedWithoutARecord(t *testing.T) {
 	arrived := make(chan struct{}, 1)
 	s := newSECServer(t, func(_ http.ResponseWriter, r *http.Request) {
