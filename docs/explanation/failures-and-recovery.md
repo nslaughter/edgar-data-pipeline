@@ -142,10 +142,11 @@ sequenceDiagram
   was fetching is delivered again 30 seconds after the replica last told
   JetStream it was in progress ([FETCHER-10]), and fetched again only if
   its fetch wasn't recorded ([JOB-6]). A replica that Kubernetes stops
-  abandons the fetch it's at work on, without a record, and asks JetStream
-  to deliver its job again at once, as the owner decided ([T23]). A stop
-  after a `403` is in the `SecAccess`'s status, so it carries over
-  ([ACCESS-3]).
+  abandons each fetch it's at work on, without a record, and asks
+  JetStream to deliver each of their jobs again at once, as the owner
+  decided ([T23]); a fetch waiting between its attempts while the replica
+  fetches a job of an earlier kind is one of them. A stop after a `403` is
+  in the `SecAccess`'s status, so it carries over ([ACCESS-3]).
 - **How it recovers:** the new holder takes the jobs, polls first ([JOB-4]).
   A poll whose job expired during the handover is acknowledged without a
   request ([JOB-5]); the jobs of filings and Backfills don't expire, so

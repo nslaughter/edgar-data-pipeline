@@ -48,6 +48,17 @@ chart holds the polls to half the fetcher's limit ([VAL-3]), so the other
 half is left to the rest, and a Backfill's fetches wait for every other:
 a backfill never delays the record of new filings ([BACKFILL-2]).
 
+The order holds between a fetch's attempts too, as the owner decided
+([T23][plan-observing]). During the wait before a retry, and again once
+it's over, the fetcher takes each job waiting of a kind before the fetch's
+own, and works it to its end before it sends the retry, which still waits
+at least as long as [FETCH-8] says. So a Backfill's retries don't delay
+polls or new filings' fetches, and a filing's retries don't delay polls.
+A job taken during a wait takes only the kinds before its own between its
+own attempts, so a poll's takes none, and the fetch it was taken during
+goes on once it has ended. Meanwhile the fetcher holds each of those jobs
+in progress ([FETCHER-10]).
+
 A poll's job expires when its Source's next poll is due, and the other
 kinds don't expire ([JOB-2], [JOB-3]). The fetcher acknowledges an expired
 job without a request or a record, unless the table already holds its
@@ -390,11 +401,11 @@ Time when no poll succeeded shows as a gap in each Source's coverage
 | --- | --- | --- | --- |
 | The active replica is lost | Every request, for up to the Lease's duration, 15 seconds by default | A gap for each Source whose slot passed without a successful poll; no record of the polls whose jobs expired meanwhile ([JOB-5]) | The standby takes the Lease; unacknowledged jobs are delivered again, and those recorded are announced, not fetched ([JOB-6]) |
 | A `403` | Every request | The `403`'s record, the stop in the SecAccess, and gaps; `SecRequestsStopped` fires ([ALERT-1]) | The owner acknowledges the stop ([ACCESS-3]) |
-| No response, a `429`, `500`, `502`, `503`, or `504`, or a body cut short | That fetch, for up to 4 attempts ([FETCH-8]) | One record, of the final attempt: its status, or none and an error | The next job |
+| No response, a `429`, `500`, `502`, `503`, or `504`, or a body cut short | That fetch, for up to 4 attempts ([FETCH-8]), between which the jobs of kinds before its own go, as the owner decided ([T23][plan-observing]) | One record, of the final attempt: its status, or none and an error | The next job |
 | Any other status, such as a `404` | Nothing ([FETCH-10]) | A record that names no version ([REC-6]) | The next job; the discoverer doesn't queue a failed file again ([FILE-4]) |
 | A poll's job expires before the fetcher takes it | That poll | No record, but `edgar_fetcher_jobs_expired_total` counts it, and its slot has no successful poll ([JOB-5]) | The next poll |
 | The database, Garage, the API server, or NATS can't take a fetch's write | Every request, until the write succeeds | Nothing new until then, and gaps for the Sources whose slots pass meanwhile | The fetcher tries the write again until it succeeds, then goes on, as the owner decided ([T23][plan-observing]) |
-| The active replica stops, or can't renew the Lease, in the middle of a fetch | That fetch, and every request until another replica takes the Lease | No record of the fetch | Its job is delivered again, and fetched again, as the owner decided ([T23][plan-observing], [JOB-6]) |
+| The active replica stops, or can't renew the Lease, in the middle of a fetch | Each fetch in progress, a fetch waiting between its attempts among them, and every request until another replica takes the Lease | No record of any of them | Each of their jobs is delivered again, and fetched again, as the owner decided ([T23][plan-observing], [JOB-6]) |
 
 NATS, Garage, and the database each keep running when one worker node is
 lost: each runs three replicas, one on each worker node

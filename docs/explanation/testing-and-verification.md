@@ -166,7 +166,8 @@ check the fetching rules the fetcher shares with `snapshot.py`, from the
 user agent to one record per fetch ([FETCH-1] to [FETCH-14] but
 [FETCH-7]), and that it trusts only the certificate it's given for the
 SEC's hosts, or else its image's roots ([FETCHER-13]); that it takes jobs
-polls first and Backfills last, acknowledges an expired or malformed job
+polls first and Backfills last, between a fetch's attempts too, as the
+owner decided ([T23]), acknowledges an expired or malformed job
 without a request, announces a recorded one again without one, and records,
 announces, then acknowledges each other, holding a write that fails until
 it succeeds ([JOB-4] to [JOB-7], [BACKFILL-2]); that it waits for its
@@ -252,7 +253,9 @@ the fetcher's requests carry the user agent of its Secret and pass the
 checks of the fetching rules, a cued `403` stopping them until a test
 acknowledges the stop, as the owner does, with `helm upgrade`, after which
 the jobs queued meanwhile go polls first and Backfills last ([FETCH-17],
-[CHECK-3], [ACCESS-1], [ACCESS-3], [JOB-4], [BACKFILL-2]); that it
+[CHECK-3], [ACCESS-1], [ACCESS-3], [JOB-4], [BACKFILL-2]); that a poll
+queued while a Backfill's fetch waits to retry a cued `503` goes before
+the retry ([JOB-4], [BACKFILL-2]); that it
 acknowledges an expired or malformed job without a request, and announces
 a recorded one again without one ([JOB-5] to [JOB-7]); that a body is
 stored once, under its name, and only the fetcher's key may write the
