@@ -1,0 +1,158 @@
+package fetcher
+
+import (
+	"context"
+	"errors"
+	"sync"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/util/retry"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/nslaughter/edgar-data-pipeline/api/v1alpha1"
+)
+
+// Access is whether requests to the SEC are allowed, as the SecAccess
+// cluster says (spec/controls.md, section 8), and where the fetcher records
+// a stop after a 403 (ACCESS-3).
+type Access interface {
+	// Allowed says whether requests are allowed: while the SecAccess
+	// exists, isn't paused, and has no stop the owner hasn't acknowledged
+	// (ACCESS-1).
+	Allowed() error
+	// Stop records a stop in the SecAccess's status, in place of any earlier
+	// one. From when it's called, Allowed refuses requests, until the
+	// SecAccess shows the stop acknowledged (ACCESS-3).
+	Stop(ctx context.Context, stop v1alpha1.Stop) error
+}
+
+// Refusals by Allowed, which say why requests aren't allowed.
+var (
+	ErrNoSecAccess     = errors.New("there is no SecAccess cluster")
+	ErrRequestsStopped = errors.New("the SecAccess has a stop the owner hasn't acknowledged")
+	ErrRequestsPaused  = errors.New("the SecAccess is paused")
+	ErrNotRead         = errors.New("the SecAccess hasn't been read yet")
+)
+
+// SecAccess is the SecAccess cluster as this replica reads it from the API
+// server, through an informer of its own, and writes its status. Its
+// informer starts when the replica becomes the active one, so what it reads
+// first is the SecAccess as it is then, a stop that the replica before it
+// recorded included (ACCESS-3). It's granted RBAC-2's verbs on the
+// SecAccess, and no others (FETCHER-4).
+type SecAccess struct {
+	cache  cache.Cache
+	client client.Client
+	synced bool
+
+	mu sync.Mutex
+	// stop is a stop this replica has begun to record, which its informer
+	// doesn't show yet.
+	stop *v1alpha1.Stop
+}
+
+// NewSecAccess gives the SecAccess, read through an informer that Start
+// starts.
+func NewSecAccess(config *rest.Config) (*SecAccess, error) {
+	scheme := runtime.NewScheme()
+	if err := v1alpha1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	informers, err := cache.New(config, cache.Options{
+		Scheme: scheme,
+		ByObject: map[client.Object]cache.ByObject{
+			&v1alpha1.SecAccess{}: {Field: fields.OneTermEqualSelector("metadata.name", v1alpha1.SecAccessName)},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	writer, err := client.New(config, client.Options{Scheme: scheme})
+	if err != nil {
+		return nil, err
+	}
+	return &SecAccess{cache: informers, client: writer}, nil
+}
+
+// Start runs the informer until ctx is done, and returns once it has read
+// the SecAccess, or ctx is done first.
+func (s *SecAccess) Start(ctx context.Context) error {
+	if _, err := s.cache.GetInformer(ctx, &v1alpha1.SecAccess{}); err != nil {
+		return err
+	}
+	go func() {
+		// It stops only once ctx is done.
+		_ = s.cache.Start(ctx)
+	}()
+	if !s.cache.WaitForCacheSync(ctx) {
+		return ctx.Err()
+	}
+	s.mu.Lock()
+	s.synced = true
+	s.mu.Unlock()
+	return nil
+}
+
+// Allowed says whether requests are allowed, as the informer last read the
+// SecAccess.
+func (s *SecAccess) Allowed() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.synced {
+		return ErrNotRead
+	}
+	access := &v1alpha1.SecAccess{}
+	// The informer has read the SecAccess, so Get reads what it holds.
+	err := s.cache.Get(context.Background(), client.ObjectKey{Name: v1alpha1.SecAccessName}, access)
+	if apierrors.IsNotFound(err) {
+		return ErrNoSecAccess
+	}
+	if err != nil {
+		return err
+	}
+	if s.stop != nil {
+		if access.Status.Stop == nil || access.Status.Stop.At != s.stop.At {
+			return ErrRequestsStopped
+		}
+		// The informer shows the stop now, so it says from here on
+		// whether the owner has acknowledged it.
+		s.stop = nil
+	}
+	return allowed(access)
+}
+
+// allowed says whether a SecAccess allows requests, and if not, why not, in
+// the order the scheduler gives its reasons (SOURCE-1).
+func allowed(access *v1alpha1.SecAccess) error {
+	switch {
+	case access.Stopped():
+		return ErrRequestsStopped
+	case access.Spec.Paused:
+		return ErrRequestsPaused
+	default:
+		return nil
+	}
+}
+
+// Stop records the stop in the SecAccess's status, which it reads from the
+// API server, not the informer, so its update is of the latest.
+func (s *SecAccess) Stop(ctx context.Context, stop v1alpha1.Stop) error {
+	s.mu.Lock()
+	s.stop = &stop
+	s.mu.Unlock()
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		access := &v1alpha1.SecAccess{}
+		if err := s.client.Get(ctx, client.ObjectKey{Name: v1alpha1.SecAccessName}, access); err != nil {
+			return err
+		}
+		if access.Status.Stop != nil && *access.Status.Stop == stop {
+			return nil
+		}
+		access.Status.Stop = &stop
+		return s.client.Status().Update(ctx, access)
+	})
+}

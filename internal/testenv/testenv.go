@@ -1,17 +1,20 @@
 // Package testenv starts what the Go tests run against, without the network:
 // a Kubernetes API server, through envtest, with the definitions in
-// spec/schemas/ installed; and a NATS server with JetStream, on a local
-// port, with the streams and the consumer the scheduler uses, configured as
-// the umbrella chart's values configure them (spec/deployment.md, NATS-3,
-// NATS-5, SCHED-8).
+// spec/schemas/ installed; a NATS server with JetStream, on a local port,
+// with the streams and the consumers the scheduler and the fetcher use,
+// configured as the umbrella chart's values configure them
+// (spec/deployment.md, NATS-3, NATS-5, SCHED-8, FETCHER-9); and a proxy that
+// can cut a service off from a server it reaches.
 package testenv
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -175,6 +178,26 @@ func GiveRecordsSubjects(ctx context.Context, t testing.TB, js jetstream.JetStre
 	return stream
 }
 
+// MakeFetcherConsumers makes the fetcher's durable consumers on JOBS, one for
+// each kind of job, as the chart's values have them (FETCHER-9), but that a
+// job is delivered again ackWait after the consumer last heard of it, or
+// JetStream's default of 30 seconds if ackWait is 0.
+func MakeFetcherConsumers(ctx context.Context, t testing.TB, js jetstream.JetStream, ackWait time.Duration) {
+	t.Helper()
+	for _, kind := range []string{"poll", "filing", "backfill"} {
+		if _, err := js.CreateConsumer(ctx, "JOBS", jetstream.ConsumerConfig{
+			Durable:        "fetcher-" + kind + "s",
+			FilterSubjects: []string{"edgar.jobs." + kind},
+			AckPolicy:      jetstream.AckExplicitPolicy,
+			DeliverPolicy:  jetstream.DeliverAllPolicy,
+			MaxDeliver:     -1,
+			AckWait:        ackWait,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // MakeSchedulerPolls makes the durable consumer scheduler-polls on RECORDS.
 func MakeSchedulerPolls(ctx context.Context, t testing.TB, js jetstream.JetStream) jetstream.Consumer {
 	t.Helper()
@@ -189,6 +212,106 @@ func MakeSchedulerPolls(ctx context.Context, t testing.TB, js jetstream.JetStrea
 		t.Fatal(err)
 	}
 	return consumer
+}
+
+// Proxy relays TCP connections to a server, such as the API server, until
+// it's cut, when it closes them and refuses new ones, or until it hangs,
+// when it keeps them open, and accepts new ones, but relays nothing more, as
+// a network that drops what it's sent.
+type Proxy struct {
+	listener net.Listener
+	mu       sync.Mutex
+	conns    []net.Conn
+	cut      bool
+	hung     bool
+	closed   chan struct{}
+}
+
+// NewProxy starts a Proxy to the target, an address, on a free local port.
+// The test's cleanup cuts it.
+func NewProxy(t testing.TB, target string) *Proxy {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &Proxy{listener: listener, closed: make(chan struct{})}
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			upstream, err := net.Dial("tcp", target)
+			p.mu.Lock()
+			if err != nil || p.cut {
+				p.mu.Unlock()
+				_ = conn.Close()
+				if upstream != nil {
+					_ = upstream.Close()
+				}
+				continue
+			}
+			p.conns = append(p.conns, conn, upstream)
+			p.mu.Unlock()
+			go p.relay(upstream, conn)
+			go p.relay(conn, upstream)
+		}
+	}()
+	t.Cleanup(p.CutOff)
+	return p
+}
+
+// Addr is the Proxy's address.
+func (p *Proxy) Addr() string {
+	return p.listener.Addr().String()
+}
+
+// relay copies what src sends to dst until either is closed. Once the proxy
+// hangs, it holds what it reads, and sends nothing more.
+func (p *Proxy) relay(dst, src net.Conn) {
+	defer func() { _ = dst.Close() }()
+	buf := make([]byte, 32<<10)
+	for {
+		n, err := src.Read(buf)
+		if n > 0 {
+			p.mu.Lock()
+			hung := p.hung
+			p.mu.Unlock()
+			if hung {
+				<-p.closed
+				return
+			}
+			if _, err := dst.Write(buf[:n]); err != nil {
+				return
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// CutOff closes the Proxy's connections, and refuses new ones.
+func (p *Proxy) CutOff() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.cut {
+		return
+	}
+	p.cut = true
+	close(p.closed)
+	_ = p.listener.Close()
+	for _, conn := range p.conns {
+		_ = conn.Close()
+	}
+}
+
+// Hang keeps the Proxy's connections open, but relays nothing more.
+func (p *Proxy) Hang() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.hung = true
 }
 
 // Eventually calls check every 50 milliseconds until it returns nil, and

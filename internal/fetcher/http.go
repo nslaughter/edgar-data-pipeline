@@ -1,0 +1,515 @@
+package fetcher
+
+import (
+	"bytes"
+	"compress/gzip"
+	"context"
+	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+	"math"
+	"net"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"golang.org/x/time/rate"
+)
+
+// The fetching rules both writers keep (spec/snapshots.md, section 10).
+const (
+	// MinInterval is the least time from the start of one request to the
+	// start of the next: at most 5 a second (FETCH-6).
+	MinInterval = 200 * time.Millisecond
+	// Attempts is the most attempts of one fetch, retries included
+	// (FETCH-8).
+	Attempts = 4
+	// MaxBackoff caps the wait before a retry (FETCH-8).
+	MaxBackoff = 60 * time.Second
+	// Timeout is how long an attempt waits for its connection, for its
+	// response, and for each read of its body (FETCH-5), as a timeout on
+	// snapshot.py's socket does. Without a response by then, it has none;
+	// with a body that stalls that long, the body is cut short (FETCH-13).
+	Timeout = 60 * time.Second
+	// maxRedirects bounds the redirects one attempt follows, as Go's client
+	// does by default.
+	maxRedirects = 10
+)
+
+// SECHosts are the only hosts the fetcher sends requests to (FETCH-1).
+var SECHosts = map[string]bool{"www.sec.gov": true, "data.sec.gov": true}
+
+// retried are the statuses that are retried, with no response and a body cut
+// short (FETCH-8).
+var retried = map[int]bool{429: true, 500: true, 502: true, 503: true, 504: true}
+
+// IsSECURL says whether a URL is one the fetcher may fetch: https, on one of
+// the SEC's hosts (FETCH-1).
+func IsSECURL(u *url.URL) bool {
+	return u.Scheme == "https" && SECHosts[u.Hostname()] && (u.Port() == "" || u.Port() == "443") && u.User == nil
+}
+
+// ClientOptions configures a Client.
+type ClientOptions struct {
+	// UserAgent is the owner's, which every request carries (FETCH-2).
+	UserAgent string
+	// Roots, when given, are the only certificates the SEC's hosts'
+	// certificates may chain to, as where CI installs the fake EDGAR. Without
+	// them, they must chain to the system's, those the fetcher's image holds
+	// (FETCHER-13).
+	Roots *x509.CertPool
+	// Permit says whether a request may be sent now, as it's about to be
+	// written: while this replica holds the Lease, and requests are allowed
+	// (FETCH-16, ACCESS-1). Without it, every request may be.
+	Permit func() error
+	// Dial makes each connection's TCP connection, with a net.Dialer by
+	// default. The tests give one that reaches a local server.
+	Dial func(ctx context.Context, network, address string) (net.Conn, error)
+	// Timeout, MinInterval, and Attempts are FETCH-5's, FETCH-6's, and
+	// FETCH-8's unless the tests give others, and BackoffUnit is the unit of
+	// FETCH-8's wait before a retry without a Retry-After, a second.
+	Timeout     time.Duration
+	MinInterval time.Duration
+	Attempts    int
+	BackoffUnit time.Duration
+	// Clock gives the times each record keeps: time.Now by default.
+	Clock func() time.Time
+	// PermitPoll is how often a fetch that may not send looks again: 100
+	// milliseconds by default.
+	PermitPoll time.Duration
+}
+
+// Client sends the fetcher's requests to the SEC's hosts, as the fetching
+// rules have them. Each request carries the user agent and asks for gzip
+// (FETCH-2, FETCH-3), and goes over a connection of its own, whose
+// certificate it has checked (FETCHER-13). Each starts at least MinInterval
+// after the one before, counted from when it's written, once its
+// connection's TLS handshake is done, so a handshake that takes longer
+// brings no two requests closer as they arrive (FETCH-6). And each is sent
+// only if Permit allows it then.
+type Client struct {
+	userAgent  string
+	roots      *x509.CertPool
+	permit     func() error
+	dial       func(ctx context.Context, network, address string) (net.Conn, error)
+	timeout    time.Duration
+	attempts   int
+	backoff    time.Duration
+	clock      func() time.Time
+	permitPoll time.Duration
+	limiter    *rate.Limiter
+	http       *http.Client
+}
+
+// NewClient returns a Client.
+func NewClient(opts ClientOptions) *Client {
+	c := &Client{
+		userAgent:  opts.UserAgent,
+		roots:      opts.Roots,
+		permit:     opts.Permit,
+		dial:       opts.Dial,
+		timeout:    opts.Timeout,
+		attempts:   opts.Attempts,
+		backoff:    opts.BackoffUnit,
+		clock:      opts.Clock,
+		permitPoll: opts.PermitPoll,
+	}
+	if c.permit == nil {
+		c.permit = func() error { return nil }
+	}
+	if c.dial == nil {
+		c.dial = (&net.Dialer{}).DialContext
+	}
+	if c.timeout == 0 {
+		c.timeout = Timeout
+	}
+	if c.attempts == 0 {
+		c.attempts = Attempts
+	}
+	if c.backoff == 0 {
+		c.backoff = time.Second
+	}
+	if c.clock == nil {
+		c.clock = time.Now
+	}
+	if c.permitPoll == 0 {
+		c.permitPoll = 100 * time.Millisecond
+	}
+	interval := opts.MinInterval
+	if interval == 0 {
+		interval = MinInterval
+	}
+	c.limiter = rate.NewLimiter(rate.Every(interval), 1)
+	c.http = &http.Client{
+		Transport: &http.Transport{
+			Proxy: nil,
+			DialContext: func(context.Context, string, string) (net.Conn, error) {
+				return nil, errors.New("only https URLs are fetched")
+			},
+			DialTLSContext:        c.dialTLS,
+			DisableKeepAlives:     true,
+			DisableCompression:    true,
+			ResponseHeaderTimeout: c.timeout,
+		},
+		// A redirect is followed only to a URL that may be fetched, and only
+		// while a request may be sent; otherwise the redirect is the
+		// response.
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= maxRedirects || !IsSECURL(req.URL) || c.permit() != nil {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
+	}
+	return c
+}
+
+// attempt is one attempt of a fetch, which the dials of its requests share
+// through their context: its own, and when its first request was written.
+// The transport dials apart from a request's cancellation, so a dial reads
+// the attempt's context for it.
+type attempt struct {
+	ctx     context.Context
+	mu      sync.Mutex
+	sent    time.Time
+	refused bool
+}
+
+type attemptKey struct{}
+
+func (a *attempt) state() (sent time.Time, refused bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.sent, a.refused
+}
+
+// dialTLS makes a connection for one request: a TCP connection to one of
+// the SEC's hosts, then a TLS handshake that checks its certificate against
+// the Client's roots, then a wait until a request may start (FETCH-6) and
+// may be sent at all (Permit). Only then does the request go out.
+func (c *Client) dialTLS(ctx context.Context, network, address string) (net.Conn, error) {
+	a, _ := ctx.Value(attemptKey{}).(*attempt)
+	if a == nil {
+		return nil, errors.New("a request outside a fetch")
+	}
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+	if !SECHosts[host] || port != "443" {
+		return nil, fmt.Errorf("%s isn't one of the SEC's hosts", address)
+	}
+	dialing, cancel := context.WithTimeout(a.ctx, c.timeout)
+	defer cancel()
+	raw, err := c.dial(dialing, network, address)
+	if err != nil {
+		return nil, err
+	}
+	conn := tls.Client(raw, &tls.Config{ServerName: host, RootCAs: c.roots, MinVersion: tls.VersionTLS12})
+	if err := conn.HandshakeContext(dialing); err != nil {
+		_ = raw.Close()
+		return nil, err
+	}
+	if err := c.limiter.Wait(a.ctx); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if err := c.permit(); err != nil {
+		a.refused = true
+		_ = conn.Close()
+		return nil, err
+	}
+	if a.sent.IsZero() {
+		a.sent = c.clock()
+	}
+	return &timeoutConn{Conn: conn, timeout: c.timeout}, nil
+}
+
+// timeoutConn gives each read and each write of a connection the Client's
+// timeout (FETCH-5).
+type timeoutConn struct {
+	net.Conn
+	timeout time.Duration
+}
+
+func (c *timeoutConn) Read(b []byte) (int, error) {
+	if err := c.SetReadDeadline(time.Now().Add(c.timeout)); err != nil {
+		return 0, err
+	}
+	return c.Conn.Read(b)
+}
+
+func (c *timeoutConn) Write(b []byte) (int, error) {
+	if err := c.SetWriteDeadline(time.Now().Add(c.timeout)); err != nil {
+		return 0, err
+	}
+	return c.Conn.Write(b)
+}
+
+// Result is what a fetch made: its record, and the object that holds its
+// body when the record names a body the fetch received.
+type Result struct {
+	Record Record
+	// Object is the body as gzip data, which the store keeps as the object
+	// the record names (OBJ-1, OBJ-4). It's nil for a record that names no
+	// body received, a 304's among them.
+	Object []byte
+}
+
+// Fetch makes one fetch of a URL, recorded under its feed: up to Attempts
+// attempts, each a request, and the record of the last (FETCH-8,
+// FETCH-14). previous is the URL's latest version in the store, if it has
+// one, whose validators make each request conditional (FETCH-4). Before
+// each attempt, it waits until a request may be sent: while requests aren't
+// allowed, a fetch between attempts waits, and makes its next attempt once
+// they are, as the owner decided. It returns an error only if ctx is done
+// before the fetch ends, when the fetch is abandoned, without a record, as
+// the owner decided.
+func (c *Client) Fetch(ctx context.Context, feed, rawURL, tool string, previous *Version) (Result, error) {
+	target, err := url.Parse(rawURL)
+	if err != nil || !IsSECURL(target) {
+		return Result{}, fmt.Errorf("%q isn't an https URL on one of the SEC's hosts", rawURL)
+	}
+	headers := map[string]string{}
+	if previous != nil && previous.ETag != nil {
+		headers["If-None-Match"] = *previous.ETag
+	}
+	if previous != nil && previous.LastModified != nil {
+		headers["If-Modified-Since"] = *previous.LastModified
+	}
+	for n := 1; ; {
+		if err := c.permitted(ctx); err != nil {
+			return Result{}, err
+		}
+		a := &attempt{ctx: ctx}
+		started := c.clock()
+		resp, err := c.do(ctx, a, target, headers)
+		var received time.Time
+		if err == nil {
+			received = c.clock()
+		}
+		sent, refused := a.state()
+		if sent.IsZero() && refused && ctx.Err() == nil {
+			// Nothing was sent, since Permit refused the request as it was
+			// about to be: it's no attempt, and waits until one may be.
+			closeBody(resp)
+			continue
+		}
+		if sent.IsZero() {
+			// No connection was made, so no request went out; the attempt
+			// began when it tried to make one.
+			sent = started
+		}
+		result := Result{Record: Record{Feed: feed, URL: rawURL, RequestedAt: timestamp(sent), Attempts: n, Tool: tool}}
+		retry := false
+		var retryAfter string
+		if err != nil {
+			result.Record.Error = ptr("no response: " + err.Error())
+			retry = true
+		} else {
+			retryAfter = resp.Header.Get("Retry-After")
+			retry = c.read(resp, target, received, previous, len(headers) > 0, &result)
+		}
+		if ctx.Err() != nil {
+			return Result{}, ctx.Err()
+		}
+		if !retry || n >= c.attempts {
+			return result, nil
+		}
+		if err := sleep(ctx, retryDelay(retryAfter, n, c.clock(), c.backoff)); err != nil {
+			return Result{}, err
+		}
+		n++
+	}
+}
+
+// permitted waits until a request may be sent, or until ctx is done.
+func (c *Client) permitted(ctx context.Context) error {
+	for c.permit() != nil {
+		if err := sleep(ctx, c.permitPoll); err != nil {
+			return err
+		}
+	}
+	return ctx.Err()
+}
+
+func (c *Client) do(ctx context.Context, a *attempt, target *url.URL, headers map[string]string) (*http.Response,
+	error) {
+	req, err := http.NewRequestWithContext(context.WithValue(ctx, attemptKey{}, a), http.MethodGet, target.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", c.userAgent)
+	req.Header.Set("Accept-Encoding", "gzip")
+	for name, value := range headers {
+		req.Header.Set(name, value)
+	}
+	return c.http.Do(req)
+}
+
+// read fills in the record of an attempt that got a response, and says
+// whether the fetch is retried. It closes the response's body.
+func (c *Client) read(resp *http.Response, target *url.URL, received time.Time, previous *Version, conditional bool,
+	result *Result) bool {
+	defer closeBody(resp)
+	record := &result.Record
+	record.ReceivedAt = ptr(timestamp(received))
+	record.Status = ptr(resp.StatusCode)
+	if final := resp.Request.URL.String(); final != target.String() {
+		record.FinalURL = &final
+	}
+	record.Date = header(resp.Header, "Date")
+	record.ETag = header(resp.Header, "ETag")
+	record.LastModified = header(resp.Header, "Last-Modified")
+	record.ContentType = header(resp.Header, "Content-Type")
+	switch resp.StatusCode {
+	case http.StatusOK:
+		var retry bool
+		result.Object, retry = body(resp, record)
+		return retry
+	case http.StatusNotModified:
+		confirm(previous, conditional, record)
+		return false
+	default:
+		return retried[resp.StatusCode]
+	}
+}
+
+// body stores a 200's body in the record: its SHA-256, its length, and its
+// object's name, and returns it as the object, gzip data (OBJ-1). A gzip
+// encoding is decoded first, and no encoding, or identity, is kept as
+// received (FETCH-11); any other is recorded with an error and nothing kept,
+// without a retry (FETCH-12). A body cut short keeps nothing, and is retried
+// (FETCH-13).
+func body(resp *http.Response, record *Record) (object []byte, retry bool) {
+	encoding := strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding")))
+	gzipped := encoding == "gzip" || encoding == "x-gzip"
+	if !gzipped && encoding != "" && encoding != "identity" {
+		record.Error = ptr("unsupported Content-Encoding: " + encoding)
+		return nil, false
+	}
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		record.Error = ptr("body cut short: " + err.Error())
+		return nil, true
+	}
+	if resp.ContentLength >= 0 && int64(len(raw)) != resp.ContentLength {
+		record.Error = ptr(fmt.Sprintf("body cut short: %d of %d bytes arrived", len(raw), resp.ContentLength))
+		return nil, true
+	}
+	data := raw
+	if gzipped {
+		if data, err = gunzip(raw); err != nil {
+			record.Error = ptr(err.Error())
+			return nil, true
+		}
+	}
+	sum := sha256.Sum256(data)
+	digest := hex.EncodeToString(sum[:])
+	record.SHA256 = &digest
+	record.Bytes = ptr(int64(len(data)))
+	record.Object = ptr(ObjectName(digest))
+	return compress(data), false
+}
+
+// confirm points a 304 at the version its conditional request asked about,
+// with that version's validators where the 304 gives none, or records an
+// error if the request sent no validators (REC-5).
+func confirm(previous *Version, conditional bool, record *Record) {
+	if previous == nil || !conditional {
+		record.Error = ptr("304 to a request that sent no validators")
+		return
+	}
+	if record.ETag == nil || *record.ETag == "" {
+		record.ETag = previous.ETag
+	}
+	if record.LastModified == nil || *record.LastModified == "" {
+		record.LastModified = previous.LastModified
+	}
+	record.SHA256 = ptr(previous.SHA256)
+	record.Bytes = ptr(previous.Bytes)
+	record.Object = ptr(previous.Object)
+}
+
+// gunzip decodes a gzip encoding, or says how it's cut short (FETCH-13).
+func gunzip(raw []byte) ([]byte, error) {
+	reader, err := gzip.NewReader(bytes.NewReader(raw))
+	if err == nil {
+		var data []byte
+		if data, err = io.ReadAll(reader); err == nil {
+			return data, nil
+		}
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return nil, errors.New("body cut short: the gzip stream ended early")
+	}
+	return nil, fmt.Errorf("gzip encoding doesn't decode: %w", err)
+}
+
+// compress gives a body as gzip data, without a name or a time in its
+// header, so the same body gives the same bytes.
+func compress(data []byte) []byte {
+	var out bytes.Buffer
+	writer := gzip.NewWriter(&out)
+	// Writes to a bytes.Buffer don't fail.
+	_, _ = writer.Write(data)
+	_ = writer.Close()
+	return out.Bytes()
+}
+
+// header gives a header's value as the response gave it, or nil if it gave
+// none.
+func header(h http.Header, name string) *string {
+	values := h.Values(name)
+	if len(values) == 0 {
+		return nil
+	}
+	return ptr(values[0])
+}
+
+// retryDelay is the wait before the attempt after attempt n: the response's
+// Retry-After, in seconds or as an HTTP date, or else 2 to the power of n,
+// in seconds, the unit given; either capped at MaxBackoff (FETCH-8).
+func retryDelay(retryAfter string, n int, now time.Time, unit time.Duration) time.Duration {
+	if value := strings.TrimSpace(retryAfter); value != "" {
+		if seconds, err := strconv.ParseFloat(value, 64); err == nil && !math.IsNaN(seconds) {
+			seconds = math.Max(0, math.Min(seconds, MaxBackoff.Seconds()))
+			return time.Duration(seconds * float64(time.Second))
+		}
+		if when, err := http.ParseTime(value); err == nil {
+			return clamp(when.Sub(now))
+		}
+	}
+	return clamp(time.Duration(math.Pow(2, float64(n)) * float64(unit)))
+}
+
+func clamp(d time.Duration) time.Duration {
+	return max(0, min(d, MaxBackoff))
+}
+
+// sleep waits for d, or until ctx is done.
+func sleep(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func closeBody(resp *http.Response) {
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+}

@@ -1,7 +1,9 @@
 // Package messages holds the messages the Go services exchange through NATS
 // JetStream, and validates them against their schemas in spec/schemas/: a job
 // and an event, as the store's specification gives them (spec/snapshots.md,
-// section 10).
+// section 10). The fetcher, which writes events, gives each record's every
+// field (internal/fetcher); the readers here decode only the fields they
+// read.
 package messages
 
 import (
@@ -20,18 +22,31 @@ import (
 const (
 	SubjectPollJob   = "edgar.jobs.poll"
 	SubjectPollEvent = "edgar.records.poll"
+	// SubjectJobs and SubjectEvents begin the subjects of each kind's jobs
+	// and events.
+	SubjectJobs   = "edgar.jobs."
+	SubjectEvents = "edgar.records."
 )
 
-// The streams and the consumer the scheduler uses, which the umbrella chart's
-// JetStream Job makes (spec/deployment.md, NATS-3, SCHED-8).
+// The streams and the consumers the scheduler and the fetcher use, which the
+// umbrella chart's JetStream Job makes (spec/deployment.md, NATS-3, SCHED-8,
+// FETCHER-9).
 const (
-	StreamJobs             = "JOBS"
-	StreamRecords          = "RECORDS"
-	ConsumerSchedulerPolls = "scheduler-polls"
+	StreamJobs               = "JOBS"
+	StreamRecords            = "RECORDS"
+	ConsumerSchedulerPolls   = "scheduler-polls"
+	ConsumerFetcherPolls     = "fetcher-polls"
+	ConsumerFetcherFilings   = "fetcher-filings"
+	ConsumerFetcherBackfills = "fetcher-backfills"
 )
 
-// KindPoll is the kind of a Source's poll.
-const KindPoll = "poll"
+// The kinds of job: a Source's poll; a filing the discoverer found; and a
+// Backfill's fetch.
+const (
+	KindPoll     = "poll"
+	KindFiling   = "filing"
+	KindBackfill = "backfill"
+)
 
 // Job is one fetch the fetcher is asked to make (job.schema.json).
 type Job struct {
