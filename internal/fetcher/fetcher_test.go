@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -20,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/nslaughter/edgar-data-pipeline/api/v1alpha1"
@@ -442,6 +444,73 @@ func TestA403IsRecordedAsAStopThatHoldsUntilTheOwnerAcknowledgesItEvenAfterAHand
 	sends(t, second.server, 1, 10*time.Second)
 	if seen := second.server.seen(); seen[0].url != "https://www.sec.gov/after" {
 		t.Errorf("it fetched %s", seen[0].url)
+	}
+}
+
+// laggingCache is an informer's cache of the SecAccess that shows only what
+// the test has it show, as one that hasn't yet seen the latest write.
+type laggingCache struct {
+	cache.Cache
+	mu    sync.Mutex
+	shown *v1alpha1.SecAccess
+}
+
+func (l *laggingCache) Get(_ context.Context, _ client.ObjectKey, obj client.Object, _ ...client.GetOption) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.shown.DeepCopyInto(obj.(*v1alpha1.SecAccess))
+	return nil
+}
+
+// show has the cache show the SecAccess as the API server holds it now.
+func (l *laggingCache) show(t *testing.T, c client.Client) {
+	t.Helper()
+	access := &v1alpha1.SecAccess{}
+	if err := c.Get(context.Background(), client.ObjectKey{Name: v1alpha1.SecAccessName}, access); err != nil {
+		t.Fatal(err)
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.shown = access
+}
+
+// spec: ACCESS-3, FETCH-9
+func TestAStopRefusesRequestsFromWhenItsRecordedBeforeTheInformerShowsIt(t *testing.T) {
+	ctx := context.Background()
+	c := newKubeClient(t)
+	// An earlier stop, which the owner has acknowledged.
+	earlier := v1alpha1.Stop{At: "2026-10-20T09:00:00.000Z", URL: "https://www.sec.gov/earlier"}
+	setSecAccess(t, c, v1alpha1.SecAccessSpec{AcknowledgedStopAt: earlier.At}, &earlier)
+	access, err := NewSecAccess(apiServer(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	informer := &laggingCache{}
+	informer.show(t, c)
+	access.cache, access.synced = informer, true
+	if err := access.Allowed(); err != nil {
+		t.Fatalf("before the stop: %v", err)
+	}
+
+	stop := v1alpha1.Stop{At: "2026-10-26T09:30:00.123Z", URL: "https://www.sec.gov/forbidden"}
+	if err := access.Stop(ctx, stop); err != nil {
+		t.Fatal(err)
+	}
+	// The informer still shows the earlier stop, acknowledged.
+	if err := access.Allowed(); !errors.Is(err, ErrRequestsStopped) {
+		t.Fatalf("once the stop was recorded, before the informer showed it: %v", err)
+	}
+	informer.show(t, c)
+	if informer.shown.Status.Stop == nil || *informer.shown.Status.Stop != stop {
+		t.Fatalf("the SecAccess's stop: %+v", informer.shown.Status.Stop)
+	}
+	if err := access.Allowed(); !errors.Is(err, ErrRequestsStopped) {
+		t.Fatalf("once the informer showed the stop: %v", err)
+	}
+	setSecAccess(t, c, v1alpha1.SecAccessSpec{AcknowledgedStopAt: stop.At}, &stop)
+	informer.show(t, c)
+	if err := access.Allowed(); err != nil {
+		t.Errorf("once the owner acknowledged the stop: %v", err)
 	}
 }
 

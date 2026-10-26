@@ -700,6 +700,14 @@ func TestAFetchWaitsWhileRequestsArentAllowedThenMakesItsNextAttempt(t *testing.
 	})
 	opts := s.options()
 	opts.Permit = permit
+	// Its connections, each a TLS handshake with the SEC's host before its
+	// request may be refused.
+	var dials atomic.Int32
+	dial := opts.Dial
+	opts.Dial = func(ctx context.Context, network, address string) (net.Conn, error) {
+		dials.Add(1)
+		return dial(ctx, network, address)
+	}
 	c := NewClient(opts)
 
 	done := make(chan Result)
@@ -711,13 +719,14 @@ func TestAFetchWaitsWhileRequestsArentAllowedThenMakesItsNextAttempt(t *testing.
 		done <- result
 	}()
 	time.Sleep(time.Second)
-	if seen := len(s.seen()); seen != 1 {
-		t.Fatalf("%d requests while requests weren't allowed", seen)
+	// It made no connection meanwhile, either.
+	if seen := len(s.seen()); seen != 1 || dials.Load() != 1 {
+		t.Fatalf("%d requests, over %d connections, while requests weren't allowed", seen, dials.Load())
 	}
 	allow(true)
 	result := <-done
-	if len(s.seen()) != 2 || result.Record.Attempts != 2 {
-		t.Fatalf("%d requests, %d attempts", len(s.seen()), result.Record.Attempts)
+	if len(s.seen()) != 2 || dials.Load() != 2 || result.Record.Attempts != 2 {
+		t.Fatalf("%d requests, over %d connections, %d attempts", len(s.seen()), dials.Load(), result.Record.Attempts)
 	}
 	names(t, result, appleBody)
 }
