@@ -3,9 +3,11 @@ package fetcher
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -440,6 +442,46 @@ func TestA403IsRecordedAsAStopThatHoldsUntilTheOwnerAcknowledgesItEvenAfterAHand
 	sends(t, second.server, 1, 10*time.Second)
 	if seen := second.server.seen(); seen[0].url != "https://www.sec.gov/after" {
 		t.Errorf("it fetched %s", seen[0].url)
+	}
+}
+
+// leaseOnly passes on a replica's requests to the API server for its Lease,
+// and fails every other, as when it can't read the SecAccess's resource.
+type leaseOnly struct{ next http.RoundTripper }
+
+func (l leaseOnly) RoundTrip(r *http.Request) (*http.Response, error) {
+	if !strings.HasPrefix(r.URL.Path, "/apis/coordination.k8s.io/") {
+		return nil, errors.New("cut off from all but the Lease")
+	}
+	return l.next.RoundTrip(r)
+}
+
+func TestAReplicaThatCantReadTheSecAccessStopsAndLeavesTheLeaseToAnother(t *testing.T) {
+	ctx := context.Background()
+	c := newKubeClient(t)
+	release := newNamespace(t, c)
+	allowRequests(t, c)
+	s := newStores(t)
+	cutOff := rest.CopyConfig(apiServer(t))
+	cutOff.Wrap(func(next http.RoundTripper) http.RoundTripper { return leaseOnly{next} })
+	timings := lease{duration: 3 * time.Second, renew: 2 * time.Second, retry: time.Second}
+	failed := runReplica(t, release, timings, cutOff, s, newSECServer(t, pathBody), nil)
+	holds(t, c, release, failed, 10*time.Second)
+	select {
+	case <-failed.done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the replica that couldn't read the SecAccess went on holding the Lease")
+	}
+	if failed.err == nil {
+		t.Error("the replica that couldn't read the SecAccess stopped without an error")
+	}
+
+	other := runReplica(t, release, timings, apiServer(t), s, newSECServer(t, pathBody), nil)
+	queue(ctx, t, s.js, newJob(messages.KindFiling, "https://www.sec.gov/filing"))
+	holds(t, c, release, other, timings.duration+5*timings.retry)
+	sends(t, other.server, 1, 10*time.Second)
+	if got := len(failed.server.seen()); got != 0 {
+		t.Errorf("the replica that couldn't read the SecAccess sent %d requests", got)
 	}
 }
 

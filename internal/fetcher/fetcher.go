@@ -69,8 +69,9 @@ func CheckUserAgent(agent string) error {
 }
 
 // Run runs a fetcher replica until ctx is done, as when Kubernetes stops its
-// pod, or until it can't renew the Lease within the renewal deadline, when
-// it fails. It sends nothing without a user agent that contains an @
+// pod, or until it can't renew the Lease within the renewal deadline, or
+// can't begin the active replica's work once it holds the Lease, when it
+// fails. It sends nothing without a user agent that contains an @
 // (FETCH-17). It serves its metrics and its health checks from when it
 // starts, whether or not it's the active replica (METRIC-1).
 //
@@ -108,6 +109,7 @@ func Run(ctx context.Context, config *rest.Config, opts Options) error {
 	expired := make(chan struct{})
 	var mu sync.Mutex
 	var led chan struct{}
+	var failed error
 	elector, err := leaderelection.NewLeaderElector(leaderelection.LeaderElectionConfig{
 		Lock:          lock,
 		LeaseDuration: opts.LeaseDuration,
@@ -124,7 +126,19 @@ func Run(ctx context.Context, config *rest.Config, opts Options) error {
 				mu.Unlock()
 				defer close(done)
 				opts.Log.Info("Became the active replica", "lease", lock.Describe())
-				lead(ctx, leading, config, opts, schemas, lock)
+				begun := lead(ctx, leading, config, opts, schemas, lock)
+				if begun == nil || leading.Err() != nil {
+					return
+				}
+				// client-go goes on renewing the Lease once this returns, so
+				// the replica stops, and fails: Kubernetes restarts it, and
+				// another replica takes the Lease over once its duration has
+				// passed without a renewal.
+				opts.Log.Error(begun, "Couldn't begin the active replica's work, so stopping", "lease", lock.Describe())
+				mu.Lock()
+				failed = begun
+				mu.Unlock()
+				stop()
 			},
 			OnStoppedLeading: func() {},
 		},
@@ -140,6 +154,12 @@ func Run(ctx context.Context, config *rest.Config, opts Options) error {
 	mu.Unlock()
 	if done != nil {
 		<-done
+	}
+	mu.Lock()
+	err = failed
+	mu.Unlock()
+	if err != nil {
+		return fmt.Errorf("couldn't begin the active replica's work: %w", err)
 	}
 	select {
 	case <-expired:
@@ -160,19 +180,17 @@ var errNotLeading = errors.New("this replica doesn't hold the Lease")
 // SecAccess from when it begins, so it sees any stop the replica before it
 // recorded (ACCESS-3), and permits each request only while it holds the
 // Lease, within the renewal deadline of its last renewal, and requests are
-// allowed (FETCH-16, ACCESS-1).
+// allowed (FETCH-16, ACCESS-1). It returns an error, having sent nothing, if
+// it can't begin to read the SecAccess, as when a request to the API server
+// for the SecAccess's resource fails.
 func lead(shutdown, leading context.Context, config *rest.Config, opts Options, schemas *messages.Schemas,
-	lock *renewals) {
+	lock *renewals) error {
 	access, err := NewSecAccess(config)
 	if err != nil {
-		opts.Log.Error(err, "Couldn't read the SecAccess")
-		return
+		return fmt.Errorf("reading the SecAccess: %w", err)
 	}
 	if err := access.Start(leading); err != nil {
-		if leading.Err() == nil {
-			opts.Log.Error(err, "Couldn't read the SecAccess")
-		}
-		return
+		return fmt.Errorf("reading the SecAccess: %w", err)
 	}
 	permit := func() error {
 		if leading.Err() != nil || !time.Now().Before(lock.renewed().Add(opts.RenewDeadline)) {
@@ -194,6 +212,7 @@ func lead(shutdown, leading context.Context, config *rest.Config, opts Options, 
 	worker.Shutdown = shutdown
 	worker.Log = opts.Log.WithName("jobs")
 	worker.Run(leading)
+	return nil
 }
 
 // renewals is the Lease's lock, through which client-go's leader election
