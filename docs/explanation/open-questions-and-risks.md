@@ -3,8 +3,8 @@
 <!-- status: all -->
 **What's built,** as the [status page](../status.md) gives it:
 
-- **Built:** NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The charts; The fake EDGAR.
-- **Specified:** Scheduler (built in part); Fetcher; Discoverer; Monitoring: traces; The snapshot store in the cluster (built in part); The transfer from the cluster to git; The controls (built in part); The documentation site (built in part).
+- **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The charts; The fake EDGAR.
+- **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The transfer from the cluster to git; The controls (built in part); The documentation site (built in part).
 - **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The drills.
 <!-- end status -->
@@ -362,7 +362,7 @@ default values pause requests, so an install with them has no such order
 notices that publishes a refused notice again also has the scheduler
 publish a refused order again until JetStream accepts it ([T48]).
 
-Its version 1.4.0 deploys the fetcher, before [T23] builds it
+Its version 1.4.0 deploys the fetcher, which [T23] built
 ([§10][deployment-from-1.3.0]): two replicas, each on a worker node of its
 own, one active through the Lease `fetcher`; [RBAC-2]'s grants and its
 Lease's, and no others; its Garage key, its role's password, and its user
@@ -556,7 +556,14 @@ version of the telemetry for them ([T32]). Two decision records: how the
 parse workers scale with their queue's depth ([T10]), and which XBRL parser
 reads the instances, a narrow parser on lxml or Arelle ([T12]). And one
 revisit: whether to keep each company's `submissions` as the notice source
-([T11]).
+([T11]). And a version of the snapshot store's specification that states
+what the fetcher does while a write can't be made, as the owner decided
+with [T23]: it holds the fetch and tries the write again, sending nothing
+else meanwhile. The owner decided that the same version states that a
+fetch between attempts waits while requests aren't allowed, and that a
+fetch in progress when its replica stops is abandoned without a record,
+and that a decision record proposed with it supersedes [0003]'s
+consequence that fetching continues while PostgreSQL fails over.
 
 ## Risks the documents name
 
@@ -627,6 +634,10 @@ revisit: whether to keep each company's `submissions` as the notice source
   ([§5 of the notices][notices-gaps]). A replica that Kubernetes stops
   doesn't release the Lease either, so an upgrade or a drain that stops the
   active fetcher pauses fetching as long ([FETCHER-3]).
+- **An outage of the database, Garage, or NATS pauses fetching.** The
+  fetcher holds a fetch whose writes can't be made, and sends no other
+  request until they can, as the owner decided ([T23]), so a Source's slots
+  that pass meanwhile show as gaps.
 - **A `403` stops everything until the owner acts.** The stop survives
   restarts and handovers, and holds until the owner acknowledges it
   ([ACCESS-3]); `SecRequestsStopped` fires meanwhile ([ALERT-1]).

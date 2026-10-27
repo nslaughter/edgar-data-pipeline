@@ -1,7 +1,7 @@
 # The architecture
 
 <!-- status: Scheduler; Fetcher; Discoverer; Parse workers; Exporter; Query API; NATS JetStream; Garage; PostgreSQL 18; The controls; `edgar-asof`; The snapshot store in the cluster -->
-**Status** ([status page](../status.md)): Scheduler: Specified; built in part. Fetcher: Specified. Discoverer: Specified. Parse workers: Decided. Exporter: Decided. Query API: Decided. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified; built in part. `edgar-asof`: Decided. The snapshot store in the cluster: Specified; built in part.
+**Status** ([status page](../status.md)): Scheduler: Specified; built in part. Fetcher: Built. Discoverer: Specified. Parse workers: Decided. Exporter: Decided. Query API: Decided. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified; built in part. `edgar-asof`: Decided. The snapshot store in the cluster: Built.
 <!-- end status -->
 
 This page covers the pipeline's components and the boundaries between
@@ -292,13 +292,16 @@ polling load ([0003]).
 What it costs: a message may arrive twice, so each step is written to be
 repeated ([JOB-6], [DISC-2]); and NATS is one more stateful component, a
 StatefulSet of three whose streams are replicated on each server
-([NATS-1], [NATS-3]). The record's consequence is that fetching continues
-while PostgreSQL fails over, with parse work waiting in its stream
-([0003]), and the design says a failover pauses parsing, not fetching
-([outages and recovery][design-outages]). The store's specification has the
-fetcher add each fetch's record to the database before it publishes the
-event and acknowledges the job ([JOB-6]), and doesn't say what the fetcher
-does while the database is unavailable.
+([NATS-1], [NATS-3]). The record expected fetching to continue while
+PostgreSQL fails over, with parse work waiting in its stream ([0003]). The
+store's specification has the fetcher add each fetch's record to the
+database before it publishes the event and acknowledges the job ([JOB-6]),
+and the owner decided that the fetcher holds a fetch whose record the
+database can't take, trying it again until the database does, and sends no
+other request meanwhile ([T23][plan-observing]). So a failover pauses
+fetching as well as parsing ([outages and recovery][design-outages]), and
+the owner decided that a decision record that supersedes 0003's
+consequence comes with the store's next version ([T23][plan-observing]).
 
 ### One fetcher, and only one (0005)
 

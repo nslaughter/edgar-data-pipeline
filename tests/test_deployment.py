@@ -92,6 +92,9 @@ CREDENTIALS: dict[str, Any] = {
     "grafana": {"adminPassword": "test-grafana-admin-password-1e4b7c"},
 }
 SERVER_NAME = "test-server-name"
+# The fetcher's user agent, a string found nowhere else, so where it lands can
+# be seen (ID-2).
+USER_AGENT = "Test Fetcher fetcher-7e2a9c@example.com"
 # The commit CI installs the umbrella chart with, as images.commit: the one
 # it checks out, from which it builds the pipeline's images (IMG-1, IMG-3);
 # and the fake EDGAR, which CI installs (FAKE-4).
@@ -103,6 +106,7 @@ TEST_VALUES: dict[str, Any] = {
     "database": {"backups": {"serverName": SERVER_NAME}},
     "images": {"commit": COMMIT},
     "fakeEdgar": {"enabled": True},
+    "fetcher": {"secUserAgent": USER_AGENT},
 }
 
 # A third-party image, named by its tag and its digest (PIN-4).
@@ -1394,6 +1398,13 @@ CONSUMERS = {
 }
 # The scheduler's consumer of poll events, which comes with it (SCHED-8).
 SCHEDULER_CONSUMERS = {"scheduler-polls": ("RECORDS", ["edgar.records.poll"], None)}
+# The fetcher's consumers of jobs, one for each kind, which come with it
+# (FETCHER-9).
+FETCHER_CONSUMERS = {
+    "fetcher-polls": ("JOBS", ["edgar.jobs.poll"], None),
+    "fetcher-filings": ("JOBS", ["edgar.jobs.filing"], None),
+    "fetcher-backfills": ("JOBS", ["edgar.jobs.backfill"], None),
+}
 
 
 def jetstream_files() -> dict[str, str]:
@@ -1439,7 +1450,7 @@ def test_the_values_list_the_tables_durable_consumers() -> None:
         for consumer in files[f"consumers-{stream['name']}"].split()
     }
 
-    every = {**CONSUMERS, **SCHEDULER_CONSUMERS}
+    every = {**CONSUMERS, **SCHEDULER_CONSUMERS, **FETCHER_CONSUMERS}
     assert listed == {name: stream for name, (stream, _, _) in every.items()}
     for name, (stream, subjects, most) in CONSUMERS.items():
         request = json.loads(files[f"consumer-{stream}-{name}.json"])
@@ -1637,7 +1648,7 @@ def test_the_job_waits_until_jetstream_accepts_its_requests(
     assert set(state["streams"]) == set(STREAMS)
 
 
-@pytest.mark.spec("NATS-5", "SCHED-8")
+@pytest.mark.spec("NATS-5", "SCHED-8", "FETCHER-9")
 def test_each_stream_by_interest_takes_its_subjects_only_once_its_consumers_exist(
     jetstream: dict[str, Any],
 ) -> None:
@@ -1656,6 +1667,9 @@ def test_each_stream_by_interest_takes_its_subjects_only_once_its_consumers_exis
         ("CREATE", "ORDERS", ",".join(STREAMS["ORDERS"][0])),
         ("CONSUMER", "ORDERS", "discoverer-orders"),
         ("CREATE", "JOBS", ",".join(STREAMS["JOBS"][0])),
+        ("CONSUMER", "JOBS", "fetcher-polls"),
+        ("CONSUMER", "JOBS", "fetcher-filings"),
+        ("CONSUMER", "JOBS", "fetcher-backfills"),
     ]
 
 
@@ -2397,6 +2411,443 @@ def test_the_scheduler_is_given_natss_address_and_no_credential_for_it() -> None
     assert [name for name in arguments if "nats" in name] == ["nats-url"]
     assert "env" not in container
     assert "@" not in arguments["nats-url"]
+
+
+# FETCHER and LEASE
+
+
+def fetcher(given: dict[str, Any] | None = None) -> dict[str, Any]:
+    docs = rendered(UMBRELLA) if given is None else documents(render(UMBRELLA, given).stdout)
+    [deployment] = [
+        d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "fetcher"
+    ]
+    return deployment
+
+
+def fetcher_arguments(given: dict[str, Any] | None = None) -> dict[str, str]:
+    """The fetcher's arguments, each --NAME=VALUE, by name."""
+    [container] = containers(fetcher(given))
+    found = {}
+    for argument in container["args"]:
+        name, _, value = argument.partition("=")
+        assert name.startswith("--"), argument
+        assert value, argument
+        found[name[2:]] = value
+    return found
+
+
+def with_fake_edgar(enabled: bool) -> dict[str, Any]:
+    given = copy.deepcopy(TEST_VALUES)
+    given["fakeEdgar"]["enabled"] = enabled
+    return given
+
+
+def secret_volumes(deployment: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Each Secret the pod mounts, by name, with the keys it mounts and where."""
+    [container] = containers(deployment)
+    mounts = {mount["name"]: mount for mount in container.get("volumeMounts", [])}
+    found = {}
+    for volume in pod_spec(deployment).get("volumes", []):
+        assert set(volume) == {"name", "secret"}, volume
+        mount = mounts[volume["name"]]
+        assert mount["readOnly"] is True, mount
+        found[volume["secret"]["secretName"]] = {
+            "items": volume["secret"].get("items"),
+            "path": mount["mountPath"],
+        }
+    assert set(mounts) == {volume["name"] for volume in pod_spec(deployment).get("volumes", [])}
+    return found
+
+
+@pytest.mark.spec("FETCHER-1")
+def test_the_fetcher_is_two_replicas_of_its_image_as_its_own_service_account() -> None:
+    deployment = fetcher()
+    spec = pod_spec(deployment)
+    [container] = containers(deployment)
+
+    assert deployment["spec"]["replicas"] == 2
+    assert "namespace" not in deployment["metadata"]
+    assert spec["serviceAccountName"] == "fetcher"
+    assert named(UMBRELLA, "ServiceAccount", "fetcher")
+    assert spec.get("automountServiceAccountToken", True) is True
+    assert values(UMBRELLA)["fetcher"]["image"] == "edgar/fetcher"
+    assert container["image"] == f"edgar/fetcher:{COMMIT}"
+    assert container["imagePullPolicy"] == "Never"
+    assert "metrics" in {port["name"] for port in container["ports"]}
+
+
+@pytest.mark.spec("FETCHER-1")
+def test_the_fetcher_claims_no_volume_and_is_given_the_commit_its_image_is_tagged_with() -> None:
+    deployment = fetcher()
+
+    for volume in pod_spec(deployment).get("volumes", []):
+        assert "persistentVolumeClaim" not in volume, volume
+        assert "ephemeral" not in volume, volume
+    assert "volumeClaimTemplates" not in deployment["spec"]
+    assert fetcher_arguments()["commit"] == COMMIT
+
+
+@pytest.mark.spec("FETCHER-1")
+def test_the_fetchers_image_is_given_by_its_value() -> None:
+    given = copy.deepcopy(TEST_VALUES)
+    given["fetcher"]["image"] = "edgar/another"
+
+    assert containers(fetcher(given))[0]["image"] == f"edgar/another:{COMMIT}"
+
+
+@pytest.mark.spec("FETCHER-1")
+def test_the_fetchers_image_holds_its_command() -> None:
+    lines = (IMAGES / "fetcher" / "Dockerfile").read_text().splitlines()
+    [entrypoint] = [
+        json.loads(line[len("ENTRYPOINT ") :]) for line in lines if line.startswith("ENTRYPOINT ")
+    ]
+
+    assert entrypoint == ["/fetcher"]
+    assert any(line.startswith("RUN go build") and "./cmd/fetcher" in line for line in lines)
+
+
+@pytest.mark.spec("FETCHER-2")
+def test_the_fetchers_pods_each_need_a_worker_node_of_their_own() -> None:
+    deployment = fetcher()
+    labels = deployment["spec"]["template"]["metadata"]["labels"]
+    [term] = pod_spec(deployment)["affinity"]["podAntiAffinity"][
+        "requiredDuringSchedulingIgnoredDuringExecution"
+    ]
+
+    assert term["topologyKey"] == "kubernetes.io/hostname"
+    assert term["labelSelector"] == {"matchLabels": labels}
+    assert labels == deployment["spec"]["selector"]["matchLabels"]
+
+
+@pytest.mark.spec("LEASE-1")
+def test_the_fetcher_is_given_its_lease_and_its_timings_15_10_and_2_seconds() -> None:
+    lease = values(UMBRELLA)["fetcher"]["lease"]
+    arguments = fetcher_arguments()
+
+    assert lease == {"durationSeconds": 15, "renewDeadlineSeconds": 10, "retryPeriodSeconds": 2}
+    assert arguments["namespace"] == "edgar"
+    assert arguments["lease-name"] == "fetcher"
+    assert arguments["lease-duration"] == "15s"
+    assert arguments["lease-renew-deadline"] == "10s"
+    assert arguments["lease-retry-period"] == "2s"
+
+
+@pytest.mark.spec("LEASE-1")
+def test_the_fetchers_lease_takes_its_timings_from_the_values() -> None:
+    given = copy.deepcopy(TEST_VALUES)
+    given["fetcher"]["lease"] = {
+        "durationSeconds": 30,
+        "renewDeadlineSeconds": 20,
+        "retryPeriodSeconds": 4,
+    }
+    arguments = fetcher_arguments(given)
+
+    assert (arguments["lease-duration"], arguments["lease-renew-deadline"]) == ("30s", "20s")
+    assert arguments["lease-retry-period"] == "4s"
+
+
+def with_fetcher_lease(duration: Any, renew: Any, retry: Any) -> dict[str, Any]:
+    given = copy.deepcopy(TEST_VALUES)
+    given["fetcher"]["lease"] = {
+        "durationSeconds": duration,
+        "renewDeadlineSeconds": renew,
+        "retryPeriodSeconds": retry,
+    }
+    return given
+
+
+@pytest.mark.spec("LEASE-1")
+@pytest.mark.parametrize(
+    ("duration", "renew", "retry"),
+    [
+        (0, 10, 2),
+        (15, 0, 2),
+        (15, 10, 0),
+        (15, -10, 2),
+        (15, 15, 2),
+        (15, 20, 2),
+        (15, 10, 10),
+        (15, 10, 12),
+        # The renewal deadline must be more than 1.2 times the retry period.
+        (15, 6, 5),
+        (15, 12, 10),
+        (15, 10, 1.5),
+    ],
+)
+def test_the_chart_refuses_fetcher_lease_timings_client_go_refuses(
+    duration: Any, renew: Any, retry: Any
+) -> None:
+    assert render(UMBRELLA, with_fetcher_lease(duration, renew, retry), check=False).returncode != 0
+
+
+@pytest.mark.spec("LEASE-1")
+@pytest.mark.parametrize(("duration", "renew", "retry"), [(15, 7, 5), (3, 2, 1), (60, 59, 49)])
+def test_the_chart_renders_fetcher_lease_timings_client_go_accepts(
+    duration: int, renew: int, retry: int
+) -> None:
+    assert render(UMBRELLA, with_fetcher_lease(duration, renew, retry), check=False).returncode == 0
+
+
+@pytest.mark.spec("LEASE-1", "FETCHER-4")
+def test_the_fetchers_role_grants_its_lease_and_nothing_else() -> None:
+    assert rbac("Role", "fetcher") == [
+        {"apiGroups": ["coordination.k8s.io"], "resources": ["leases"], "verbs": ["create"]},
+        {
+            "apiGroups": ["coordination.k8s.io"],
+            "resources": ["leases"],
+            "resourceNames": ["fetcher"],
+            "verbs": ["get", "update"],
+        },
+    ]
+    assert "namespace" not in named(UMBRELLA, "Role", "fetcher")["metadata"]
+
+
+@pytest.mark.spec("FETCHER-4", "RBAC-2")
+def test_the_fetchers_cluster_role_grants_rbac_2s_verbs_on_the_secaccess() -> None:
+    assert rbac("ClusterRole", "edgar-fetcher") == [
+        {
+            "apiGroups": ["edgar.nathanslaughter.com"],
+            "resources": ["secaccesses"],
+            "verbs": ["get", "list", "watch"],
+        },
+        {
+            "apiGroups": ["edgar.nathanslaughter.com"],
+            "resources": ["secaccesses/status"],
+            "verbs": ["update", "patch"],
+        },
+    ]
+
+
+@pytest.mark.spec("FETCHER-4")
+def test_the_fetchers_service_account_is_bound_to_its_roles_and_no_other() -> None:
+    found = set()
+    for chart, _, namespace in RELEASES:
+        for doc in rendered(chart):
+            if doc["kind"] not in ("RoleBinding", "ClusterRoleBinding"):
+                continue
+            here = doc["metadata"].get("namespace", namespace)
+            for subject in doc.get("subjects", []):
+                if subject["kind"] == "ServiceAccount" and subject["name"] == "fetcher":
+                    assert subject.get("namespace", here) == "edgar"
+                    found.add((doc["kind"], doc["roleRef"]["kind"], doc["roleRef"]["name"]))
+
+    assert found == {
+        ("RoleBinding", "Role", "fetcher"),
+        ("ClusterRoleBinding", "ClusterRole", "edgar-fetcher"),
+    }
+
+
+def from_secret(name: str, key: str) -> dict[str, Any]:
+    return {"valueFrom": {"secretKeyRef": {"name": name, "key": key}}}
+
+
+@pytest.mark.spec("FETCHER-5", "SECRET-3")
+def test_the_fetcher_reads_its_key_its_password_and_its_user_agent_from_their_secrets() -> None:
+    [container] = containers(fetcher())
+    env = {
+        variable["name"]: {k: v for k, v in variable.items() if k != "name"}
+        for variable in container["env"]
+    }
+
+    assert env == {
+        "SEC_USER_AGENT": from_secret("fetcher-user-agent", "SEC_USER_AGENT"),
+        "AWS_ACCESS_KEY_ID": from_secret("garage-key-fetcher", "AWS_ACCESS_KEY_ID"),
+        "AWS_SECRET_ACCESS_KEY": from_secret("garage-key-fetcher", "AWS_SECRET_ACCESS_KEY"),
+        "PGPASSWORD": from_secret("postgres-fetcher", "password"),
+    }
+    assert "envFrom" not in container
+    key = named(UMBRELLA, "Secret", "garage-key-fetcher")["stringData"]
+    assert (key["AWS_ACCESS_KEY_ID"], key["AWS_SECRET_ACCESS_KEY"]) == (
+        CREDENTIALS["garageKeys"]["fetcher"]["id"],
+        CREDENTIALS["garageKeys"]["fetcher"]["secret"],
+    )
+    password = named(UMBRELLA, "Secret", "postgres-fetcher")["stringData"]["password"]
+    assert password == CREDENTIALS["database"]["fetcher"]
+    agent = named(UMBRELLA, "Secret", "fetcher-user-agent")["stringData"]
+    assert agent == {"SEC_USER_AGENT": USER_AGENT}
+
+
+@pytest.mark.spec("FETCHER-5")
+@pytest.mark.parametrize("fake", [True, False])
+def test_the_fetcher_mounts_no_secret_but_the_certificates(fake: bool) -> None:
+    mounted = secret_volumes(fetcher(with_fake_edgar(fake)))
+    authorities = {"postgres-ca", "fake-edgar-ca"} if fake else {"postgres-ca"}
+
+    assert set(mounted) == authorities
+    for secret in mounted.values():
+        assert secret["items"] == [{"key": "ca.crt", "path": "ca.crt"}]
+
+
+@pytest.mark.spec("FETCHER-5")
+def test_no_other_services_container_reads_the_fetchers_key_or_its_password() -> None:
+    for doc in rendered(UMBRELLA):
+        for spec in pod_specs(doc):
+            if doc["kind"] == "Deployment" and doc["metadata"]["name"] == "fetcher":
+                continue
+            for container in [*spec.get("initContainers", []), *spec["containers"]]:
+                if not OWN_IMAGE.match(container["image"]):
+                    continue
+                text = json.dumps([container, spec.get("volumes", [])])
+                for secret in ("garage-key-fetcher", "postgres-fetcher"):
+                    assert secret not in text, (doc["metadata"]["name"], secret)
+
+
+@pytest.mark.spec("FETCHER-5", "ID-2")
+@pytest.mark.parametrize("agent", [None, "", "A name without a contact address"])
+def test_the_values_schema_requires_a_user_agent_that_contains_an_at(agent: Any) -> None:
+    given = copy.deepcopy(TEST_VALUES)
+    if agent is None:
+        del given["fetcher"]["secUserAgent"]
+    else:
+        given["fetcher"]["secUserAgent"] = agent
+    result = render(UMBRELLA, given, check=False)
+
+    assert result.returncode != 0
+    assert "secUserAgent" in result.stderr
+
+
+@pytest.mark.spec("FETCHER-6")
+def test_the_fetcher_is_given_the_bucket_snapshots_and_garages_s3_api() -> None:
+    arguments = fetcher_arguments()
+    service = named(UMBRELLA, "Service", "garage")
+
+    assert arguments["bucket"] == "snapshots"
+    assert "snapshots" in values(UMBRELLA)["garageSetup"]["buckets"]
+    assert arguments["s3-endpoint"] == "http://garage:3900"
+    assert 3900 in {port["port"] for port in service["spec"]["ports"]}
+    assert arguments["s3-region"] == garage_values()["garage"]["s3"]["api"]["region"]
+
+
+@pytest.mark.spec("FETCHER-7")
+def test_the_fetcher_connects_to_the_databases_primary_as_its_role_verifying_the_server() -> None:
+    arguments = fetcher_arguments()
+    cluster = the_cluster()
+    mounted = secret_volumes(fetcher())
+    authority = mounted[f"{cluster['metadata']['name']}-ca"]
+
+    assert arguments["database-host"] == f"{cluster['metadata']['name']}-rw"
+    assert arguments["database-port"] == "5432"
+    assert (
+        arguments["database-name"] == cluster["spec"]["bootstrap"]["initdb"]["database"] == "edgar"
+    )
+    assert arguments["database-user"] == "fetcher"
+    assert "fetcher" in roles()
+    assert authority["items"] == [{"key": "ca.crt", "path": "ca.crt"}]
+    assert arguments["database-ca"] == f"{authority['path']}/ca.crt"
+
+
+@pytest.mark.spec("FETCHER-8")
+def test_the_fetcher_is_given_natss_address_and_no_credential_for_it() -> None:
+    arguments = fetcher_arguments()
+    [container] = containers(fetcher())
+
+    assert arguments["nats-url"] == "nats://nats:4222"
+    assert named(UMBRELLA, "Service", "nats")
+    assert [name for name in arguments if "nats" in name] == ["nats-url"]
+    assert not [v for v in container["env"] if "NATS" in v["name"]]
+    assert "@" not in arguments["nats-url"]
+
+
+@pytest.mark.spec("FETCHER-9")
+def test_the_values_list_the_fetchers_consumers_of_jobs_as_nats_5_configures_each() -> None:
+    files = jetstream_files()
+    [jobs] = [stream for stream in streams() if stream["name"] == "JOBS"]
+
+    assert jobs["consumers"] == [
+        {"name": name, "filterSubjects": subjects}
+        for name, (_, subjects, _) in FETCHER_CONSUMERS.items()
+    ]
+    assert files["consumers-JOBS"].split() == list(FETCHER_CONSUMERS)
+    for name, (_, subjects, _) in FETCHER_CONSUMERS.items():
+        assert json.loads(files[f"consumer-JOBS-{name}.json"]) == {
+            "stream_name": "JOBS",
+            "config": {
+                "durable_name": name,
+                "name": name,
+                "filter_subjects": subjects,
+                "ack_policy": "explicit",
+                "deliver_policy": "all",
+                "max_deliver": -1,
+                "num_replicas": 3,
+            },
+        }
+
+
+@pytest.mark.spec("FETCHER-12")
+def test_where_ci_installs_the_fake_edgar_the_fetcher_is_given_its_authoritys_certificate() -> None:
+    enabled = fetcher(with_fake_edgar(True))
+    authority = named(UMBRELLA, "Certificate", "fake-edgar-ca")
+    served = named(UMBRELLA, "Certificate", "fake-edgar")
+    mounted = secret_volumes(enabled)[authority["spec"]["secretName"]]
+
+    assert authority["spec"]["isCA"] is True
+    assert (
+        served["spec"]["issuerRef"]["name"]
+        == named(UMBRELLA, "Issuer", "fake-edgar-ca")["metadata"]["name"]
+    )
+    assert mounted["items"] == [{"key": "ca.crt", "path": "ca.crt"}]
+    assert fetcher_arguments(with_fake_edgar(True))["sec-ca"] == f"{mounted['path']}/ca.crt"
+
+
+@pytest.mark.spec("FETCHER-12")
+def test_without_the_fake_edgar_the_fetcher_is_given_no_certificate_for_the_secs_hosts() -> None:
+    disabled = fetcher(with_fake_edgar(False))
+
+    assert "fake-edgar-ca" not in json.dumps(pod_spec(disabled))
+    assert "sec-ca" not in fetcher_arguments(with_fake_edgar(False))
+
+
+@pytest.mark.spec("ID-2")
+def test_the_user_agent_is_in_one_secret_which_only_the_fetcher_reads() -> None:
+    holding = []
+    reading = []
+    for chart, _, _ in RELEASES:
+        for doc in rendered(chart):
+            text = json.dumps(doc)
+            if USER_AGENT in text:
+                holding.append((doc["kind"], doc["metadata"]["name"]))
+            for spec in pod_specs(doc):
+                for container in [*spec.get("initContainers", []), *spec["containers"]]:
+                    if "fetcher-user-agent" in json.dumps(container):
+                        reading.append((doc["metadata"]["name"], container["name"]))
+                assert "fetcher-user-agent" not in json.dumps(spec.get("volumes", []))
+
+    assert holding == [("Secret", "fetcher-user-agent")]
+    assert reading == [("fetcher", "fetcher")]
+
+
+@pytest.mark.spec("ID-2")
+def test_no_committed_values_file_sets_the_user_agent() -> None:
+    def sets(node: Any) -> bool:
+        if isinstance(node, dict):
+            given = node.get("fetcher")
+            if isinstance(given, dict) and "secUserAgent" in given:
+                return True
+            return any(sets(value) for value in node.values())
+        return isinstance(node, list) and any(sets(item) for item in node)
+
+    tracked = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-files", "*.yaml", "*.yml", "*.json"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    setting = []
+    for name in tracked:
+        try:
+            loaded = list(yaml.load_all((ROOT / name).read_text(encoding="utf-8"), Loader=Loader))
+        except yaml.YAMLError:
+            continue  # a template, which isn't a values file
+        if any(sets(doc) for doc in loaded):
+            setting.append(name)
+    without = copy.deepcopy(TEST_VALUES)
+    del without["fetcher"]
+    result = render(UMBRELLA, without, check=False)
+
+    assert "secUserAgent" not in values(UMBRELLA)["fetcher"]
+    assert setting == []
+    assert result.returncode != 0
+    assert "fetcher" in result.stderr
 
 
 # FAKE

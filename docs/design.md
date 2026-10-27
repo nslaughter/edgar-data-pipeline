@@ -1,6 +1,6 @@
 # Design: the EDGAR data pipeline
 
-**Status:** Draft, October 23, 2026. This document explains the pipeline's
+**Status:** Draft, October 26, 2026. This document explains the pipeline's
 architecture and the reasons for it. It makes no rules: the specifications
 under [`spec/`](../spec/) govern, the records under
 [`docs/decisions/`](decisions/) record each significant choice, and
@@ -188,7 +188,11 @@ nothing is queued, and the time is recorded as a gap.
   filing first seen after the outage carries the gap's bounds.
 - A fetcher handover is a short gap, and a stop after a `403` carries over
   to the standby through `SecAccess`. A database failover pauses parsing,
-  not fetching ([0003](decisions/0003-queue-work-in-nats-jetstream.md)).
+  whose work waits in its stream
+  ([0003](decisions/0003-queue-work-in-nats-jetstream.md)), and fetching
+  too: the fetcher holds a fetch it can't record until the database takes
+  the record, and sends no other request meanwhile, as the owner decided
+  ([T23](plan.md#observing-filings)).
 - On kind, outages are caused on purpose: deleting pods, scaling the
   scheduler to zero, pausing a `Source`, blocking the SEC with a
   NetworkPolicy. Each drill shows the pipeline recovering and the gaps it

@@ -18,6 +18,13 @@
 #
 #   images:
 #     commit: 40 lower-case hexadecimal digits
+#
+# And so is the user agent the fetcher sends the SEC, the owner's name and a
+# contact address, which the owner keeps in a values file git ignores, as
+# .env.dev keeps snapshot.py's (ID-2, FETCH-15):
+#
+#   fetcher:
+#     secUserAgent: such as "Name contact@example.com"
 
 # The fake EDGAR, which answers for the SEC's hosts from the stored versions
 # under data/, for the tests on kind (spec/fake-edgar.md). Only CI sets
@@ -66,6 +73,18 @@ controls:
 # (SCHED-3).
 scheduler:
   image: edgar/scheduler
+  lease:
+    durationSeconds: 15
+    renewDeadlineSeconds: 10
+    retryPeriodSeconds: 2
+
+# The fetcher, which sends every request to the SEC and writes the cluster
+# store: two replicas of its image, the pipeline's own, tagged with
+# images.commit, of which the one that holds its Lease sends requests and
+# reads jobs (FETCHER-1, FETCH-16). The Lease's timings are client-go's
+# leader election's, which the chart checks as it does (LEASE-1).
+fetcher:
+  image: edgar/fetcher
   lease:
     durationSeconds: 15
     renewDeadlineSeconds: 10
@@ -135,7 +154,15 @@ jetstream:
       retention: workqueue
       storage: file
       replicas: 3
-      consumers: []
+      consumers:
+        # The fetcher's, one for each kind of job, which it asks for a job in
+        # this order (FETCHER-9, FETCHER-10).
+        - name: fetcher-polls
+          filterSubjects: [edgar.jobs.poll]
+        - name: fetcher-filings
+          filterSubjects: [edgar.jobs.filing]
+        - name: fetcher-backfills
+          filterSubjects: [edgar.jobs.backfill]
 
 # What a hook Job sets up in Garage after each install and upgrade, through
 # its admin API (GARAGE-2): each node's capacity in the layout, in bytes, its

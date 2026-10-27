@@ -1,7 +1,7 @@
 # Failures and recovery
 
 <!-- status: Scheduler; Fetcher; Discoverer; NATS JetStream; Garage; PostgreSQL 18; The controls; Monitoring: metrics, alerts, and dashboards; The drills -->
-**Status** ([status page](../status.md)): Scheduler: Specified; built in part. Fetcher: Specified. Discoverer: Specified. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified; built in part. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The drills: Planned.
+**Status** ([status page](../status.md)): Scheduler: Specified; built in part. Fetcher: Built. Discoverer: Specified. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified; built in part. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The drills: Planned.
 <!-- end status -->
 
 For each failure that the design and the specifications consider: what
@@ -141,8 +141,12 @@ sequenceDiagram
   acknowledges them ([the store's jobs and events]). A job the lost replica
   was fetching is delivered again 30 seconds after the replica last told
   JetStream it was in progress ([FETCHER-10]), and fetched again only if
-  its fetch wasn't recorded ([JOB-6]). A stop after a `403` is in the
-  `SecAccess`'s status, so it carries over ([ACCESS-3]).
+  its fetch wasn't recorded ([JOB-6]). A replica that Kubernetes stops
+  abandons each fetch it's at work on, without a record, and asks
+  JetStream to deliver each of their jobs again at once, as the owner
+  decided ([T23]); a fetch waiting between its attempts while the replica
+  fetches a job of an earlier kind is one of them. A stop after a `403` is
+  in the `SecAccess`'s status, so it carries over ([ACCESS-3]).
 - **How it recovers:** the new holder takes the jobs, polls first ([JOB-4]).
   A poll whose job expired during the handover is acknowledged without a
   request ([JOB-5]); the jobs of filings and Backfills don't expire, so
@@ -206,14 +210,18 @@ The database runs three instances, one on each worker node, under
 CloudNativePG, with which failover, point-in-time recovery, and backups to
 Garage can be shown ([PG-3], [PLACE-1], [0004]).
 
-- **What stops:** decision 0003 and the design have a failover pause
-  parsing, not fetching. Parse jobs wait in their stream, and are delivered
-  when the database is back ([0003], [the design's outages and recovery]). A
-  discoverer that can't add a message's rows doesn't acknowledge it, so the
-  message is delivered again ([DISC-1], [DISC-2]). The fetcher adds each
-  fetch's record before it publishes the event and acknowledges the job
-  ([JOB-6]), and what it does while the database can't take a record isn't
-  specified yet (see the analysis below).
+- **What stops:** parsing and fetching. Parse jobs wait in their stream,
+  and are delivered when the database is back ([0003], [the design's
+  outages and recovery]). A discoverer that can't add a message's rows
+  doesn't acknowledge it, so the message is delivered again ([DISC-1],
+  [DISC-2]). The fetcher adds each fetch's record before it publishes the
+  event and acknowledges the job ([JOB-6]), and while the database can't
+  take the record, it holds the fetch it has made, tries the record again
+  until the database takes it, and sends no other request, as the owner
+  decided ([T23]). Decision 0003 had expected fetching to go on while
+  PostgreSQL fails over ([0003]); a decision record that supersedes that
+  consequence comes with the store's next version, as the owner decided
+  ([T23]).
 - **What's kept:** every message not yet acknowledged, and the database's
   archive: its WAL, and a base backup at least once a day, in Garage's
   `database-backups` bucket ([PG-4]).
@@ -242,8 +250,10 @@ With all three down, nothing passes between the services:
 - **What stops:** the scheduler can't queue polls, and a poll it can't queue
   before the next is due is skipped ([SOURCE-2]). The fetcher has no jobs to
   take. A fetch it recorded but whose event it couldn't publish isn't
-  acknowledged, so its job is delivered again, and the event published from
-  the record, without a request ([JOB-6]). The discoverer reads nothing.
+  acknowledged: it tries the event again until NATS takes it, as the owner
+  decided ([T23]), and were its replica lost meanwhile, the job would be
+  delivered again, and the event published from the record, without a
+  request ([JOB-6]). The discoverer reads nothing.
 - **What's kept:** the streams, in files on volumes whose data is kept in a
   directory of the host ([VOL-2], [VOL-3], [KIND-2]).
 - **How it recovers:** queued work survives the restart, and work not
@@ -264,8 +274,9 @@ copy of every object, so it keeps running when one is lost ([GARAGE-1],
 With all three down:
 
 - **What stops:** the fetcher can't store a body, which it does before
-  adding its record ([OBJ-4], [FETCH-14]); what it does then isn't specified
-  yet (see the analysis below). The discoverer can't read versions from the
+  adding its record ([OBJ-4], [FETCH-14]), so it holds the fetch, tries the
+  object again until Garage takes it, and sends no other request, as the
+  owner decided ([T23]). The discoverer can't read versions from the
   bucket ([SEEN-1], [FILE-3]), so it doesn't acknowledge the events that
   need them, and they're delivered again ([DISC-1]). The database can't
   archive its WAL or take its backups there ([PG-4]).
@@ -319,9 +330,11 @@ sequenceDiagram
 - **What's kept:** the stop, in the `SecAccess`'s status, with when the
   fetch was sent and its URL, through restarts and handovers
   ([the controls' guarantees], [SecAccess][controls-secaccess]). The fetch
-  that got the `403` is recorded like any other ([FETCH-9]). What happens if
-  the active fetcher is lost after the `403` and before the stop reaches the
-  status isn't specified yet.
+  that got the `403` is recorded like any other ([FETCH-9]), once the stop
+  is in the status, so a fetcher lost between the two leaves the stop, and
+  the job is fetched again once the owner acknowledges it ([T23]). One lost
+  after the `403` and before the stop reaches the status leaves neither,
+  and the next active replica fetches the job again.
 - **How it recovers:** the owner acknowledges the stop by copying its `at`
   into the chart's values, as `controls.secAccess.acknowledgedStopAt`, and
   running `helm upgrade`. An acknowledgement names one stop, so a later
@@ -381,7 +394,9 @@ way: a pause is a gap ([0007]).
   `False` and the reason `Paused`; while the `SecAccess` is paused, every
   Source's, with the reason `RequestsPaused` ([SOURCE-1]). While requests
   are paused, the scheduler queues nothing, and the fetcher sends nothing
-  ([ACCESS-1], [ACCESS-2]). The discoverer still queues the fetches of
+  and takes no job ([ACCESS-1], [ACCESS-2]). A fetch waiting to retry when
+  requests are paused makes its next attempt once they're allowed again, as
+  the owner decided ([T23]). The discoverer still queues the fetches of
   filings' files, and the jobs wait ([a filing's files][notices-files]).
 - **What's kept:** the control, as the owner set it in the chart's values,
   which the API server keeps ([the controls' guarantees], [RBAC-6]). The
@@ -437,19 +452,12 @@ blocks the SEC with a NetworkPolicy ([the design's outages and recovery],
 
 > **Analysis.** No task, decision record, or specification covers this.
 >
-> Five questions above are still open in the specifications. The pipeline
+> Three questions above are still open in the specifications. The pipeline
 > could settle each in a later version:
 >
-> - **A fetcher lost between a `403` and recording the stop.** The fetcher
->   could record the stop in the `SecAccess`'s status before it adds the
->   fetch's record, or a new holder of the Lease could look in the table for
->   a `403` later than the last acknowledged stop before its first request.
-> - **The fetcher while the database fails over.** It could hold its next
->   request until the database takes records again, so that it sends no
->   request whose fetch it can't record.
-> - **The fetcher while Garage is down.** It could record each fetch with
->   `error` set and no version, as a body it can't store, or hold its next
->   request until Garage is back.
+> - **A fetcher lost between a `403` and recording the stop.** A new holder
+>   of the Lease could look in the table for a `403` later than the last
+>   acknowledged stop before its first request.
 > - **Commits lost in a failover.** The database's `Cluster` could require a
 >   synchronous replica, so that a failover loses no record whose event was
 >   published.
@@ -469,6 +477,7 @@ blocks the SEC with a NetworkPolicy ([the design's outages and recovery],
 [the design's controls]: ../design.md#controls
 [the design's outages and recovery]: ../design.md#outages-and-recovery
 [the design's testing on kind]: ../design.md#testing-on-kind
+[T23]: ../plan.md#observing-filings
 [T31]: ../plan.md#traces-logs-and-drills
 [status page]: ../status.md
 [SRC-9]: ../../investigation/edgar.md#findings-so-far

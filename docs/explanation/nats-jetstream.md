@@ -117,8 +117,8 @@ It also specifies nine durable consumers, which the same Job makes
 
 The scheduler's consumer of poll events came with the scheduler, which
 [T22] built, before the fetcher publishes any ([SCHED-8]). The fetcher's
-three come with the fetcher, as the deployment's version 1.4.0 specifies
-them ([the fetcher's access to NATS][fetcher-nats]).
+three came with the fetcher, which [T23] built, as the deployment's version
+1.4.0 specifies them ([the fetcher's access to NATS][fetcher-nats]).
 
 Each is a pull consumer, which any replica of its service may read from,
 though only the scheduler's active replica reads the scheduler's
@@ -339,18 +339,22 @@ recovery](failures-and-recovery.md). For the streams:
 | --- | --- |
 | One server, or its node | The other two keep each replicated stream, with its messages and a leader, and the pipeline goes on ([deployment, §1][dep-guarantees]). |
 | A consumer's pod, partway through a message | The message isn't acknowledged, so it's delivered again, and the steps above make the repeat harmless ([DISC-1], [DISC-2], [JOB-6]). |
-| The active fetcher | Jobs wait in `JOBS` until the standby takes the Lease over, once its duration has passed without a renewal, even when Kubernetes stopped the active replica ([FETCHER-3]). The job the lost replica was at work on is delivered again 30 seconds after the replica last told JetStream the job was in progress ([FETCHER-10]). Poll jobs that expire meanwhile are acknowledged without a request ([JOB-5]). Decision 0005 records every handover as a gap ([0005]); the notices' specification gives a gap only where the handover misses a poll ([notices, §5][gaps]). |
+| The active fetcher | Jobs wait in `JOBS` until the standby takes the Lease over, once its duration has passed without a renewal, even when Kubernetes stopped the active replica ([FETCHER-3]). Each job the lost replica was at work on, a fetch waiting between its attempts among them, as the owner decided ([T23]), is delivered again 30 seconds after the replica last told JetStream the job was in progress ([FETCHER-10]). Poll jobs that expire meanwhile are acknowledged without a request ([JOB-5]). Decision 0005 records every handover as a gap ([0005]); the notices' specification gives a gap only where the handover misses a poll ([notices, §5][gaps]). |
 | JetStream, for the scheduler | A poll that can't be queued before the next one is due is skipped ([SOURCE-2]) and counted ([METRIC-3]); its slot holds no successful poll, so the record shows a gap ([notices, §5][gaps]). |
 | All three servers, restarted | The streams are kept in files on retained claims ([NATS-1], [VOL-3]), so queued work survives the restart ([outages and recovery][outages]). |
 | A consumer that doesn't exist yet | An interest stream would keep nothing for it, which is why the Job makes each stream's durable consumers right after the stream, and gives an interest stream its subjects only once they exist, so a message published sooner is refused, not kept for none, and kept only once it's published again ([NATS-5], [NATS-6]). |
 | A malformed message | It's acknowledged without being acted on, and counted ([JOB-7], [MSG-2]). |
 
-Decision 0003 expects fetching to go on while PostgreSQL fails over, with
+Decision 0003 expected fetching to go on while PostgreSQL fails over, with
 the parse workers' work waiting in its stream until the database is back
 ([0003]). The fetcher's own steps pass through the database, though: it
 adds each record before it publishes the event and acknowledges the job
-([JOB-6]), and no statement yet says what it does while the database can't
-take a record.
+([JOB-6]). The owner decided that while the database can't take a record,
+the fetcher holds the fetch, tries the record again until it can, and
+sends no other request, and does the same while NATS can't take an event
+([T23][plan-observing]), so a failover pauses fetching too. A decision
+record that supersedes 0003's consequence comes with the store's next
+version, as the owner also decided.
 
 ## What it depends on
 
@@ -485,4 +489,5 @@ metrics workers scale by, and steps that are safe to repeat ([0003]).
 [FETCHER-11]: ../../spec/deployment.md#the-fetchers-access-to-nats
 [fetcher-nats]: ../../spec/deployment.md#the-fetchers-access-to-nats
 [T22]: ../plan.md#observing-filings
+[T23]: ../plan.md#observing-filings
 [SOURCE-4]: ../../spec/controls.md#6-source

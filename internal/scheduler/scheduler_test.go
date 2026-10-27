@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -566,105 +565,14 @@ func TestAStandbyReadsNoPollEventsSetsNoStatusAndQueuesNoPolls(t *testing.T) {
 	})
 }
 
-// proxy relays TCP connections to the API server until it's cut, when it
-// closes them and refuses new ones, or until it hangs, when it keeps them
-// open, and accepts new ones, but relays nothing more, as a network that
-// drops what it's sent.
-type proxy struct {
-	listener net.Listener
-	mu       sync.Mutex
-	conns    []net.Conn
-	cut      bool
-	hung     bool
-	closed   chan struct{}
-}
-
-func newProxy(t *testing.T, target string) *proxy {
-	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	p := &proxy{listener: listener, closed: make(chan struct{})}
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			upstream, err := net.Dial("tcp", target)
-			p.mu.Lock()
-			if err != nil || p.cut {
-				p.mu.Unlock()
-				_ = conn.Close()
-				if upstream != nil {
-					_ = upstream.Close()
-				}
-				continue
-			}
-			p.conns = append(p.conns, conn, upstream)
-			p.mu.Unlock()
-			go p.relay(upstream, conn)
-			go p.relay(conn, upstream)
-		}
-	}()
-	t.Cleanup(p.cutOff)
-	return p
-}
-
-// relay copies what src sends to dst until either is closed. Once the proxy
-// hangs, it holds what it reads, and sends nothing more.
-func (p *proxy) relay(dst, src net.Conn) {
-	defer func() { _ = dst.Close() }()
-	buf := make([]byte, 32<<10)
-	for {
-		n, err := src.Read(buf)
-		if n > 0 {
-			p.mu.Lock()
-			hung := p.hung
-			p.mu.Unlock()
-			if hung {
-				<-p.closed
-				return
-			}
-			if _, err := dst.Write(buf[:n]); err != nil {
-				return
-			}
-		}
-		if err != nil {
-			return
-		}
-	}
-}
-
-func (p *proxy) cutOff() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.cut {
-		return
-	}
-	p.cut = true
-	close(p.closed)
-	_ = p.listener.Close()
-	for _, conn := range p.conns {
-		_ = conn.Close()
-	}
-}
-
-func (p *proxy) hang() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.hung = true
-}
-
 // spec: SCHED-4
 func TestAReplicaThatCantRenewTheLeaseStopsActingBeforeAnotherTakesItOver(t *testing.T) {
 	for _, loss := range []struct {
 		name string
-		lose func(*proxy)
+		lose func(*testenv.Proxy)
 	}{
-		{"its connections to the API server closed", (*proxy).cutOff},
-		{"its requests to the API server unanswered", (*proxy).hang},
+		{"its connections to the API server closed", (*testenv.Proxy).CutOff},
+		{"its requests to the API server unanswered", (*testenv.Proxy).Hang},
 	} {
 		t.Run(loss.name, func(t *testing.T) {
 			c := newClient(t)
@@ -675,9 +583,9 @@ func TestAReplicaThatCantRenewTheLeaseStopsActingBeforeAnotherTakesItOver(t *tes
 			if err != nil {
 				t.Fatal(err)
 			}
-			relay := newProxy(t, server.Host)
+			relay := testenv.NewProxy(t, server.Host)
 			relayed := rest.CopyConfig(restConfig)
-			relayed.Host = "https://" + relay.listener.Addr().String()
+			relayed.Host = "https://" + relay.Addr()
 			// Timings the chart accepts (SCHED-3), whose retry period and
 			// renewal deadline together pass the Lease's duration: client-go
 			// tries to renew the Lease a retry period after its last renewal,

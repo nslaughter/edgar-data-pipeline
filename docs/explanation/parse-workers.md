@@ -185,10 +185,13 @@ The documents say this much now:
 
 - **A database failover pauses parsing.** The parse workers' work waits in
   its stream and is delivered when the database is back ([0003],
-  [outages and recovery][design-outages]). Decision 0003 and the design
-  have fetching go on meanwhile; the store's specification has the fetcher
-  add each record before it acknowledges its job ([JOB-6]), and doesn't
-  yet say what it does while the database is down
+  [outages and recovery][design-outages]). Decision 0003 has fetching go
+  on meanwhile, but the store's specification has the fetcher add each
+  record before it acknowledges its job ([JOB-6]), and the owner decided
+  that it holds a fetch the database can't take the record of, sending
+  nothing else meanwhile, so a failover pauses fetching too. A decision
+  record that supersedes 0003's consequence comes with the store's next
+  version, as the owner also decided
   ([Failures and recovery](failures-and-recovery.md#losing-the-databases-primary)).
 - **A message delivered twice repeats its step harmlessly,** since filings
   are named by their accession numbers and bodies by their SHA-256

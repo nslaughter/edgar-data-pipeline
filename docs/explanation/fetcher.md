@@ -1,7 +1,7 @@
 # The fetcher
 
 <!-- status: Fetcher; The snapshot store in the cluster -->
-**Status** ([status page](../status.md)): Fetcher: Specified. The snapshot store in the cluster: Specified; built in part.
+**Status** ([status page](../status.md)): Fetcher: Built. The snapshot store in the cluster: Built.
 <!-- end status -->
 
 The fetcher is the only component that sends requests to the SEC, and the
@@ -48,6 +48,20 @@ chart holds the polls to half the fetcher's limit ([VAL-3]), so the other
 half is left to the rest, and a Backfill's fetches wait for every other:
 a backfill never delays the record of new filings ([BACKFILL-2]).
 
+The order holds between a fetch's attempts too, as the owner decided
+([T23][plan-observing]). During the wait before a retry, and again once
+it's over, the fetcher takes each job waiting of a kind before the fetch's
+own, and works it to its end before it sends the retry, which still waits
+at least as long as [FETCH-8] says. So a Backfill's retries don't delay
+polls or new filings' fetches, and a filing's retries don't delay polls.
+A job taken during a wait takes only the kinds before its own between its
+own attempts, so a poll's takes none, and the fetch it was taken during
+goes on once it has ended. Meanwhile the fetcher holds each of those jobs
+in progress ([FETCHER-10]). A job taken during a wait can be for the
+fetch's own URL, as a filing's and a Backfill's can be for the same file,
+so the retry sends the validators of the URL's latest version as the wait
+ends, which a `304` to it names ([FETCH-4], [REC-5]).
+
 A poll's job expires when its Source's next poll is due, and the other
 kinds don't expire ([JOB-2], [JOB-3]). The fetcher acknowledges an expired
 job without a request or a record, unless the table already holds its
@@ -73,7 +87,7 @@ the snapshot store, keeps
 | Retries | Retries no response, a `429`, `500`, `502`, `503`, or `504`, and a body cut short, up to 4 attempts in all. It waits the response's `Retry-After`, or else 2 to the power of the attempt number, in seconds, capped at 60. | [FETCH-8], [FETCH-13] |
 | A `403` | Records it, sends nothing more, and keeps the stop in the SecAccess until the owner acknowledges it. | [FETCH-9], [ACCESS-3] |
 | Other statuses | Records each without a retry, and goes on with its next job. | [FETCH-10] |
-| Permission | Sends only while requests are allowed. | [ACCESS-1] |
+| Permission | Sends only while requests are allowed, and takes no job while they aren't. A fetch waiting to retry when they stop being allowed makes its next attempt once they are again, as the owner decided ([T23][plan-observing]). | [ACCESS-1] |
 
 The user agent is in one Secret, rendered from the value
 `fetcher.secUserAgent`, which no committed values file sets; the owner
@@ -171,9 +185,9 @@ and names an object that exists ([STORE-3]).
 ## The stop on a 403
 
 The SEC returns a `403` to clients over its limit ([FETCH-9]). After one,
-the fetcher records the fetch, writes the stop into the SecAccess's
-`status`, in place of any earlier stop, before it sends another request,
-and sends none until the owner acknowledges it ([ACCESS-3]). The stop gives
+the fetcher records the fetch, and the stop in the SecAccess's `status`, in
+place of any earlier stop, before it sends another request, and sends none
+until the owner acknowledges it ([ACCESS-3]). The stop gives
 the fetch's `requested_at` as `stop.at`, and its URL
 ([§8 of the controls][controls-secaccess]). The owner acknowledges it by
 copying `stop.at` into the chart's values, as
@@ -390,19 +404,27 @@ Time when no poll succeeded shows as a gap in each Source's coverage
 | --- | --- | --- | --- |
 | The active replica is lost | Every request, for up to the Lease's duration, 15 seconds by default | A gap for each Source whose slot passed without a successful poll; no record of the polls whose jobs expired meanwhile ([JOB-5]) | The standby takes the Lease; unacknowledged jobs are delivered again, and those recorded are announced, not fetched ([JOB-6]) |
 | A `403` | Every request | The `403`'s record, the stop in the SecAccess, and gaps; `SecRequestsStopped` fires ([ALERT-1]) | The owner acknowledges the stop ([ACCESS-3]) |
-| No response, a `429`, `500`, `502`, `503`, or `504`, or a body cut short | That fetch, for up to 4 attempts ([FETCH-8]) | One record, of the final attempt: its status, or none and an error | The next job |
+| No response, a `429`, `500`, `502`, `503`, or `504`, or a body cut short | That fetch, for up to 4 attempts ([FETCH-8]), between which the jobs of kinds before its own go, as the owner decided ([T23][plan-observing]) | One record, of the final attempt: its status, or none and an error | The next job |
 | Any other status, such as a `404` | Nothing ([FETCH-10]) | A record that names no version ([REC-6]) | The next job; the discoverer doesn't queue a failed file again ([FILE-4]) |
 | A poll's job expires before the fetcher takes it | That poll | No record, but `edgar_fetcher_jobs_expired_total` counts it, and its slot has no successful poll ([JOB-5]) | The next poll |
+| The database, Garage, the API server, or NATS can't take a fetch's write | Every request, until the write succeeds | Nothing new until then, and gaps for the Sources whose slots pass meanwhile | The fetcher tries the write again until it succeeds, then goes on, as the owner decided ([T23][plan-observing]) |
+| The active replica stops, or can't renew the Lease, in the middle of a fetch | Each fetch in progress, a fetch waiting between its attempts among them, and every request until another replica takes the Lease | No record of any of them | Each of their jobs is delivered again, and fetched again, as the owner decided ([T23][plan-observing], [JOB-6]) |
 
 NATS, Garage, and the database each keep running when one worker node is
 lost: each runs three replicas, one on each worker node
-([§1 of deployment][deployment-guarantees]). The design says a database
-failover pauses parsing, not fetching
-([outages and recovery][design-outages], [0003]). The store's
-specification has the fetcher store each object before adding its record,
-and add the record before it publishes the event and acknowledges the job
-([FETCH-14], [JOB-6]), and doesn't say what the fetcher does while the
-database or Garage can't take a write.
+([§1 of deployment][deployment-guarantees]). The store's specification has
+the fetcher store each object before adding its record, and add the record
+before it publishes the event and acknowledges the job ([FETCH-14],
+[JOB-6]). The owner decided that while one of those writes can't be made,
+the fetcher holds the fetch it has made, tries the write again until it
+succeeds, and sends no other request meanwhile, so nothing fetched is lost
+unless the replica is too; a later version of the store's specification
+states it, with the owner's decisions on a fetch between attempts while
+requests aren't allowed and on one in progress when its replica stops
+([T23][plan-observing]). So a database failover pauses fetching
+as well as parsing, for as long as it lasts, and the record shows each
+Source's slots that passed meanwhile as gaps
+([outages and recovery][design-outages]).
 
 The drills delete the active fetcher, fail over the database, and block the
 SEC, then check that the record shows each gap and lost nothing
@@ -485,8 +507,11 @@ forgotten when the standby took over ([0007]).
 - **Whether the SEC's `Date` is when it generated each response,** before
   the clock's skew is alerted on
   ([open question 1 of telemetry][telemetry-open]).
-- **What the fetcher does while the database or Garage can't take a
-  write,** which no statement says.
+- **A version of the store's specification that states what the fetcher
+  does while a write can't be made,** between attempts while requests
+  aren't allowed, and when its replica stops, as the owner decided, with a
+  decision record that supersedes [0003]'s consequence that fetching
+  continues while PostgreSQL fails over ([T23][plan-observing]).
 - **An alert on a Source with no poll at all,** such as on a new install
   whose fetcher never fetches, which `SourceGap` doesn't cover. It waits
   for a later version of the telemetry specification
@@ -514,22 +539,25 @@ forgotten when the standby took over ([0007]).
 | [ALERT-1] | The alert while requests are stopped. |
 | [TRACE-1], [TRACE-3], [TRACE-5], [TRACE-6], [TRACE-7] | Its spans, and no trace context sent to the SEC. |
 
-Task T49 specified the fetcher's deployment, and task T23 builds the
-fetcher, with the checks on its requests against the fake EDGAR on kind
-([plan][plan-observing]). Some of the table's statements
-have tests already: the rules it shares with `snapshot.py`, [FETCH-1] to
-[FETCH-14] but [FETCH-7], which the owner keeps, and [ID-1], [OBJ-1],
-[REC-9], and [REC-10], through `snapshot.py` and `verify.py`; and the
-schemas' statements, [STORE-1] and [JOB-1]; and those of its bucket,
-database role, and credentials, which T20 wrote with the charts
-([GARAGE-4], [PG-6] to [PG-9], [SECRET-1]). The others' tests await the
-tasks that build what they describe: T23 the fetcher, its Lease, jobs,
-writes, and deployment among them, whose image [IMG-1]'s test, written in
-T21 with the fake EDGAR's, checks once the chart renders it; T24
-[FETCH-18]; and
-T28 and T29 its metrics, its alert, and its traces
-([§3 of the store][snapshots-ids], [§3 of the controls][controls-ids], [§3
-of deployment][deployment-ids], [§3 of telemetry][telemetry-ids]).
+Task T49 specified the fetcher's deployment, and task T23 built the
+fetcher, in `cmd/fetcher/` and `internal/fetcher/`, with its Deployment,
+Lease, grants, credentials, consumers of jobs, and trust of the fake
+EDGAR's authority in the umbrella chart, and the checks on its requests
+against the fake EDGAR on kind ([plan][plan-observing]). The rules it
+shares with `snapshot.py`, [FETCH-1] to [FETCH-14] but [FETCH-7], which the
+owner keeps, have tests of both writers: `snapshot.py`'s and `verify.py`'s,
+and the fetcher's Go tests, which run it against a local server that
+answers as the SEC's hosts. The schemas' statements, [STORE-1] and [JOB-1],
+have tests, and so do those of its bucket, database role, and credentials,
+which T20 wrote with the charts ([GARAGE-4], [PG-6] to [PG-9],
+[SECRET-1]). T23 wrote the tests of what it built: its Lease, its jobs, its
+writes, and its deployment, by rendering the chart and on kind, where the
+tests also check the cluster store it writes ([STORE-2], [STORE-3],
+[OBJ-4], [LOG-3], [LOG-4]). The others' tests await the tasks that build
+what they describe: T24 [FETCH-18]; and T28 and T29 its metrics, its alert,
+and its traces ([§3 of the store][snapshots-ids], [§3 of the
+controls][controls-ids], [§3 of deployment][deployment-ids], [§3 of
+telemetry][telemetry-ids]).
 
 [0002]: ../decisions/0002-store-bodies-in-garage.md
 [0003]: ../decisions/0003-queue-work-in-nats-jetstream.md
