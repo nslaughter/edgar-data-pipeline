@@ -190,8 +190,9 @@ The documents say this much now:
   record before it acknowledges its job ([JOB-6]), and the owner decided
   that it holds a fetch the database can't take the record of, sending
   nothing else meanwhile, so a failover pauses fetching too. A decision
-  record that supersedes 0003's consequence comes with the store's next
-  version, as the owner also decided
+  record that supersedes 0003's consequence comes with the version of the
+  store's specification that states the held fetch, as the owner also
+  decided
   ([Failures and recovery](failures-and-recovery.md#losing-the-databases-primary)).
 - **A message delivered twice repeats its step harmlessly,** since filings
   are named by their accession numbers and bodies by their SHA-256

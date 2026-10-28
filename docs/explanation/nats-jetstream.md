@@ -353,8 +353,9 @@ adds each record before it publishes the event and acknowledges the job
 the fetcher holds the fetch, tries the record again until it can, and
 sends no other request, and does the same while NATS can't take an event
 ([T23][plan-observing]), so a failover pauses fetching too. A decision
-record that supersedes 0003's consequence comes with the store's next
-version, as the owner also decided.
+record that supersedes 0003's consequence comes with the version of the
+store's specification that states the held fetch, as the owner also
+decided.
 
 ## What it depends on
 

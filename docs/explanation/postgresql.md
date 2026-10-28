@@ -1,7 +1,7 @@
 # PostgreSQL 18
 
-<!-- status: PostgreSQL 18 -->
-**Status** ([status page](../status.md)): PostgreSQL 18: Built.
+<!-- status: PostgreSQL 18; The transfer from the cluster to git -->
+**Status** ([status page](../status.md)): PostgreSQL 18: Built. The transfer from the cluster to git: Specified.
 <!-- end status -->
 
 PostgreSQL 18 holds the pipeline's record: a row for every fetch, what the
@@ -87,12 +87,18 @@ password is also a value of the umbrella chart ([PG-11]).
 | `fetcher` | The fetcher | `INSERT`, `SELECT` ([LOG-3]) | `SELECT` only ([TABLE-3]) | `SELECT` ([PG-12]) | None ([PG-13]) |
 | `discoverer` | The discoverer | `SELECT` only ([LOG-3]) | `INSERT`, `SELECT` ([TABLE-3]) | `SELECT` ([PG-12]) | None ([PG-13]) |
 | Each other service's | That service | `SELECT` only ([LOG-3]) | `SELECT` only ([TABLE-3]) | `SELECT` ([PG-12]) | None ([PG-13]) |
+| `transfer` | The transfer, from outside the cluster | `SELECT` only ([LOG-5], [PG-15]) | None ([PG-15]) | None ([PG-15]) | None ([PG-15]) |
 | `grafana` | Grafana | None ([PG-11]) | None ([VIEW-3]) | None ([VIEW-3]) | Use the schema, and select its views ([PG-13], [VIEW-3]) |
 
 In the deployment's version 1.1.0, the values list two services' roles,
 `fetcher` and `discoverer`; each other service's comes with that service
 ([PG-7]). Grafana's role isn't a service's, so the Job grants it nothing on
-`records` ([PG-11]).
+`records` ([PG-11]). Version 2.0.0 adds the transfer's role, `transfer`,
+which isn't a service's either: the Job grants it `SELECT` on `records`
+and nothing else ([PG-8], [PG-15]). The transfer reads the database's
+replicas from outside the cluster, through a port-forward of the API
+server, and requires SCRAM's channel binding of the connection
+([TRANSFER-5]).
 
 ## The store's table, records
 
@@ -345,8 +351,8 @@ the database can't take a record, the fetcher holds the fetch, tries the
 record again until the database takes it, and sends no other request
 ([T23][plan-observing]). So a failover pauses fetching as well as parsing
 ([outages and recovery][outages]), and a decision record that supersedes
-0003's consequence comes with the store's next version, as the owner also
-decided. The database's
+0003's consequence comes with the version of the store's specification that
+states the held fetch, as the owner also decided. The database's
 replication lag and failovers are metrics of a later version of the
 telemetry ([telemetry, left to other specifications][telemetry-left]).
 
@@ -433,6 +439,8 @@ DuckDB, pandas, or Polars without the cluster ([0004]).
 [PG-12]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [PG-13]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [PG-14]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-15]: ../../spec/deployment.md#the-stores-database
+[TRANSFER-5]: ../../spec/deployment.md#the-transfer
 [pg-notices]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [PLACE-1]: ../../spec/deployment.md#placement
 [PLACE-2]: ../../spec/deployment.md#placement
@@ -465,6 +473,7 @@ DuckDB, pandas, or Polars without the cluster ([0004]).
 [FETCH-4]: ../../spec/snapshots.md#10-fetching
 [JOB-6]: ../../spec/snapshots.md#jobs-and-events
 [LOG-3]: ../../spec/snapshots.md#8-history
+[LOG-5]: ../../spec/snapshots.md#8-history
 [REC-3]: ../../spec/snapshots.md#6-records
 [REC-4]: ../../spec/snapshots.md#6-records
 [REC-5]: ../../spec/snapshots.md#6-records

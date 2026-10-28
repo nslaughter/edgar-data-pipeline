@@ -69,8 +69,8 @@ without the behavior it covers ([doing the next item][agents-next], step
 
 | Specification | Statements with tests now | Statements awaiting a task |
 | --- | --- | --- |
-| [`snapshots.md`][snapshots] 1.0.0 | Those `verify.py` checks, and `snapshot.py`'s rules, brought to this version by [T35], done October 13, 2026; the schemas': [STORE-1], [REC-13], [JOB-1]; the scheduler's jobs, [JOB-2], written by [T22]; and the fetcher's and the cluster store's, written by [T23] ([STORE-2], [STORE-3], [OBJ-4], [LOG-3], [LOG-4], [FETCH-16], [FETCH-17], [ID-2], [JOB-4] to [JOB-7]) | [T24], the discoverer's jobs and its use of `edgar-asof` ([FETCH-18]); [T36], the transfer ([XFER-1] to [XFER-3]) |
-| [`deployment.md`][deployment] 1.4.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind; and the pipeline's images' and the fake EDGAR's installation, written by [T21] ([IMG-1] to [IMG-3], [IMG-5], [FAKE-1] to [FAKE-5]); and the scheduler's Deployment, Lease, grants, and consumer, written by [T22] ([SCHED-1] to [SCHED-9]); and the fetcher's Lease, Deployment, grants, credentials, consumers, and trust of the fake EDGAR's authority, written by [T23] ([LEASE-1], [LEASE-2], [FETCHER-1] to [FETCHER-13]) | None |
+| [`snapshots.md`][snapshots] 1.1.0 | Those `verify.py` checks, and `snapshot.py`'s rules, brought to this version by [T35], done October 13, 2026; the schemas': [STORE-1], [REC-13], [JOB-1]; the scheduler's jobs, [JOB-2], written by [T22]; and the fetcher's and the cluster store's, written by [T23] ([STORE-2], [STORE-3], [OBJ-4], [LOG-3], [LOG-4], [FETCH-16], [FETCH-17], [ID-2], [JOB-4] to [JOB-7]) | [T24], the discoverer's jobs and its use of `edgar-asof` ([FETCH-18]); [T36], the transfer ([XFER-1] to [XFER-3]) and its read-only role and key on kind ([LOG-5]) |
+| [`deployment.md`][deployment] 2.0.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind; and the pipeline's images' and the fake EDGAR's installation, written by [T21] ([IMG-1] to [IMG-3], [IMG-5], [FAKE-1] to [FAKE-5]); and the scheduler's Deployment, Lease, grants, and consumer, written by [T22] ([SCHED-1] to [SCHED-9]); and the fetcher's Lease, Deployment, grants, credentials, consumers, and trust of the fake EDGAR's authority, written by [T23] ([LEASE-1], [LEASE-2], [FETCHER-1] to [FETCHER-13]) | [T36], the transfer's role, key, and access to the cluster store ([PG-15], [GARAGE-5], [TRANSFER-1] to [TRANSFER-5]) |
 | [`controls.md`][controls] 1.0.0 | [API-1]; and, written by [T22], the generated definitions and the API server's refusals ([API-2], [API-3]), the chart's controls ([VAL-1] to [VAL-4]), the scheduler's polls and Sources' status ([SOURCE-1] to [SOURCE-4], [ACCESS-2]), and its grants ([RBAC-1], [RBAC-4]), [SOURCE-4]'s ahead of [T23]; and, written by [T23], the fetcher's use of the SecAccess, its Backfills last, and its grants ([ACCESS-1], [ACCESS-3], [BACKFILL-2], [RBAC-2]) | [T24] and [T28] ([§3][controls-ids]) |
 | [`notices.md`][notices] 0.1.1 | [TABLE-1], [MSG-1] | [T24], the discoverer, with the scheduler's side of the Backfills ([§3][notices-ids]) |
 | [`telemetry.md`][telemetry] 0.1.0 | [VIEW-1] | [T28], the monitoring of observing filings; [T29], the traces ([§3][telemetry-ids]) |
@@ -528,6 +528,7 @@ clock check relies on, waits on a finding
 [LOG-1]: ../../spec/snapshots.md#8-history
 [LOG-2]: ../../spec/snapshots.md#8-history
 [LOG-3]: ../../spec/snapshots.md#8-history
+[LOG-5]: ../../spec/snapshots.md#8-history
 [SCOPE-2]: ../../spec/snapshots.md#9-scope
 [SCOPE-4]: ../../spec/snapshots.md#9-scope
 [SCOPE-5]: ../../spec/snapshots.md#9-scope
@@ -563,6 +564,10 @@ clock check relies on, waits on a finding
 [PG-9]: ../../spec/deployment.md#the-stores-database
 [PG-10]: ../../spec/deployment.md#instances-and-backups
 [PG-14]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-15]: ../../spec/deployment.md#the-stores-database
+[GARAGE-5]: ../../spec/deployment.md#garage
+[TRANSFER-1]: ../../spec/deployment.md#the-transfer
+[TRANSFER-5]: ../../spec/deployment.md#the-transfer
 [NATS-2]: ../../spec/deployment.md#nats
 [NATS-6]: ../../spec/deployment.md#durable-consumers
 [MON-6]: ../../spec/deployment.md#monitoring

@@ -4,8 +4,8 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The charts; The fake EDGAR.
-- **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`; The transfer from the cluster to git (specified in part).
+- **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The transfer from the cluster to git; The controls (built in part); The documentation site (built in part).
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The drills.
 <!-- end status -->
 
@@ -276,7 +276,11 @@ names what would show it.
 
 ### The snapshot store
 
-[`snapshots.md`'s §13][store-questions] has four. Which feeds and
+[`snapshots.md`'s §13][store-questions] has four, and its version 1.1.0
+adds none. That version states the transfer's grants, as the owner decided
+on October 28, 2026: a role and a key of the transfer's own, which may only
+read the cluster store ([LOG-5]), and which it leaves to the deployment to
+give. Which feeds and
 companies the store holds is for the investigation to decide. How large
 the scope may grow is answered by a budget, no file over 50 MiB and at most
 1 GB in all ([SCOPE-4], [SCOPE-5]); if the store would outgrow it, objects
@@ -429,6 +433,53 @@ with their alternatives:
     `fetcher.image`, the consumers above, and the area `FETCHER`, apart
     from the store's `FETCH`. A shorter area wouldn't read as close to
     `FETCH`, but wouldn't name the fetcher as plainly.
+
+Its version 2.0.0 gives the transfer, which the owner runs outside the
+cluster, its access to the cluster store, before [T36] builds it
+([§10][deployment-from-1.4.0]): a database role and a Garage key of its
+own, `transfer`, each of which may only read, with their credentials in
+Secrets that no service reads; and, since nothing exposes the database or
+Garage outside the cluster, a way in through the API server of the cluster
+the owner names ([PG-15], [GARAGE-5], [TRANSFER-1] to [TRANSFER-5]). It
+settles these details, each with a default the owner hasn't yet confirmed
+or changed, listed with their alternatives:
+
+1. **A major version** ([PG-8]). [PG-8]'s Job now grants the transfer's
+   role `SELECT` on `records`, where it granted no role but the services'
+   and the owner's, which changes the statement's meaning. As a minor
+   version, 1.5.0, the grant would count as a list that lengthens, as
+   version 1.1.0's lists did, though [PG-8] doesn't give its list for a
+   version.
+2. **Credentials from the cluster** ([TRANSFER-4]): the transfer reads its
+   role's password and its key from their Secrets, through the API server,
+   so the owner's values file stays their one copy. Read from the
+   environment or `.env.dev`, as `snapshot.py` reads its user agent, they
+   would be a second copy, kept in step by hand.
+3. **Port-forwards through the API server** ([TRANSFER-2],
+   [TRANSFER-5]), which work on any cluster the owner's context reaches.
+   Ports of kind's nodes mapped to the host would need no API server, but
+   would leave the database and Garage listening on the host, on kind
+   alone.
+4. **The database's replicas** ([TRANSFER-5]), as Grafana reads them, so
+   the transfer's reads don't load the primary. The primary sees a record
+   as soon as it's committed, where a replica can lag behind it for a
+   moment.
+5. **Channel binding, not the server's certificate** ([TRANSFER-5]).
+   Checking the certificate against the `Cluster`'s authority would mean
+   reading the Secret that holds it, which holds the authority's key too.
+6. **A context named on every run** ([TRANSFER-3]). Falling back to the
+   kubeconfig's current context would save an argument, but could copy
+   from a test cluster's store, whose bodies the fake EDGAR served, into
+   `data/`, which never removes a record ([LOG-1]).
+7. **The owner's context, not an identity of the transfer's own.** The
+   transfer acts on the API server with the context the owner names. A
+   ServiceAccount of its own, limited to its Secrets and its port-forwards,
+   would need a token the owner took from the cluster with that context
+   anyway.
+8. **The names:** the role and the key `transfer`, and the area
+   `TRANSFER`, apart from the store's `XFER`. Without an area of its own,
+   the transfer's statements would be in `PG`, `GARAGE`, and `SECRET`,
+   though most are about the transfer rather than the database or Garage.
 
 Its [§9][deployment-later] lists what later versions add: the pipeline's
 other services, with their replicas, credentials, and placement;
@@ -729,6 +780,7 @@ consequence that fetching continues while PostgreSQL fails over.
 [T28]: ../plan.md#observing-filings
 [T31]: ../plan.md#traces-logs-and-drills
 [T32]: ../plan.md#facts
+[T36]: ../plan.md#observing-filings
 [T38]: ../plan.md#observing-filings
 [T48]: ../plan.md#observing-filings
 [agents-rules]: ../../AGENTS.md#rules
@@ -747,6 +799,7 @@ consequence that fetching continues while PostgreSQL fails over.
 [deployment-consumers]: ../../spec/deployment.md#durable-consumers
 [deployment-from-1.2.0]: ../../spec/deployment.md#from-version-120
 [deployment-from-1.3.0]: ../../spec/deployment.md#from-version-130
+[deployment-from-1.4.0]: ../../spec/deployment.md#from-version-140
 [deployment-scheduler-nats]: ../../spec/deployment.md#its-access-to-nats
 [deployment-from-1.1.0]: ../../spec/deployment.md#from-version-110
 [controls]: ../../spec/controls.md
@@ -797,6 +850,8 @@ consequence that fetching continues while PostgreSQL fails over.
 [SCOPE-4]: ../../spec/snapshots.md#9-scope
 [SCOPE-5]: ../../spec/snapshots.md#9-scope
 [XFER-1]: ../../spec/snapshots.md#records-the-cluster-made
+[LOG-1]: ../../spec/snapshots.md#8-history
+[LOG-5]: ../../spec/snapshots.md#8-history
 [FETCH-5]: ../../spec/snapshots.md#10-fetching
 [FETCH-6]: ../../spec/snapshots.md#10-fetching
 [FETCH-7]: ../../spec/snapshots.md#10-fetching
@@ -808,8 +863,16 @@ consequence that fetching continues while PostgreSQL fails over.
 [KIND-2]: ../../spec/deployment.md#the-kind-cluster
 [VOL-2]: ../../spec/deployment.md#volumes
 [GARAGE-4]: ../../spec/deployment.md#garage
+[GARAGE-5]: ../../spec/deployment.md#garage
 [PG-4]: ../../spec/deployment.md#instances-and-backups
 [PG-7]: ../../spec/deployment.md#the-stores-database
+[PG-8]: ../../spec/deployment.md#the-stores-database
+[PG-15]: ../../spec/deployment.md#the-stores-database
+[TRANSFER-1]: ../../spec/deployment.md#the-transfer
+[TRANSFER-2]: ../../spec/deployment.md#the-transfer
+[TRANSFER-3]: ../../spec/deployment.md#the-transfer
+[TRANSFER-4]: ../../spec/deployment.md#the-transfer
+[TRANSFER-5]: ../../spec/deployment.md#the-transfer
 [PIN-3]: ../../spec/deployment.md#6-pins
 [IMG-5]: ../../spec/deployment.md#the-pipelines-own-images
 [IMG-2]: ../../spec/deployment.md#the-pipelines-own-images

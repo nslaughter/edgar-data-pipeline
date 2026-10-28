@@ -1,7 +1,7 @@
 # Security and access
 
 <!-- status: The controls; The charts; Fetcher; Scheduler; Discoverer; Garage; PostgreSQL 18; Monitoring: metrics, alerts, and dashboards; The snapshot store in git; The transfer from the cluster to git -->
-**Status** ([status page](../status.md)): The controls: Specified; built in part. The charts: Built. Fetcher: Built. Scheduler: Specified; built in part. Discoverer: Specified. Garage: Built. PostgreSQL 18: Built. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The snapshot store in git: Built. The transfer from the cluster to git: Decided; specified in part.
+**Status** ([status page](../status.md)): The controls: Specified; built in part. The charts: Built. Fetcher: Built. Scheduler: Specified; built in part. Discoverer: Specified. Garage: Built. PostgreSQL 18: Built. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The snapshot store in git: Built. The transfer from the cluster to git: Specified.
 <!-- end status -->
 
 Each credential the pipeline uses and where it's kept, how the user agent
@@ -20,8 +20,9 @@ Secrets ([credentials]).
 | Credential | Used by | Where it comes from |
 | --- | --- | --- |
 | Garage's RPC secret, and its admin token | Garage's nodes; the setup Job, which reaches Garage's admin API with the token ([GARAGE-2]) | Required values of the umbrella chart ([SECRET-1]) |
-| The ID and secret of each Garage key | The fetcher's key, which may read and write the store's bucket `snapshots`, and no other ([GARAGE-4]); the discoverer's key, which may only read `snapshots` ([GARAGE-4]); the key of `database-backups`, which may read and write only that bucket, for the database's backups ([GARAGE-2], [PG-4]); each other service's key, which comes with that service ([GARAGE-4]) | Required values ([SECRET-1]) |
+| The ID and secret of each Garage key | The fetcher's key, which may read and write the store's bucket `snapshots`, and no other ([GARAGE-4]); the discoverer's key, which may only read `snapshots` ([GARAGE-4]); the transfer's key, `transfer`, which may only read `snapshots` ([GARAGE-5]); the key of `database-backups`, which may read and write only that bucket, for the database's backups ([GARAGE-2], [PG-4]); each other service's key, which comes with that service ([GARAGE-4]) | Required values ([SECRET-1]) |
 | The password of each service's database role | In the deployment's version 1.1.0, the fetcher's role and the discoverer's; each other service's comes with that service ([PG-7]) | Required values ([SECRET-1]) |
+| The password of the transfer's database role, `transfer` | The transfer, outside the cluster, which reads it from the role's Secret through the API server ([PG-15], [TRANSFER-4]) | A required value ([SECRET-1]) |
 | The password of Grafana's database role, `grafana` | Grafana's PostgreSQL data source, which reads it from the role's Secret ([PG-11], [MON-5]) | A required value ([SECRET-1]) |
 | The database owner's password, of the role `edgar` | Only the Job that creates the record's tables and views and grants each role its privileges ([PG-6], [PG-8], [PG-12], [PG-13]) | Generated in the cluster by CloudNativePG, which keeps it there ([PG-6], [credentials]) |
 | Grafana's admin password | Grafana | A required value ([SECRET-1]) |
@@ -187,9 +188,11 @@ the database allows no superuser access ([PG-6],
 [the store's database][stores-database]). Each service's role logs in
 without superuser, `createdb`, `createrole`, `replication`, or `bypassrls`
 ([PG-7]), and no Garage key has the `owner` permission on any bucket, which
-would let it change the bucket's configuration ([GARAGE-4]). So the database
-refuses any change to a record. Garage can't refuse a change to an object,
-so the pipeline makes none, and a check of the objects finds any other
+would let it change the bucket's configuration ([GARAGE-4]). The
+transfer's role and key may only read, too ([LOG-5], [PG-15],
+[GARAGE-5]). So the database refuses any change to a record. Garage can't
+refuse a change to an object, so the pipeline makes none, and a check of
+the objects finds any other
 ([store guarantees][store-guarantees], [0002]).
 
 The scheduler doesn't read EDGAR's content ([0006]): it never fetches and
@@ -220,12 +223,21 @@ statement give a NetworkPolicy, which would limit which pods reach the SEC,
 NATS, Garage, or the database.
 
 The transfer, which the owner runs outside the cluster to copy records from
-the cluster store into `data/` ([XFER-1]), has no credential yet. The database and the bucket
-grant `records` and `snapshots` only to the services' roles and keys, and
-only the Job that grants them connects as the database's owner ([PG-6],
-[PG-8], [GARAGE-4]). Task T50 specifies a database role and a Garage key of
-the transfer's own, each of which may only read, before task T36 builds the
-transfer ([plan][plan-observing]).
+the cluster store into `data/` ([XFER-1]), reads the store as a database
+role and with a Garage key of its own, `transfer`, each of which may only
+read it, and with no service's credentials ([LOG-5], [PG-15],
+[GARAGE-5]). The chart puts the role's password and the key in Secrets that
+no service reads ([TRANSFER-1]), and it exposes neither the database nor
+Garage outside the cluster ([TRANSFER-2]). So the transfer works through
+the API server of the cluster the owner names: it reads its credentials
+from those Secrets, and reaches the database's replicas and Garage's S3 API
+through port-forwards ([TRANSFER-3], [TRANSFER-4], [TRANSFER-5],
+[the transfer][deployment-transfer]). It doesn't check the database's
+certificate, since the Secret that holds the `Cluster`'s certificate
+authority holds the authority's key too, and the API server returns a
+Secret whole. It requires SCRAM's channel binding instead, so only a server
+that holds its role's password verifier completes its connection. Task T36
+builds the transfer, its role, and its key ([plan][plan-observing]).
 
 ## What runs
 
@@ -258,6 +270,7 @@ and loaded into kind's nodes, never pushed to or pulled from a registry
 [OBJ-4]: ../../spec/snapshots.md#5-objects
 [LOG-3]: ../../spec/snapshots.md#8-history
 [LOG-4]: ../../spec/snapshots.md#8-history
+[LOG-5]: ../../spec/snapshots.md#8-history
 [XFER-1]: ../../spec/snapshots.md#records-the-cluster-made
 [FETCH-2]: ../../spec/snapshots.md#10-fetching
 [FETCH-15]: ../../spec/snapshots.md#10-fetching
@@ -273,6 +286,7 @@ and loaded into kind's nodes, never pushed to or pulled from a registry
 [GARAGE-1]: ../../spec/deployment.md#garage
 [GARAGE-2]: ../../spec/deployment.md#garage
 [GARAGE-4]: ../../spec/deployment.md#garage
+[GARAGE-5]: ../../spec/deployment.md#garage
 [MON-2]: ../../spec/deployment.md#monitoring
 [MON-3]: ../../spec/deployment.md#monitoring
 [MON-5]: ../../spec/deployment.md#monitoring
@@ -311,6 +325,13 @@ and loaded into kind's nodes, never pushed to or pulled from a registry
 [PG-12]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [PG-13]: ../../spec/deployment.md#the-notices-and-the-dashboards
 [PG-14]: ../../spec/deployment.md#the-notices-and-the-dashboards
+[PG-15]: ../../spec/deployment.md#the-stores-database
+[deployment-transfer]: ../../spec/deployment.md#the-transfer
+[TRANSFER-1]: ../../spec/deployment.md#the-transfer
+[TRANSFER-2]: ../../spec/deployment.md#the-transfer
+[TRANSFER-3]: ../../spec/deployment.md#the-transfer
+[TRANSFER-4]: ../../spec/deployment.md#the-transfer
+[TRANSFER-5]: ../../spec/deployment.md#the-transfer
 [deployment-later]: ../../spec/deployment.md#9-later-versions
 [the controls' guarantees]: ../../spec/controls.md#1-guarantees
 [controls-values]: ../../spec/controls.md#5-the-charts-values
