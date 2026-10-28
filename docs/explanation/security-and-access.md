@@ -219,6 +219,14 @@ consumers it reads ([later versions][deployment-later]). Nor does any
 statement give a NetworkPolicy, which would limit which pods reach the SEC,
 NATS, Garage, or the database.
 
+The transfer, which the owner runs outside the cluster to copy records from
+the cluster store into `data/` ([XFER-1]), has no credential yet. The database and the bucket
+grant `records` and `snapshots` only to the services' roles and keys, and
+only the Job that grants them connects as the database's owner ([PG-6],
+[PG-8], [GARAGE-4]). Task T50 specifies a database role and a Garage key of
+the transfer's own, each of which may only read, before task T36 builds the
+transfer ([plan][plan-observing]).
+
 ## What runs
 
 What the charts install is pinned, so an upgrade is a reviewed change, not
@@ -250,6 +258,7 @@ and loaded into kind's nodes, never pushed to or pulled from a registry
 [OBJ-4]: ../../spec/snapshots.md#5-objects
 [LOG-3]: ../../spec/snapshots.md#8-history
 [LOG-4]: ../../spec/snapshots.md#8-history
+[XFER-1]: ../../spec/snapshots.md#records-the-cluster-made
 [FETCH-2]: ../../spec/snapshots.md#10-fetching
 [FETCH-15]: ../../spec/snapshots.md#10-fetching
 [ID-1]: ../../spec/snapshots.md#10-fetching
@@ -324,3 +333,4 @@ and loaded into kind's nodes, never pushed to or pulled from a registry
 [VIEW-3]: ../../spec/telemetry.md#8-the-views-grafana-reads
 [TRACE-5]: ../../spec/telemetry.md#9-traces
 [TRACE-6]: ../../spec/telemetry.md#9-traces
+[plan-observing]: ../plan.md#observing-filings
