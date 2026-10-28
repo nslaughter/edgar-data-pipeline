@@ -65,9 +65,9 @@ the statements it lists ([§3](#3-statement-ids)).
 - **Writer:** a program that fetches into a store: `scripts/snapshot.py`,
   into the git store, and **the fetcher**, the pipeline's service that sends
   every request from the cluster ([0005]), into the cluster store.
-- **The transfer:** a program the owner runs, which copies records and their
-  objects from the cluster store into the git store
-  ([§9](#9-scope)). It sends no request to the SEC.
+- **The transfer:** a program the owner runs outside the cluster, where
+  `data/` is, which copies records and their objects from the cluster store
+  into the git store ([§9](#9-scope)). It sends no request to the SEC.
 - **Feed:** a named set of URLs fetched for one purpose. A name, of a feed or
   an import, matches `[a-z0-9][a-z0-9-]*`. Which feeds exist is for the
   source investigation ([open question 1](#13-open-questions)).
@@ -752,10 +752,12 @@ which the deployment specification gives it
 ([§13](#left-to-other-specifications)). It adds a statement, so it's a
 minor version: no statement's or field's meaning changes, and nothing
 stored is rewritten. [LOG-3] and [LOG-4] still name the services' roles
-and keys, and guarantee 4 now rests on [LOG-5] too. The owner decided on
-October 28, 2026 that this document states the transfer's grants, beside
-[LOG-3] and [LOG-4], so that guarantee 4 reaches the transfer as it does
-each service.
+and keys, and guarantee 4 now rests on [LOG-5] too. [§2](#2-terms)'s term
+for the transfer now says where the owner runs it, outside the cluster,
+where `data/` is, which its access to the cluster store rests on. The owner
+decided on October 28, 2026 that this document states the transfer's
+grants, beside [LOG-3] and [LOG-4], so that guarantee 4 reaches the
+transfer as it does each service.
 
 ### Reading data written under version 0.2.0
 
