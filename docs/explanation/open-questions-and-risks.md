@@ -460,10 +460,14 @@ or changed, listed with their alternatives:
    Ports of kind's nodes mapped to the host would need no API server, but
    would leave the database and Garage listening on the host, on kind
    alone.
-4. **The database's replicas** ([TRANSFER-5]), as Grafana reads them, so
-   the transfer's reads don't load the primary. The primary sees a record
-   as soon as it's committed, where a replica can lag behind it for a
-   moment.
+4. **The database's primary, not its replicas** ([TRANSFER-5]). The
+   primary holds each record once it's committed. The replicas follow it
+   asynchronously, so a range read from one, as Grafana reads them, could
+   miss records the primary holds, and [XFER-1] would copy the range
+   without them. Reading the replicas would spare the primary the range's
+   reads, but the transfer would first have to read the primary's position
+   in its WAL, wait until its replica had replayed it, and copy nothing if
+   the replica didn't within a limit.
 5. **Channel binding, not the server's certificate** ([TRANSFER-5]).
    Checking the certificate against the `Cluster`'s authority would mean
    reading the Secret that holds it, which holds the authority's key too.

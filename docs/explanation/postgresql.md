@@ -96,8 +96,9 @@ In the deployment's version 1.1.0, the values list two services' roles,
 `records` ([PG-11]). Version 2.0.0 adds the transfer's role, `transfer`,
 which isn't a service's either: the Job grants it `SELECT` on `records`
 and nothing else ([PG-8], [PG-15]). The transfer reads the database's
-replicas from outside the cluster, through a port-forward of the API
-server, and requires SCRAM's channel binding of the connection
+primary from outside the cluster, through a port-forward of the API
+server, since a replica can lag behind the primary and miss records of
+the range it reads. It requires SCRAM's channel binding of the connection
 ([TRANSFER-5]).
 
 ## The store's table, records

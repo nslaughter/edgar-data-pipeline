@@ -1040,8 +1040,11 @@ umbrella chart renders them into, and opens a port-forward to each store,
 as `kubectl port-forward` does. So it needs nothing of the cluster that the
 owner's context can't already do, and it works the same on kind as on any
 other cluster the charts are installed on. It reads the database's
-replicas, as Grafana does ([MON-5]), so that its reads of a range's records
-don't load the primary, where the fetcher and the discoverer write.
+primary, where the fetcher writes each record ([FETCHER-7]), rather than
+its replicas, as Grafana does ([MON-5]). The replicas follow the primary
+asynchronously, so one can lag behind it, and a range read there could
+miss records the primary holds, which [XFER-1] copies. The primary holds
+each record once its transaction commits.
 
 A port-forward carries the transfer's connection through the API server to
 the pod's node, and from there into the pod. What the transfer reads
@@ -1092,7 +1095,7 @@ for the fetcher.
   API only through port-forwards that it opens through that context's API
   server, as `kubectl port-forward` does, and closes before it exits: to
   port 5432 of the Service that CloudNativePG makes for the `Cluster`'s
-  replicas, the `Cluster`'s name followed by `-ro`, and to the S3 port,
+  primary, the `Cluster`'s name followed by `-rw`, and to the S3 port,
   3900, of the Service `garage`. It reads the database `edgar` as the role
   `transfer` ([PG-15]), over TLS and with SCRAM's channel binding, as
   libpq's `sslmode=require` and `channel_binding=require` ask, and the
@@ -1474,7 +1477,7 @@ keeps PostgreSQL's default, which lets every role execute it.
 | TRANSFER-2 | invariant | tests | Neither the database nor Garage is exposed outside the cluster: each Service that would select their pods is of type `ClusterIP`. |
 | TRANSFER-3 | rule | tests | The transfer acts only on the cluster of the context the owner names, and on none without one. |
 | TRANSFER-4 | rule | kind | The transfer reads its role's password and its key only from its Secrets, through the API server, and writes them nowhere. |
-| TRANSFER-5 | rule | kind | The transfer reads the database's replicas as `transfer`, with channel binding, and the bucket with its key, through port-forwards. |
+| TRANSFER-5 | rule | kind | The transfer reads the database's primary as `transfer`, with channel binding, and the bucket with its key, through port-forwards. |
 | FAKE-1 | invariant | tests | The umbrella chart renders the fake EDGAR only when `fakeEdgar.enabled`, which no committed values file sets. |
 | FAKE-2 | invariant | tests | The fake EDGAR is one replica of its image, with its certificate's Secret mounted but no claim or token, behind a Service with ports 443 and 8080. |
 | FAKE-3 | invariant | tests | A certificate authority of the release's own, through cert-manager, issues the fake EDGAR's certificate for the SEC's hosts. |
@@ -1709,7 +1712,7 @@ this version:
   Garage outside the cluster, [TRANSFER-2]; the transfer acts on the
   cluster of the context the owner names, [TRANSFER-3]; it reads its
   credentials from its Secrets through the API server, [TRANSFER-4]; and
-  it reads the database's replicas, with channel binding, and the bucket,
+  it reads the database's primary, with channel binding, and the bucket,
   through port-forwards, [TRANSFER-5]. That is guarantee 16.
 - **The term the transfer, and the area `TRANSFER`,** apart from the
   snapshot store's `XFER`, [§2](#2-terms) and [§3](#3-statement-ids).

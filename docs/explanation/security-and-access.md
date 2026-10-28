@@ -230,7 +230,7 @@ read it, and with no service's credentials ([LOG-5], [PG-15],
 no service reads ([TRANSFER-1]), and it exposes neither the database nor
 Garage outside the cluster ([TRANSFER-2]). So the transfer works through
 the API server of the cluster the owner names: it reads its credentials
-from those Secrets, and reaches the database's replicas and Garage's S3 API
+from those Secrets, and reaches the database's primary and Garage's S3 API
 through port-forwards ([TRANSFER-3], [TRANSFER-4], [TRANSFER-5],
 [the transfer][deployment-transfer]). It doesn't check the database's
 certificate, since the Secret that holds the `Cluster`'s certificate
