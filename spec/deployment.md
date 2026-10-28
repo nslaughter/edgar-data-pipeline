@@ -114,9 +114,10 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
 16. **The transfer reaches the cluster store from outside the cluster only
     through the API server of the cluster the owner names,** with
     credentials of its own that may only read, which it takes from that
-    cluster. Nothing the charts render exposes the database or Garage
+    cluster, and it copies nothing from a cluster that holds the fake
+    EDGAR. Nothing the charts render exposes the database or Garage
     outside the cluster. [PG-15], [GARAGE-5], [TRANSFER-1], [TRANSFER-2],
-    [TRANSFER-3], [TRANSFER-4], [TRANSFER-5].
+    [TRANSFER-3], [TRANSFER-4], [TRANSFER-5], [TRANSFER-6].
 
 ## 2. Terms
 
@@ -210,7 +211,7 @@ builds the charts and writes their tests, apart from [IMG-1] to [IMG-3]'s,
 the pipeline's images, the fake EDGAR's; [LEASE-1]'s, [LEASE-2]'s, and
 [FETCHER-1] to [FETCHER-13]'s, which T23 writes with the fetcher;
 [SCHED-1] to [SCHED-9]'s, which T22 writes with the scheduler; and
-[PG-15]'s, [GARAGE-5]'s, and [TRANSFER-1] to [TRANSFER-5]'s, which T36
+[PG-15]'s, [GARAGE-5]'s, and [TRANSFER-1] to [TRANSFER-6]'s, which T36
 writes with the transfer. Until then each awaits its task.
 
 ## 4. Layout
@@ -1046,6 +1047,15 @@ asynchronously, so one can lag behind it, and a range read there could
 miss records the primary holds, which [XFER-1] copies. The primary holds
 each record once its transaction commits.
 
+A context can't tell a test cluster from the owner's: kind names each
+cluster made from `deploy/kind.yaml` `edgar`, and its context `kind-edgar`,
+unless it's given another name. A test cluster's records are of fetches
+the fake EDGAR answered, not the SEC, and `data/` would keep them for good
+([LOG-1]). So the transfer copies nothing from a cluster that holds the
+fake EDGAR ([TRANSFER-6]). It reads the range there all the same, so the
+tests on kind, whose cluster holds the fake EDGAR, check its access to the
+cluster store.
+
 A port-forward carries the transfer's connection through the API server to
 the pod's node, and from there into the pod. What the transfer reads
 becomes records that `data/` keeps for good ([LOG-1]), so it authenticates
@@ -1101,6 +1111,13 @@ for the fetcher.
   libpq's `sslmode=require` and `channel_binding=require` ask, and the
   bucket `snapshots` with the key `transfer` ([GARAGE-5]), in the region
   that the chart's values give Garage's S3 API.
+- **TRANSFER-6** (rule) The transfer copies nothing from a cluster whose
+  release namespace holds the fake EDGAR's Deployment, `fake-edgar`
+  ([FAKE-2]), which CI installs and the owner's installations don't
+  ([FAKE-1], [FAKE-4]), and says that the fake EDGAR is installed there. It
+  looks for the Deployment through that context's API server. It reads the
+  range there all the same, through [TRANSFER-5]'s port-forwards, but
+  writes nothing to `data/`.
 
 ### The fake EDGAR
 
@@ -1478,6 +1495,7 @@ keeps PostgreSQL's default, which lets every role execute it.
 | TRANSFER-3 | rule | tests | The transfer acts only on the cluster of the context the owner names, and on none without one. |
 | TRANSFER-4 | rule | kind | The transfer reads its role's password and its key only from its Secrets, through the API server, and writes them nowhere. |
 | TRANSFER-5 | rule | kind | The transfer reads the database's primary as `transfer`, with channel binding, and the bucket with its key, through port-forwards. |
+| TRANSFER-6 | rule | kind | The transfer copies nothing from a cluster that holds the fake EDGAR, though it reads the range there. |
 | FAKE-1 | invariant | tests | The umbrella chart renders the fake EDGAR only when `fakeEdgar.enabled`, which no committed values file sets. |
 | FAKE-2 | invariant | tests | The fake EDGAR is one replica of its image, with its certificate's Secret mounted but no claim or token, behind a Service with ports 443 and 8080. |
 | FAKE-3 | invariant | tests | A certificate authority of the release's own, through cert-manager, issues the fake EDGAR's certificate for the SEC's hosts. |
@@ -1711,9 +1729,11 @@ this version:
 - **How the transfer reaches the store:** nothing exposes the database or
   Garage outside the cluster, [TRANSFER-2]; the transfer acts on the
   cluster of the context the owner names, [TRANSFER-3]; it reads its
-  credentials from its Secrets through the API server, [TRANSFER-4]; and
-  it reads the database's primary, with channel binding, and the bucket,
-  through port-forwards, [TRANSFER-5]. That is guarantee 16.
+  role's password and its key from their Secrets through the API server,
+  [TRANSFER-4]; it reads the database's primary, with channel binding, and
+  the bucket, through port-forwards, [TRANSFER-5]; and it copies nothing
+  from a cluster that holds the fake EDGAR, [TRANSFER-6]. That is
+  guarantee 16.
 - **The term the transfer, and the area `TRANSFER`,** apart from the
   snapshot store's `XFER`, [§2](#2-terms) and [§3](#3-statement-ids).
 
@@ -1872,6 +1892,7 @@ adds the role grants it, and no service's grants change.
 [TRANSFER-3]: #the-transfer
 [TRANSFER-4]: #the-transfer
 [TRANSFER-5]: #the-transfer
+[TRANSFER-6]: #the-transfer
 [VAL-4]: controls.md#5-the-charts-values
 [VIEW-2]: telemetry.md#8-the-views-grafana-reads
 [VIEW-3]: telemetry.md#8-the-views-grafana-reads

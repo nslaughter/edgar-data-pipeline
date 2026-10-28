@@ -116,7 +116,16 @@ AWAITING = {
     ),
     **dict.fromkeys(["XFER-1", "XFER-2", "XFER-3", "LOG-5"], "T36"),
     **dict.fromkeys(
-        ["PG-15", "GARAGE-5", "TRANSFER-1", "TRANSFER-2", "TRANSFER-3", "TRANSFER-4", "TRANSFER-5"],
+        [
+            "PG-15",
+            "GARAGE-5",
+            "TRANSFER-1",
+            "TRANSFER-2",
+            "TRANSFER-3",
+            "TRANSFER-4",
+            "TRANSFER-5",
+            "TRANSFER-6",
+        ],
         "T36",
     ),
 }

@@ -440,7 +440,7 @@ cluster, its access to the cluster store, before [T36] builds it
 own, `transfer`, each of which may only read, with their credentials in
 Secrets that no service reads; and, since nothing exposes the database or
 Garage outside the cluster, a way in through the API server of the cluster
-the owner names ([PG-15], [GARAGE-5], [TRANSFER-1] to [TRANSFER-5]). It
+the owner names ([PG-15], [GARAGE-5], [TRANSFER-1] to [TRANSFER-6]). It
 settles these details, each with a default the owner hasn't yet confirmed
 or changed, listed with their alternatives:
 
@@ -472,9 +472,11 @@ or changed, listed with their alternatives:
    Checking the certificate against the `Cluster`'s authority would mean
    reading the Secret that holds it, which holds the authority's key too.
 6. **A context named on every run** ([TRANSFER-3]). Falling back to the
-   kubeconfig's current context would save an argument, but could copy
-   from a test cluster's store, whose bodies the fake EDGAR served, into
-   `data/`, which never removes a record ([LOG-1]).
+   kubeconfig's current context would save an argument, but the transfer
+   would then read whichever cluster the owner last switched to, into
+   `data/`, which never removes a record ([LOG-1]). A name can't tell a
+   test cluster from the owner's, since kind names both alike; item 10
+   guards against that.
 7. **The owner's context, not an identity of the transfer's own.** The
    transfer acts on the API server with the context the owner names. A
    ServiceAccount of its own, limited to its Secrets and its port-forwards,
@@ -487,8 +489,20 @@ or changed, listed with their alternatives:
 9. **An invariant that nothing exposes the database or Garage**
    ([TRANSFER-2]), checked by rendering the charts, each Service that would
    select their pods among them, and reading `deploy/kind.yaml`, so that a
-   later change can't open another way in unnoticed. Without it, the reason the transfer goes through the API
-   server would hold only while nothing else changed.
+   later change can't open another way in unnoticed. Without it, the reason
+   the transfer goes through the API server would hold only while nothing
+   else changed.
+10. **Nothing copied from a cluster that holds the fake EDGAR**
+    ([TRANSFER-6]). kind names each cluster made from `deploy/kind.yaml`
+    `edgar`, so a test cluster's context can be `kind-edgar`, as the
+    owner's is, and its records are of fetches the fake EDGAR answered.
+    The transfer looks for the fake EDGAR's Deployment ([FAKE-2]), which
+    the owner's installations don't render ([FAKE-1]). It still reads the
+    range there, so the tests on kind check its access; stopping before it
+    reads would leave them no cluster to run on. Without the check, only
+    the context's name would keep a test cluster's records out of
+    `data/`. A cluster from which the fake EDGAR was later removed would
+    pass it, with the records the fake EDGAR answered.
 
 Its [§9][deployment-later] lists what later versions add: the pipeline's
 other services, with their replicas, credentials, and placement;
@@ -882,6 +896,7 @@ consequence that fetching continues while PostgreSQL fails over.
 [TRANSFER-3]: ../../spec/deployment.md#the-transfer
 [TRANSFER-4]: ../../spec/deployment.md#the-transfer
 [TRANSFER-5]: ../../spec/deployment.md#the-transfer
+[TRANSFER-6]: ../../spec/deployment.md#the-transfer
 [PIN-3]: ../../spec/deployment.md#6-pins
 [IMG-5]: ../../spec/deployment.md#the-pipelines-own-images
 [IMG-2]: ../../spec/deployment.md#the-pipelines-own-images

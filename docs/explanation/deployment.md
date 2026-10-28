@@ -550,7 +550,7 @@ owner runs outside the cluster, a database role and a Garage key of its
 own, each of which may only read the cluster store, and a way to it
 through the API server of the cluster the owner names, since nothing
 exposes the database or Garage outside the cluster ([PG-15], [GARAGE-5],
-[TRANSFER-1] to [TRANSFER-5]; [deployment, from version 1.4.0][from-1.4.0]).
+[TRANSFER-1] to [TRANSFER-6]; [deployment, from version 1.4.0][from-1.4.0]).
 It's a major version, since [PG-8]'s Job now grants the transfer's role
 `SELECT` on `records`, where it granted no role but the services' and the
 owner's.
@@ -641,7 +641,7 @@ Later versions add ([deployment, §9][later]):
 [PG-15]: ../../spec/deployment.md#the-stores-database
 [GARAGE-5]: ../../spec/deployment.md#garage
 [TRANSFER-1]: ../../spec/deployment.md#the-transfer
-[TRANSFER-5]: ../../spec/deployment.md#the-transfer
+[TRANSFER-6]: ../../spec/deployment.md#the-transfer
 [GARAGE-1]: ../../spec/deployment.md#garage
 [GARAGE-2]: ../../spec/deployment.md#garage
 [GARAGE-4]: ../../spec/deployment.md#garage
