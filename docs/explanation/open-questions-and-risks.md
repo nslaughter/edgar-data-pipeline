@@ -481,9 +481,9 @@ or changed, listed with their alternatives:
    the transfer's statements would be in `PG`, `GARAGE`, and `SECRET`,
    though most are about the transfer rather than the database or Garage.
 9. **An invariant that nothing exposes the database or Garage**
-   ([TRANSFER-2]), checked by rendering the charts and reading
-   `deploy/kind.yaml`, so that a later change can't open another way in
-   unnoticed. Without it, the reason the transfer goes through the API
+   ([TRANSFER-2]), checked by rendering the charts, each Service that would
+   select their pods among them, and reading `deploy/kind.yaml`, so that a
+   later change can't open another way in unnoticed. Without it, the reason the transfer goes through the API
    server would hold only while nothing else changed.
 
 Its [§9][deployment-later] lists what later versions add: the pipeline's

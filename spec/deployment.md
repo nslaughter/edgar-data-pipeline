@@ -1067,11 +1067,14 @@ for the fetcher.
   key `transfer` ([GARAGE-5]) each into a Secret in the release namespace.
   No service's container reads either, in its environment or from a volume.
 - **TRANSFER-2** (invariant) The charts expose neither the database nor
-  Garage outside the cluster. The `Cluster` asks CloudNativePG for no
-  Service but those it makes for every `Cluster`, of type `ClusterIP`; each
-  Service the charts render for Garage is of type `ClusterIP`; no Ingress
-  the charts render routes to either; and `deploy/kind.yaml` maps no port
-  of a node to the host.
+  Garage outside the cluster. Every Service the charts render whose
+  selector would match the database's pods, which CloudNativePG labels
+  with the `Cluster`'s name in `cnpg.io/cluster`, or Garage's pods is of
+  type `ClusterIP`, and so is every Service they ask CloudNativePG to make:
+  the `Cluster` asks for none but those CloudNativePG makes for every
+  `Cluster`, which are of that type, and any `Pooler` the charts render
+  asks for one of that type. No Ingress the charts render routes to
+  either, and `deploy/kind.yaml` maps no port of a node to the host.
 - **TRANSFER-3** (rule) The transfer acts only on the cluster of the
   Kubernetes context the owner names when they run it, in the release
   namespace, `edgar` ([§5](#5-dependencies)). Without a context named, it
@@ -1468,7 +1471,7 @@ keeps PostgreSQL's default, which lets every role execute it.
 | SCHED-8 | invariant | tests | The values list the scheduler's durable consumer of poll events, `scheduler-polls`, on `RECORDS`, as NATS-5 configures each consumer. |
 | SCHED-9 | rule | tests | The scheduler makes no stream or consumer, and waits for those it reads. |
 | TRANSFER-1 | invariant | tests | The transfer's role's password and key are each in a Secret that no service reads. |
-| TRANSFER-2 | invariant | tests | Neither the database nor Garage is exposed outside the cluster. |
+| TRANSFER-2 | invariant | tests | Neither the database nor Garage is exposed outside the cluster: each Service that would select their pods is of type `ClusterIP`. |
 | TRANSFER-3 | rule | tests | The transfer acts only on the cluster of the context the owner names, and on none without one. |
 | TRANSFER-4 | rule | kind | The transfer reads its role's password and its key only from its Secrets, through the API server, and writes them nowhere. |
 | TRANSFER-5 | rule | kind | The transfer reads the database's replicas as `transfer`, with channel binding, and the bucket with its key, through port-forwards. |
