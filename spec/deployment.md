@@ -1042,7 +1042,7 @@ as `kubectl port-forward` does. So it needs nothing of the cluster that the
 owner's context can't already do, and it works the same on kind as on any
 other cluster the charts are installed on. It reads the database's
 primary, where the fetcher writes each record ([FETCHER-7]), rather than
-its replicas, as Grafana does ([MON-5]). The replicas follow the primary
+its replicas, which Grafana reads ([MON-5]). The replicas follow the primary
 asynchronously, so one can lag behind it, and a range read there could
 miss records the primary holds, which [XFER-1] copies. The primary holds
 each record once its transaction commits.

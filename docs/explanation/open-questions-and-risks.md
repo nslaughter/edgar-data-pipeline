@@ -461,8 +461,8 @@ or changed, listed with their alternatives:
    would leave the database and Garage listening on the host, on kind
    alone.
 4. **The database's primary, not its replicas** ([TRANSFER-5]). The
-   primary holds each record once it's committed. The replicas follow it
-   asynchronously, so a range read from one, as Grafana reads them, could
+   primary holds each record once it's committed. The replicas, which
+   Grafana reads, follow it asynchronously, so a range read from one could
    miss records the primary holds, and [XFER-1] would copy the range
    without them. Reading the replicas would spare the primary the range's
    reads, but the transfer would first have to read the primary's position
