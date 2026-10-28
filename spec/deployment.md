@@ -1077,11 +1077,14 @@ for the fetcher.
   namespace, `edgar` ([§5](#5-dependencies)). Without a context named, it
   reads nothing, rather than the cluster the kubeconfig's current context
   names.
-- **TRANSFER-4** (rule) The transfer reads its role's password and its
-  key's ID and secret from [TRANSFER-1]'s Secrets, through that context's
-  API server, and reads no other Secret. It takes no credential from its
-  environment, a file, or the chart's values, and writes none anywhere: not
-  to `data/`, its output, or a log ([SECRET-4]).
+- **TRANSFER-4** (rule) The transfer reaches that context's API server
+  with the owner's credentials for it, from their kubeconfig
+  ([TRANSFER-3]). Through it, the transfer reads its role's password and
+  its key's ID and secret from [TRANSFER-1]'s Secrets, and reads no other
+  Secret. It takes none of the three from its environment, from a file such
+  as `~/.pgpass` or `~/.aws/credentials`, or from the chart's values, and
+  writes none of them anywhere: not to `data/`, its output, or a log
+  ([SECRET-4]).
 - **TRANSFER-5** (rule) The transfer reaches the database and Garage's S3
   API only through port-forwards that it opens through that context's API
   server, as `kubectl port-forward` does, and closes before it exits: to
@@ -1467,7 +1470,7 @@ keeps PostgreSQL's default, which lets every role execute it.
 | TRANSFER-1 | invariant | tests | The transfer's role's password and key are each in a Secret that no service reads. |
 | TRANSFER-2 | invariant | tests | Neither the database nor Garage is exposed outside the cluster. |
 | TRANSFER-3 | rule | tests | The transfer acts only on the cluster of the context the owner names, and on none without one. |
-| TRANSFER-4 | rule | kind | The transfer reads its credentials only from its Secrets, through the API server, and writes them nowhere. |
+| TRANSFER-4 | rule | kind | The transfer reads its role's password and its key only from its Secrets, through the API server, and writes them nowhere. |
 | TRANSFER-5 | rule | kind | The transfer reads the database's replicas as `transfer`, with channel binding, and the bucket with its key, through port-forwards. |
 | FAKE-1 | invariant | tests | The umbrella chart renders the fake EDGAR only when `fakeEdgar.enabled`, which no committed values file sets. |
 | FAKE-2 | invariant | tests | The fake EDGAR is one replica of its image, with its certificate's Secret mounted but no claim or token, behind a Service with ports 443 and 8080. |
