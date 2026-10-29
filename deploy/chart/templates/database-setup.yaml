@@ -37,8 +37,8 @@ data:
     {{- $dashboards | nindent 4 }}
   setup.sql: |
     -- The store's table, unless it exists, then its grants: the fetcher's
-    -- role may add records, each other service's may only read them, and no
-    -- other role may do either (PG-8, LOG-3).
+    -- role may add records, each other service's and the transfer's may only
+    -- read them, and no other role may do either (PG-8, LOG-3, LOG-5).
     SELECT to_regclass('public.records') IS NULL AS absent \gset
     \if :absent
     BEGIN;
@@ -49,6 +49,7 @@ data:
     {{- if $readers }}
     GRANT SELECT ON TABLE records TO {{ join ", " $readers }};
     {{- end }}
+    GRANT SELECT ON TABLE records TO transfer;
 
     -- The notices' tables and views, and the functions they call, unless
     -- its tables exist, then their grants: the discoverer's role may add
@@ -108,7 +109,7 @@ spec:
             - name: SQL
               value: /sql
             - name: ROLES
-              value: {{ append $services "grafana" | join " " | quote }}
+              value: {{ concat $services (list "grafana" "transfer") | join " " | quote }}
             # As the database's owner, from the Secret CloudNativePG keeps its
             # password in, verifying the server against the Cluster's
             # certificate authority.

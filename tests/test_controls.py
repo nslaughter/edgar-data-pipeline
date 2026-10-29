@@ -104,9 +104,9 @@ REQUIRED: dict[str, Any] = {
         "garage": {"rpcSecret": "0" * 64, "adminToken": "t" * 32},
         "garageKeys": {
             key: {"id": "GK" + "0" * 24, "secret": "0" * 64}
-            for key in ("database-backups", "fetcher", "discoverer")
+            for key in ("database-backups", "fetcher", "discoverer", "transfer")
         },
-        "database": {role: "p" * 16 for role in ("fetcher", "discoverer", "grafana")},
+        "database": {role: "p" * 16 for role in ("fetcher", "discoverer", "grafana", "transfer")},
         "grafana": {"adminPassword": "p" * 16},
     },
     "database": {"backups": {"serverName": "test"}},

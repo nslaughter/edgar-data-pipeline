@@ -38,11 +38,12 @@ spec:
     initdb:
       database: edgar
       owner: edgar
-  # Each service's role, and Grafana's, able to log in and nothing more,
-  # each with its password from a Secret of this chart (PG-7, PG-11).
+  # Each service's role, Grafana's, and the transfer's, able to log in and
+  # nothing more, each with its password from a Secret of this chart (PG-7,
+  # PG-11, PG-15).
   managed:
     roles:
-      {{- range (append .Values.database.services "grafana") }}
+      {{- range (concat .Values.database.services (list "grafana" "transfer")) }}
       - name: {{ . }}
         ensure: present
         login: true

@@ -28,7 +28,7 @@ import subprocess
 import sys
 import tarfile
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -83,11 +83,13 @@ CREDENTIALS: dict[str, Any] = {
         "database-backups": {"id": "GK" + "ba0c" * 6, "secret": "ba05" * 16},
         "fetcher": {"id": "GK" + "fe7c" * 6, "secret": "fe75" * 16},
         "discoverer": {"id": "GK" + "d15c" * 6, "secret": "d155" * 16},
+        "transfer": {"id": "GK" + "7a5c" * 6, "secret": "7a55" * 16},
     },
     "database": {
         "fetcher": "test-fetcher-password-3b7e1d",
         "discoverer": "test-discoverer-password-8c2f4a",
         "grafana": "test-grafana-password-5d9a6e",
+        "transfer": "test-transfer-password-6f1c8b",
     },
     "grafana": {"adminPassword": "test-grafana-admin-password-1e4b7c"},
 }
@@ -811,8 +813,8 @@ def role_secret(role: str) -> dict[str, Any]:
     return named(UMBRELLA, "Secret", roles()[role]["passwordSecret"]["name"])
 
 
-@pytest.mark.spec("PG-7", "PG-11")
-@pytest.mark.parametrize("role", ["fetcher", "discoverer", "grafana"])
+@pytest.mark.spec("PG-7", "PG-11", "PG-15")
+@pytest.mark.parametrize("role", ["fetcher", "discoverer", "grafana", "transfer"])
 def test_each_role_logs_in_without_special_attributes(role: str) -> None:
     given = roles()[role]
 
@@ -821,8 +823,8 @@ def test_each_role_logs_in_without_special_attributes(role: str) -> None:
         assert given[attribute] is False, attribute
 
 
-@pytest.mark.spec("PG-7", "PG-11", "SECRET-1")
-@pytest.mark.parametrize("role", ["fetcher", "discoverer", "grafana"])
+@pytest.mark.spec("PG-7", "PG-11", "PG-15", "SECRET-1")
+@pytest.mark.parametrize("role", ["fetcher", "discoverer", "grafana", "transfer"])
 def test_each_roles_password_is_a_required_value_in_a_secret(role: str) -> None:
     secret = role_secret(role)
     without = copy.deepcopy(TEST_VALUES)
@@ -833,12 +835,12 @@ def test_each_roles_password_is_a_required_value_in_a_secret(role: str) -> None:
     assert render(UMBRELLA, without, check=False).returncode != 0
 
 
-@pytest.mark.spec("PG-7")
-def test_the_roles_are_each_services_and_grafanas() -> None:
+@pytest.mark.spec("PG-7", "PG-15")
+def test_the_roles_are_each_services_grafanas_and_the_transfers() -> None:
     services = values(UMBRELLA)["database"]["services"]
 
     assert services == ["fetcher", "discoverer"]
-    assert sorted(roles()) == sorted([*services, "grafana"])
+    assert sorted(roles()) == sorted([*services, "grafana", "transfer"])
 
 
 # The SQL the database Job applies, and its grants.
@@ -1027,9 +1029,21 @@ def test_each_file_is_applied_in_one_transaction_unless_it_was() -> None:
     assert dashboards == "to_regnamespace('dashboards') IS NULL"
 
 
-@pytest.mark.spec("PG-8", "PG-11")
+@pytest.mark.spec("PG-8", "PG-11", "PG-15")
 def test_only_the_fetchers_role_may_add_records() -> None:
-    assert grants()["records"] == {"fetcher": {"INSERT", "SELECT"}, "discoverer": {"SELECT"}}
+    assert grants()["records"] == {
+        "fetcher": {"INSERT", "SELECT"},
+        "discoverer": {"SELECT"},
+        "transfer": {"SELECT"},
+    }
+
+
+@pytest.mark.spec("PG-15")
+def test_the_transfers_role_is_granted_nothing_but_records() -> None:
+    granted = {name for name, roles in grants().items() if "transfer" in roles}
+
+    assert granted == {"records"}
+    assert grants()["records"]["transfer"] == {"SELECT"}
 
 
 @pytest.mark.spec("PG-12")
@@ -1779,15 +1793,30 @@ def test_the_garage_job_is_a_hook_after_each_install_and_upgrade() -> None:
     assert hook(named(UMBRELLA, "Job", "garage-setup")) == {"post-install", "post-upgrade"}
 
 
-@pytest.mark.spec("GARAGE-2", "GARAGE-4")
+@pytest.mark.spec("GARAGE-2", "GARAGE-4", "GARAGE-5")
 def test_the_values_list_two_buckets_and_their_keys() -> None:
     assert garage_setup()["buckets"] == {
         "database-backups": {"database-backups": {"read": True, "write": True}},
         "snapshots": {
             "fetcher": {"read": True, "write": True},
             "discoverer": {"read": True, "write": False},
+            "transfer": {"read": True, "write": False},
         },
     }
+
+
+@pytest.mark.spec("GARAGE-5", "SECRET-1")
+def test_the_transfers_key_may_only_read_the_stores_bucket() -> None:
+    granted = {
+        bucket: grants["transfer"]
+        for bucket, grants in garage_setup()["buckets"].items()
+        if "transfer" in grants
+    }
+    without = copy.deepcopy(TEST_VALUES)
+    del without["credentials"]["garageKeys"]["transfer"]
+
+    assert granted == {"snapshots": {"read": True, "write": False}}
+    assert render(UMBRELLA, without, check=False).returncode != 0
 
 
 @pytest.mark.spec("GARAGE-4")
@@ -2850,6 +2879,147 @@ def test_no_committed_values_file_sets_the_user_agent() -> None:
     assert "fetcher" in result.stderr
 
 
+# TRANSFER
+
+
+# The Secrets of the transfer's role's password and its key (TRANSFER-1).
+TRANSFER_SECRETS = ("postgres-transfer", "garage-key-transfer")
+
+
+@pytest.mark.spec("TRANSFER-1")
+def test_the_transfers_password_and_key_are_each_in_a_secret_in_the_release_namespace() -> None:
+    password = named(UMBRELLA, "Secret", "postgres-transfer")
+    key = named(UMBRELLA, "Secret", "garage-key-transfer")
+
+    assert roles()["transfer"]["passwordSecret"] == {"name": "postgres-transfer"}
+    assert password["stringData"] == {
+        "username": "transfer",
+        "password": CREDENTIALS["database"]["transfer"],
+    }
+    assert key["stringData"] == {
+        "AWS_ACCESS_KEY_ID": CREDENTIALS["garageKeys"]["transfer"]["id"],
+        "AWS_SECRET_ACCESS_KEY": CREDENTIALS["garageKeys"]["transfer"]["secret"],
+        "AWS_REGION": garage_values()["garage"]["s3"]["api"]["region"],
+    }
+    # In the release namespace, where the chart renders what names none.
+    for secret in (password, key):
+        assert "namespace" not in secret["metadata"]
+
+
+@pytest.mark.spec("TRANSFER-1")
+def test_no_services_container_reads_the_transfers_password_or_key() -> None:
+    services = 0
+    for _, doc in rendered_all():
+        for spec in pod_specs(doc):
+            for container in [*spec.get("initContainers", []), *spec["containers"]]:
+                if not OWN_IMAGE.match(container["image"]):
+                    continue
+                services += 1
+                text = json.dumps([container, spec.get("volumes", [])])
+                for secret in TRANSFER_SECRETS:
+                    assert secret not in text, (doc["metadata"]["name"], secret)
+
+    assert services
+
+
+def selects_the_database(selector: dict[str, str]) -> bool:
+    """Whether a Service's selector would match one of the database's pods,
+    which CloudNativePG labels with the Cluster's name, and with each
+    instance's name and role (TRANSFER-2)."""
+    cluster = the_cluster()["metadata"]["name"]
+    labels: dict[str, Callable[[str], bool]] = {
+        "cnpg.io/cluster": lambda value: value == cluster,
+        "cnpg.io/podRole": lambda value: value == "instance",
+        "cnpg.io/instanceRole": lambda value: value in {"primary", "replica"},
+        "role": lambda value: value in {"primary", "replica"},
+        "cnpg.io/instanceName": lambda value: value.startswith(f"{cluster}-"),
+    }
+    return bool(selector) and all(
+        name in labels and labels[name](value) for name, value in selector.items()
+    )
+
+
+def selects_garage(selector: dict[str, str]) -> bool:
+    """Whether a Service's selector would match Garage's pods."""
+    pods = stateful_set("garage")["spec"]["template"]["metadata"]["labels"]
+    return bool(selector) and selector.items() <= pods.items()
+
+
+@pytest.mark.spec("TRANSFER-2")
+@pytest.mark.parametrize(
+    ("selector", "database", "garage"),
+    [
+        ({"cnpg.io/cluster": "postgres"}, True, False),
+        ({"cnpg.io/cluster": "postgres", "cnpg.io/instanceRole": "primary"}, True, False),
+        ({"role": "replica"}, True, False),
+        ({"cnpg.io/cluster": "other"}, False, False),
+        ({"cnpg.io/cluster": "postgres", "app": "other"}, False, False),
+        ({"app.kubernetes.io/name": "garage"}, False, True),
+        ({"app.kubernetes.io/name": "garage", "app.kubernetes.io/instance": "edgar"}, False, True),
+        ({"app.kubernetes.io/name": "grafana"}, False, False),
+        ({}, False, False),
+    ],
+)
+def test_a_selector_is_known_by_the_pods_it_would_match(
+    selector: dict[str, str], database: bool, garage: bool
+) -> None:
+    assert (selects_the_database(selector), selects_garage(selector)) == (database, garage)
+
+
+@pytest.mark.spec("TRANSFER-2")
+def test_every_service_that_would_select_the_database_or_garage_is_of_type_cluster_ip() -> None:
+    selecting = [
+        (chart, doc)
+        for chart, doc in rendered_all()
+        if doc["kind"] == "Service"
+        and (
+            selects_the_database(doc["spec"].get("selector", {}))
+            or selects_garage(doc["spec"].get("selector", {}))
+        )
+    ]
+
+    assert {doc["metadata"]["name"] for _, doc in selecting} >= {"garage", "garage-admin"}
+    for chart, doc in selecting:
+        assert doc["spec"].get("type", "ClusterIP") == "ClusterIP", (chart, doc["metadata"])
+
+
+@pytest.mark.spec("TRANSFER-2")
+def test_the_database_asks_cloudnativepg_for_no_service_but_its_own() -> None:
+    poolers = [doc for _, doc in rendered_all() if doc["kind"] == "Pooler"]
+
+    assert "services" not in the_cluster()["spec"].get("managed", {})
+    for pooler in poolers:
+        service = pooler["spec"].get("serviceTemplate", {}).get("spec", {})
+        assert service.get("type", "ClusterIP") == "ClusterIP", pooler["metadata"]
+
+
+@pytest.mark.spec("TRANSFER-2")
+def test_no_ingress_routes_to_the_database_or_garage() -> None:
+    selecting = {
+        doc["metadata"]["name"]
+        for _, doc in rendered_all()
+        if doc["kind"] == "Service"
+        and (
+            selects_the_database(doc["spec"].get("selector", {}))
+            or selects_garage(doc["spec"].get("selector", {}))
+        )
+    }
+    cluster = the_cluster()["metadata"]["name"]
+    stores = selecting | {f"{cluster}-rw", f"{cluster}-ro", f"{cluster}-r"}
+
+    for _, doc in rendered_all():
+        if doc["kind"] != "Ingress":
+            continue
+        routed = re.findall(r'"service": \{"name": "([^"]+)"', json.dumps(doc["spec"]))
+        assert not set(routed) & stores, doc["metadata"]["name"]
+
+
+@pytest.mark.spec("TRANSFER-2")
+def test_kind_maps_no_port_of_a_node_to_the_host() -> None:
+    for node in kind_config()["nodes"]:
+        assert "extraPortMappings" not in node, node["role"]
+
+
 # FAKE
 
 
@@ -3018,9 +3188,11 @@ def test_the_committed_values_set_no_credential() -> None:
         ("garageKeys", "database-backups"),
         ("garageKeys", "fetcher"),
         ("garageKeys", "discoverer"),
+        ("garageKeys", "transfer"),
         ("database", "fetcher"),
         ("database", "discoverer"),
         ("database", "grafana"),
+        ("database", "transfer"),
         ("grafana", "adminPassword"),
     ],
 )

@@ -172,10 +172,12 @@ jobs:
               database-backups: {id: "GK$(hex 12)", secret: "$(hex 32)"}
               fetcher: {id: "GK$(hex 12)", secret: "$(hex 32)"}
               discoverer: {id: "GK$(hex 12)", secret: "$(hex 32)"}
+              transfer: {id: "GK$(hex 12)", secret: "$(hex 32)"}
             database:
               fetcher: "$(hex 24)"
               discoverer: "$(hex 24)"
               grafana: "$(hex 24)"
+              transfer: "$(hex 24)"
             grafana:
               adminPassword: "$(hex 24)"
           database:
