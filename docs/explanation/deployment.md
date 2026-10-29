@@ -592,10 +592,11 @@ Later versions add ([deployment, §9][later]):
 | `LEASE` | [LEASE-1], [LEASE-2] | The fetcher's Lease and its timings. | This page |
 | `SCHED` | [SCHED-1] to [SCHED-9] | The scheduler's Deployment, its Lease and the active replica's use of it, its grants, NATS's address, and its consumer of poll events. | This page, and [The scheduler](scheduler.md#replicas) |
 | `FETCHER` | [FETCHER-1] to [FETCHER-13] | The fetcher's Deployment and its handover, its grants, credentials, and stores, NATS's address, its consumers of jobs, and its trust of the fake EDGAR's authority. | This page, and [The fetcher](fetcher.md#replicas) |
+| `TRANSFER` | [TRANSFER-1] to [TRANSFER-6] | The transfer's credentials, in Secrets no service reads, no store exposed outside the cluster, the context the owner names, its port-forwards to the database's primary and Garage, and nothing copied from a cluster that holds the fake EDGAR. | [Security and access](security-and-access.md#what-each-service-may-read-and-write) |
 | `FAKE` | [FAKE-1] to [FAKE-5] | The fake EDGAR, installed only by CI, as the SEC's hosts. | This page, and [Testing and verification](testing-and-verification.md#the-fake-edgar) |
 | `NATS` | [NATS-1] to [NATS-6] | Three servers, the streams, and their durable consumers. | [NATS JetStream](nats-jetstream.md) |
-| `GARAGE` | [GARAGE-1] to [GARAGE-4] | Three nodes, the setup Job, the buckets, and the keys. | [Garage](garage.md) |
-| `PG` | [PG-1] to [PG-14] | PostgreSQL 18, three instances, the database, the roles, the store's table, the notices' tables and views, the dashboards' views, and the backups. | [PostgreSQL 18](postgresql.md) |
+| `GARAGE` | [GARAGE-1] to [GARAGE-5] | Three nodes, the setup Job, the buckets, and the keys, the transfer's read-only key among them. | [Garage](garage.md) |
+| `PG` | [PG-1] to [PG-15] | PostgreSQL 18, three instances, the database, the services' and Grafana's roles, the store's table, the notices' tables and views, the dashboards' views, the backups, and the transfer's read-only role. | [PostgreSQL 18](postgresql.md) |
 | `MON` | [MON-1] to [MON-6] | What's scraped, read-only Grafana and its PostgreSQL data source, Alertmanager, and their replicas. | [Monitoring](monitoring.md) |
 
 [0001]: ../decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
