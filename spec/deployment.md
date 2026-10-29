@@ -1,6 +1,6 @@
 # Specification: deployment
 
-**Status:** Version 1.4.0, draft, October 25, 2026. This document governs
+**Status:** Version 2.0.0, draft, October 28, 2026. This document governs
 what the pipeline's Helm charts install, in which order and at which
 versions, and how they configure what they install: the charts, operators,
 and images they pin; the custom resource definitions they install; each
@@ -11,17 +11,18 @@ Grafana's access to the record; the scheduler's Deployment, Lease,
 ServiceAccount, access to NATS, and durable consumers; the fetcher's
 Deployment, ServiceAccount, credentials, access to its stores and to NATS,
 durable consumers, and trust of the fake EDGAR's certificate authority; the
-fake EDGAR that CI installs for tests, and how the pipeline's images are
-built; the kind cluster they're installed on; the tools that install them;
-and the tests that check them. Where a chart and this document disagree,
-the chart is wrong or this document needs a new version; say which before
-changing either.
+transfer's database role, Garage key, and access to the cluster store from
+outside the cluster; the fake EDGAR that CI installs for tests, and how the
+pipeline's images are built; the kind cluster they're installed on; the
+tools that install them; and the tests that check them. Where a chart and
+this document disagree, the chart is wrong or this document needs a new
+version; say which before changing either.
 
 It rests on the decisions to deploy on Kubernetes with Helm, on kind
 ([0001]); to install the definitions and the operators before the umbrella
 chart, in four releases ([0011]); and to keep the record in PostgreSQL 18
 ([0004]); and on the decisions that chose the other components ([0002],
-[0003], [0005], [0008]). It deploys what the snapshot store's version 1.0.0
+[0003], [0005], [0008]). It deploys what the snapshot store's version 1.1.0
 leaves to it ([`snapshots.md`, §13](snapshots.md#left-to-other-specifications)),
 what the notices' version 0.1.0 leaves to it
 ([`notices.md`, §12](notices.md#left-to-other-specifications)), and, for
@@ -30,9 +31,11 @@ Grafana, what the telemetry's version 0.1.0 leaves to it
 deploys the scheduler, the controller that the controls' version 1.0.0
 describes ([`controls.md`](controls.md)), on the decision to reconcile the
 controls with it ([0007]). It deploys the fetcher, which the snapshot
-store's version 1.0.0 describes
+store's version 1.1.0 describes
 ([`snapshots.md`](snapshots.md#the-fetcher)), on the decision to send every
-request to the SEC through one active fetcher ([0005]). It installs, for
+request to the SEC through one active fetcher ([0005]). It gives the
+transfer, which that version also describes, its access to the cluster
+store ([`snapshots.md`, §8](snapshots.md#8-history)). It installs, for
 CI, the fake EDGAR that the fake EDGAR's version 0.1.0 describes
 ([`fake-edgar.md`](fake-edgar.md)).
 Each component's resource requests and limits, which are measured on kind,
@@ -75,10 +78,11 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
    outside a Secret.** An operator may generate one in the cluster, such as
    the database owner's password ([PG-6]). [SECRET-1], [SECRET-2],
    [SECRET-3], [SECRET-4].
-10. **Only the fetcher writes to the cluster store, and no service can
-    change a record:** each service has credentials of its own, and only
-    the fetcher's may add records and objects ([LOG-3], [LOG-4]). [GARAGE-4],
-    [PG-6], [PG-7], [PG-8], [PG-9], [FETCHER-5].
+10. **Only the fetcher writes to the cluster store, and neither a service
+    nor the transfer can change a record:** each service has credentials of
+    its own, and so does the transfer, and only the fetcher's may add records
+    and objects ([LOG-3], [LOG-4], [LOG-5]). [GARAGE-4], [GARAGE-5], [PG-6],
+    [PG-7], [PG-8], [PG-9], [PG-15], [FETCHER-5], [TRANSFER-1].
 11. **Only the discoverer adds to the notices' tables, no service changes
     them, and Grafana reads only the views made for it,** each with a
     database role of its own ([TABLE-3], [VIEW-3]). [PG-7], [PG-11],
@@ -107,6 +111,13 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
     controls grant it and its Lease needs, and no other service reads its
     credentials. [FETCHER-1], [FETCHER-2], [FETCHER-3], [FETCHER-4],
     [FETCHER-5], [FETCHER-10], [LEASE-1], [LEASE-2], [RBAC-2].
+16. **The transfer reaches the cluster store from outside the cluster only
+    through the API server of the cluster the owner names,** with
+    credentials of its own that may only read, which it takes from that
+    cluster, and it copies nothing from a cluster that holds the fake
+    EDGAR. Nothing the charts render exposes the database or Garage
+    outside the cluster. [PG-15], [GARAGE-5], [TRANSFER-1], [TRANSFER-2],
+    [TRANSFER-3], [TRANSFER-4], [TRANSFER-5], [TRANSFER-6].
 
 ## 2. Terms
 
@@ -140,6 +151,9 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
 - **The cluster store:** the store's objects in Garage and records in
   PostgreSQL, as the snapshot store's specification describes it
   ([`snapshots.md`](snapshots.md#the-cluster-store)).
+- **The transfer:** the program the owner runs, outside the cluster, that
+  copies records and their objects from the cluster store into `data/`
+  ([`snapshots.md`](snapshots.md#2-terms)). It isn't a service.
 - **The notices' tables and views:** those that
   [`schemas/notices.sql`](schemas/notices.sql) defines, in which the
   discoverer keeps what it finds
@@ -158,10 +172,12 @@ Each guarantee holds because of the statements it lists ([§3](#3-statement-ids)
 Every normative statement in this document has an ID, such as `PG-1`: an
 area and a number. The areas `CHART`, `PIN`, `PG`, `CRD`, `IMG`, `KIND`,
 `VOL`, `PLACE`, `NATS`, `GARAGE`, `MON`, `SECRET`, `LEASE`, `SCHED`,
-`FETCHER`, and `FAKE` belong to this document. `FETCHER`, the fetcher's
-deployment, is an area apart from the snapshot store's `FETCH`, its rules
-for fetching. An ID is assigned once and never reused or renumbered. A
-statement that is dropped stays in the [index](#8-index), marked retired.
+`FETCHER`, `TRANSFER`, and `FAKE` belong to this document. `FETCHER`, the
+fetcher's deployment, is an area apart from the snapshot store's `FETCH`,
+its rules for fetching, and `TRANSFER`, the transfer's access to the
+cluster store, one apart from the store's `XFER`, its rules for copying. An
+ID is assigned once and never reused or renumbered. A statement that is
+dropped stays in the [index](#8-index), marked retired.
 
 Each statement is one of two kinds:
 
@@ -193,9 +209,10 @@ done. This version's statements come before the charts they describe: T20
 builds the charts and writes their tests, apart from [IMG-1] to [IMG-3]'s,
 [IMG-5]'s, and [FAKE-1] to [FAKE-5]'s, which T21 writes with the first of
 the pipeline's images, the fake EDGAR's; [LEASE-1]'s, [LEASE-2]'s, and
-[FETCHER-1] to [FETCHER-13]'s, which T23 writes with the fetcher; and
-[SCHED-1] to [SCHED-9]'s, which T22 writes with the scheduler. Until then
-each awaits its task.
+[FETCHER-1] to [FETCHER-13]'s, which T23 writes with the fetcher;
+[SCHED-1] to [SCHED-9]'s, which T22 writes with the scheduler; and
+[PG-15]'s, [GARAGE-5]'s, and [TRANSFER-1] to [TRANSFER-6]'s, which T36
+writes with the transfer. Until then each awaits its task.
 
 ## 4. Layout
 
@@ -517,7 +534,7 @@ takes it, and no notice that follows a message before `NOTICES` does.
   what it would create already exists. In this version, the values list
   two buckets: `database-backups`, with one key, which may read and write
   only that bucket, for the database's backups ([PG-4]); and the cluster
-  store's bucket, with its keys ([GARAGE-4]).
+  store's bucket, with its keys ([GARAGE-4], [GARAGE-5]).
 - **GARAGE-3** (rule) In the installed charts, Garage's layout holds its
   three nodes, in three zones, each node holding a copy of every object.
   Each bucket and key the values list exists, with the grants they give,
@@ -527,10 +544,15 @@ takes it, and no notice that follows a message before `NOTICES` does.
   bucket: the fetcher's may read and write it, and each other service's
   may only read it ([LOG-4]). No key has Garage's `owner` permission on
   any bucket, which would let it change the bucket's configuration. In
-  this version, the values list two keys for the bucket: the fetcher's,
-  and the discoverer's, which may only read it
-  ([`notices.md`, §12](notices.md#left-to-other-specifications)). Each
-  other service's comes with that service ([§9](#9-later-versions)).
+  this version, the values list three keys for the bucket: the fetcher's;
+  the discoverer's, which may only read it
+  ([`notices.md`, §12](notices.md#left-to-other-specifications)); and the
+  transfer's ([GARAGE-5]). Each other service's comes with that service
+  ([§9](#9-later-versions)).
+- **GARAGE-5** (invariant) The transfer has a key of its own, `transfer`,
+  which may only read `snapshots`, may use no other bucket, and has
+  Garage's `owner` permission on none ([LOG-5]). Its ID and secret are
+  values of the umbrella chart, as every key's are ([SECRET-1]).
 
 ### Monitoring
 
@@ -589,7 +611,8 @@ values, so the same values render the same chart.
   none of its committed values files sets it, so `helm template` fails
   without it. In this version: Garage's RPC secret and admin token, the ID
   and secret of each Garage key, the password of each service's database
-  role ([PG-7]) and of Grafana's ([PG-11]), and Grafana's admin password.
+  role ([PG-7]), of Grafana's ([PG-11]), and of the transfer's ([PG-15]),
+  and Grafana's admin password.
   The chart renders each into a Secret, from which its component reads it.
 - **SECRET-2** (invariant) The charts render the same manifests from the
   same values: nothing they render is generated as they render it, such as
@@ -1001,6 +1024,101 @@ How the chart gives the scheduler its Lease's name and timings, NATS's
 address, and the release namespace, as arguments or in its environment, is
 for the chart and the scheduler to agree.
 
+### The transfer
+
+The owner runs the transfer outside the cluster, where `data/` is, to copy
+records and their objects from the cluster store into it ([XFER-1]). It
+isn't a service, so it holds no service's credentials: it reads the store
+as a database role and with a Garage key of its own, each of which may only
+read it ([LOG-5]). So a mistake in the transfer can't change the cluster
+store, and the services' credentials never leave the cluster.
+
+Nothing the charts render exposes the database or Garage outside the
+cluster ([TRANSFER-2]), so the transfer reaches them through the Kubernetes
+API server, with the context the owner names from their kubeconfig.
+Through it, the transfer reads its own credentials from the Secrets the
+umbrella chart renders them into, and opens a port-forward to each store,
+as `kubectl port-forward` does. So it needs nothing of the cluster that the
+owner's context can't already do, and it works the same on kind as on any
+other cluster the charts are installed on. It reads the database's
+primary, where the fetcher writes each record ([FETCHER-7]), rather than
+its replicas, which Grafana reads ([MON-5]). The replicas follow the primary
+asynchronously, so one can lag behind it, and a range read there could
+miss records the primary holds, which [XFER-1] copies. The primary holds
+each record once its transaction commits.
+
+A context can't tell a test cluster from the owner's: kind names each
+cluster made from `deploy/kind.yaml` `edgar`, and its context `kind-edgar`,
+unless it's given another name. A test cluster's records are of fetches
+the fake EDGAR answered, not the SEC, and `data/` would keep them for good
+([LOG-1]). So the transfer copies nothing from a cluster that holds the
+fake EDGAR ([TRANSFER-6]). It reads the range there all the same, so the
+tests on kind, whose cluster holds the fake EDGAR, check its access to the
+cluster store.
+
+A port-forward carries the transfer's connection through the API server to
+the pod's node, and from there into the pod. What the transfer reads
+becomes records that `data/` keeps for good ([LOG-1]), so it authenticates
+the database itself. It can't check the server's certificate against the
+`Cluster`'s certificate authority, as the fetcher does ([FETCHER-7]),
+without reading the Secret that holds the authority's certificate, which
+holds the authority's key too, since the API server returns a Secret whole.
+It requires SCRAM's channel binding instead, with which only a server that
+holds the role's password verifier completes the connection. Garage's S3
+API speaks plain HTTP through the port-forward, as it does in the cluster:
+a request carries a signature made with the key's secret, never the secret
+itself ([FETCHER-6]). Each object is named by its body's SHA-256
+([OBJ-1]), which `verify.py` checks of every object the transfer places in
+`data/`.
+
+How the transfer learns the `Cluster`'s name, the Secrets' names, the
+bucket, and the region is for the chart and the transfer to agree, as it is
+for the fetcher.
+
+- **TRANSFER-1** (invariant) The umbrella chart renders the password of the
+  database role `transfer` ([PG-15]) and the ID and secret of the Garage
+  key `transfer` ([GARAGE-5]) each into a Secret in the release namespace.
+  No service's container reads either, in its environment or from a volume.
+- **TRANSFER-2** (invariant) The charts expose neither the database nor
+  Garage outside the cluster. Every Service the charts render whose
+  selector would match the database's pods, which CloudNativePG labels
+  with the `Cluster`'s name in `cnpg.io/cluster`, or Garage's pods is of
+  type `ClusterIP`, and so is every Service they ask CloudNativePG to make:
+  the `Cluster` asks for none but those CloudNativePG makes for every
+  `Cluster`, which are of that type, and any `Pooler` the charts render
+  asks for one of that type. No Ingress the charts render routes to
+  either, and `deploy/kind.yaml` maps no port of a node to the host.
+- **TRANSFER-3** (rule) The transfer acts only on the cluster of the
+  Kubernetes context the owner names when they run it, in the release
+  namespace, `edgar` ([§5](#5-dependencies)). Without a context named, it
+  reads nothing, rather than the cluster the kubeconfig's current context
+  names.
+- **TRANSFER-4** (rule) The transfer reaches that context's API server
+  with the owner's credentials for it, from their kubeconfig
+  ([TRANSFER-3]). Through it, the transfer reads its role's password and
+  its key's ID and secret from [TRANSFER-1]'s Secrets, and reads no other
+  Secret. It takes none of the three from its environment, from a file such
+  as `~/.pgpass` or `~/.aws/credentials`, or from the chart's values, and
+  writes none of them anywhere: not to `data/`, its output, or a log
+  ([SECRET-4]).
+- **TRANSFER-5** (rule) The transfer reaches the database and Garage's S3
+  API only through port-forwards that it opens through that context's API
+  server, as `kubectl port-forward` does, and closes before it exits: to
+  port 5432 of the Service that CloudNativePG makes for the `Cluster`'s
+  primary, the `Cluster`'s name followed by `-rw`, and to the S3 port,
+  3900, of the Service `garage`. It reads the database `edgar` as the role
+  `transfer` ([PG-15]), over TLS and with SCRAM's channel binding, as
+  libpq's `sslmode=require` and `channel_binding=require` ask, and the
+  bucket `snapshots` with the key `transfer` ([GARAGE-5]), in the region
+  that the chart's values give Garage's S3 API.
+- **TRANSFER-6** (rule) The transfer copies nothing from a cluster whose
+  release namespace holds the fake EDGAR's Deployment, `fake-edgar`
+  ([FAKE-2]), which CI installs and the owner's installations don't
+  ([FAKE-1], [FAKE-4]), and says that the fake EDGAR is installed there. It
+  looks for the Deployment through that context's API server. It reads the
+  range there all the same, through [TRANSFER-5]'s port-forwards, but
+  writes nothing to `data/`.
+
 ### The fake EDGAR
 
 The tests on kind fetch from the fake EDGAR, so they never reach the SEC
@@ -1176,8 +1294,9 @@ the drills in the [plan](../docs/plan.md).
 
 The cluster store's records are a table in the pipeline's database
 ([STORE-1], [STORE-2]). Its owner creates the table and grants each
-service's role what [LOG-3] allows, and no service connects as the owner,
-who could change a record.
+service's role what [LOG-3] allows, and the transfer's what [LOG-5]
+allows, and neither a service nor the transfer connects as the owner, who
+could change a record.
 
 - **PG-6** (invariant) The `Cluster` creates one database, `edgar`, the
   pipeline's database, owned by the role `edgar`, whose password
@@ -1199,8 +1318,9 @@ who could change a record.
     the file in one transaction, so the table never exists without its
     index;
   - grants the fetcher's role `INSERT` and `SELECT` on `records`, each
-    other service's role `SELECT` only ([LOG-3]), and no other role any
-    privilege on it, but its owner.
+    other service's role `SELECT` only ([LOG-3]), the transfer's role
+    `SELECT` only ([LOG-5]), and no other role any privilege on it, but its
+    owner.
 
   `deploy/chart/files/records.sql` is a copy of
   [`spec/schemas/records.sql`](schemas/records.sql), since Helm reads only
@@ -1212,6 +1332,14 @@ who could change a record.
   insert a row and select it; every other service's role can select it;
   and no service's role can update, delete, or truncate a row, nor any but
   the fetcher's insert one.
+- **PG-15** (invariant) The transfer reads `edgar` as a role of its own,
+  `transfer`, which the `Cluster` declares in `managed.roles`, able to log
+  in, and without superuser, `createdb`, `createrole`, `replication`, or
+  `bypassrls`. Its password comes from a Secret the umbrella chart renders
+  from a required value ([SECRET-1], [TRANSFER-1]). [PG-8]'s Job grants it
+  `SELECT` on `records` ([LOG-5]). It's not a service's role, so [PG-12]
+  and [PG-13] grant it nothing on the notices' tables and views or on
+  `dashboards`.
 
 ### The notices and the dashboards
 
@@ -1298,6 +1426,7 @@ keeps PostgreSQL's default, which lets every role execute it.
 | PG-12 | invariant | tests | The hook Job creates the notices' tables and views from a copy of `notices.sql`, in one transaction, and grants only the discoverer's role inserts. |
 | PG-13 | invariant | tests | The hook Job creates the schema `dashboards` from a copy of `dashboards.sql`, in one transaction, and grants only Grafana's role its views. |
 | PG-14 | rule | kind | The notices' tables and the dashboards' views are as their files define them; only the discoverer's role inserts, every service's role reads the notices' views, no service's role changes a row, and Grafana's role reads only the dashboards' views. |
+| PG-15 | invariant | tests | The transfer has a database role of its own, `transfer`, without special attributes, its password from a value, granted only `SELECT` on `records`. |
 | CRD-1 | invariant | tests | Every definition is a template, none from a `crds/` directory. |
 | CRD-2 | invariant | tests | Each definition is rendered by the chart the table gives it; the umbrella chart renders none. |
 | CRD-3 | invariant | tests | Each resource's definition, and any webhook that fails closed on it, comes from an earlier chart. |
@@ -1326,6 +1455,7 @@ keeps PostgreSQL's default, which lets every role execute it.
 | GARAGE-2 | invariant | tests | A hook Job sets the layout, keys, buckets, and grants, and can run again. |
 | GARAGE-3 | rule | kind | Garage's layout, buckets, keys, and grants are as the values say. |
 | GARAGE-4 | invariant | tests | The store's bucket is `snapshots`; only the fetcher's key may write it, and no key owns a bucket. |
+| GARAGE-5 | invariant | tests | The transfer has a key of its own, `transfer`, which may only read `snapshots`, and no other bucket. |
 | MON-1 | invariant | tests | Nothing kind doesn't expose is scraped. |
 | MON-2 | invariant | tests | Grafana is read-only; its data sources come from its own value, which restarts it, and its sidecar provisions dashboards only. |
 | MON-3 | invariant | tests | Alertmanager sends nothing outside the cluster. |
@@ -1360,6 +1490,12 @@ keeps PostgreSQL's default, which lets every role execute it.
 | SCHED-7 | invariant | tests | The scheduler is given NATS's address, and no NATS credential. |
 | SCHED-8 | invariant | tests | The values list the scheduler's durable consumer of poll events, `scheduler-polls`, on `RECORDS`, as NATS-5 configures each consumer. |
 | SCHED-9 | rule | tests | The scheduler makes no stream or consumer, and waits for those it reads. |
+| TRANSFER-1 | invariant | tests | The transfer's role's password and key are each in a Secret that no service reads. |
+| TRANSFER-2 | invariant | tests | Neither the database nor Garage is exposed outside the cluster: each Service that would select their pods is of type `ClusterIP`. |
+| TRANSFER-3 | rule | tests | The transfer acts only on the cluster of the context the owner names, and on none without one. |
+| TRANSFER-4 | rule | kind | The transfer reads its role's password and its key only from its Secrets, through the API server, and writes them nowhere. |
+| TRANSFER-5 | rule | kind | The transfer reads the database's primary as `transfer`, with channel binding, and the bucket with its key, through port-forwards. |
+| TRANSFER-6 | rule | kind | The transfer copies nothing from a cluster that holds the fake EDGAR, though it reads the range there. |
 | FAKE-1 | invariant | tests | The umbrella chart renders the fake EDGAR only when `fakeEdgar.enabled`, which no committed values file sets. |
 | FAKE-2 | invariant | tests | The fake EDGAR is one replica of its image, with its certificate's Secret mounted but no claim or token, behind a Service with ports 443 and 8080. |
 | FAKE-3 | invariant | tests | A certificate authority of the release's own, through cert-manager, issues the fake EDGAR's certificate for the SEC's hosts. |
@@ -1439,7 +1575,12 @@ as the scheduler's was, and confirmed the same day that it leaves the
 fetcher's resource requests and limits, its probes, and its NATS
 credentials to the later versions above, items 4 and 7: version 1.4.0.
 The owner confirmed on October 25, 2026 the details that version
-settles.
+settles. The owner decided on October 28, 2026 that the transfer's access
+to the cluster store is specified in a version of this document before the
+transfer is built, as each service's deployment is, and that the snapshot
+store's specification states the transfer's grants, in its version 1.1.0:
+version 2.0.0. The owner confirmed the same day the details that version
+settles, its major version among them.
 
 ## 10. Changes to this document
 
@@ -1570,6 +1711,38 @@ Job then makes them on the stream, which keeps each job it holds until a
 consumer acknowledges it. The fetcher takes each such job as any other, and
 acknowledges a poll's job that has expired without a request ([JOB-5]).
 
+### From version 1.4.0
+
+Version 2.0.0 gives the transfer, which the owner runs outside the cluster,
+its access to the cluster store. [PG-8]'s Job now grants the transfer's role
+`SELECT` on `records`, where [PG-8] granted no role but the services' and
+the owner's any privilege on it. That changes the statement's meaning, so
+it's a major version. It also adds statements, an area, a term, and a
+guarantee, and lengthens the lists that [GARAGE-4] and [SECRET-1] give for
+this version:
+
+- **The transfer's credentials:** its database role, `transfer`, granted
+  only `SELECT` on `records`, [PG-15] and [PG-8]; its Garage key,
+  `transfer`, which may only read the store's bucket, [GARAGE-5] and
+  [GARAGE-4]; and their password, ID, and secret among the required
+  values, [SECRET-1], each in a Secret that no service reads,
+  [TRANSFER-1]. The transfer joins guarantee 10.
+- **How the transfer reaches the store:** nothing exposes the database or
+  Garage outside the cluster, [TRANSFER-2]; the transfer acts on the
+  cluster of the context the owner names, [TRANSFER-3]; it reads its
+  role's password and its key from their Secrets through the API server,
+  [TRANSFER-4]; it reads the database's primary, with channel binding, and
+  the bucket, through port-forwards, [TRANSFER-5]; and it copies nothing
+  from a cluster that holds the fake EDGAR, [TRANSFER-6]. That is
+  guarantee 16.
+- **The term the transfer, and the area `TRANSFER`,** apart from the
+  snapshot store's `XFER`, [§2](#2-terms) and [§3](#3-statement-ids).
+
+Nothing changes on a cluster until T36 builds the transfer, which adds its
+role, its key, and their Secrets to the umbrella chart, and the role's
+grant to [PG-8]'s Job. The Job runs after each upgrade, so the upgrade that
+adds the role grants it, and no service's grants change.
+
 [0001]: ../docs/decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
 [0002]: ../docs/decisions/0002-store-bodies-in-garage.md
 [0003]: ../docs/decisions/0003-queue-work-in-nats-jetstream.md
@@ -1628,6 +1801,7 @@ acknowledges a poll's job that has expired without a request ([JOB-5]).
 [GARAGE-2]: #garage
 [GARAGE-3]: #garage
 [GARAGE-4]: #garage
+[GARAGE-5]: #garage
 [ID-2]: snapshots.md#the-fetcher
 [IMG-1]: #the-pipelines-own-images
 [IMG-2]: #the-pipelines-own-images
@@ -1645,8 +1819,10 @@ acknowledges a poll's job that has expired without a request ([JOB-5]).
 [LEASE-2]: #the-fetchers-lease
 [LIST-1]: notices.md#8-backfills
 [LIST-3]: notices.md#8-backfills
+[LOG-1]: snapshots.md#8-history
 [LOG-3]: snapshots.md#8-history
 [LOG-4]: snapshots.md#8-history
+[LOG-5]: snapshots.md#8-history
 [METRIC-1]: telemetry.md#4-metrics
 [METRIC-3]: telemetry.md#the-scheduler
 [METRIC-4]: telemetry.md#the-fetchers-clock
@@ -1659,6 +1835,7 @@ acknowledges a poll's job that has expired without a request ([JOB-5]).
 [NATS-5]: #durable-consumers
 [NATS-6]: #durable-consumers
 [NOTICE-1]: notices.md#8-backfills
+[OBJ-1]: snapshots.md#5-objects
 [NOTICE-2]: notices.md#8-backfills
 [ORDER-1]: notices.md#8-backfills
 [PG-1]: #7-postgresql
@@ -1675,6 +1852,7 @@ acknowledges a poll's job that has expired without a request ([JOB-5]).
 [PG-12]: #the-notices-and-the-dashboards
 [PG-13]: #the-notices-and-the-dashboards
 [PG-14]: #the-notices-and-the-dashboards
+[PG-15]: #the-stores-database
 [PIN-1]: #6-pins
 [PIN-2]: #6-pins
 [PIN-3]: #6-pins
@@ -1710,9 +1888,16 @@ acknowledges a poll's job that has expired without a request ([JOB-5]).
 [STORE-2]: snapshots.md#the-cluster-store
 [TABLE-2]: notices.md#4-the-record-of-notices
 [TABLE-3]: notices.md#4-the-record-of-notices
+[TRANSFER-1]: #the-transfer
+[TRANSFER-2]: #the-transfer
+[TRANSFER-3]: #the-transfer
+[TRANSFER-4]: #the-transfer
+[TRANSFER-5]: #the-transfer
+[TRANSFER-6]: #the-transfer
 [VAL-4]: controls.md#5-the-charts-values
 [VIEW-2]: telemetry.md#8-the-views-grafana-reads
 [VIEW-3]: telemetry.md#8-the-views-grafana-reads
 [VOL-1]: #volumes
 [VOL-2]: #volumes
 [VOL-3]: #volumes
+[XFER-1]: snapshots.md#records-the-cluster-made

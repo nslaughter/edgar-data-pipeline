@@ -1,7 +1,7 @@
 # Garage
 
-<!-- status: Garage; The snapshot store in the cluster -->
-**Status** ([status page](../status.md)): Garage: Built. The snapshot store in the cluster: Built.
+<!-- status: Garage; The snapshot store in the cluster; The transfer from the cluster to git -->
+**Status** ([status page](../status.md)): Garage: Built. The snapshot store in the cluster: Built. The transfer from the cluster to git: Specified.
 <!-- end status -->
 
 Garage is the pipeline's object store, which holds every body the fetcher
@@ -42,10 +42,11 @@ An object has the same name in both stores, and a record's `object` names
 its object in its own store ([the cluster store][STORE-1]). So the
 transfer, which the owner runs, can copy a record and its object from the
 cluster into `data/` unchanged, for a finding to cite ([XFER-1], [XFER-2]).
-Only the fetcher writes to the cluster store, and no service can change a
-record ([deployment, §1][dep-guarantees]): the database refuses a change to
-a row ([LOG-3]), and the bucket's keys keep every service but the fetcher
-from writing ([LOG-4]). The cluster store meets the git store's invariants
+Only the fetcher writes to the cluster store, and neither a service nor
+the transfer can change a record ([deployment, §1][dep-guarantees]): the
+database refuses a change to a row ([LOG-3]), and the bucket's keys keep
+every service but the fetcher from writing ([LOG-4]), as the transfer's
+key does the transfer ([LOG-5]). The cluster store meets the git store's invariants
 of objects and records ([STORE-3]). The records and the table that holds
 them are on [PostgreSQL 18](postgresql.md#the-stores-table-records).
 
@@ -136,13 +137,16 @@ flowchart LR
 
 | Bucket | Holds | Keys | Specified by |
 | --- | --- | --- | --- |
-| `snapshots` | The cluster store's objects | The fetcher's, which may read and write it; each other service's, which may only read it, and no other bucket | [GARAGE-4], [LOG-4] |
+| `snapshots` | The cluster store's objects | The fetcher's, which may read and write it; each other service's, which may only read it, and no other bucket; and the transfer's, which may only read it, and no other bucket | [GARAGE-4], [GARAGE-5], [LOG-4], [LOG-5] |
 | `database-backups` | The database's write-ahead log and base backups, under each cluster's server name | One, which may read and write only that bucket | [GARAGE-2], [PG-4] |
 
 In the deployment's version 1.1.0, the values list two keys for
 `snapshots`: the fetcher's, and the discoverer's, which may only read it.
 Each other service's comes with that service ([GARAGE-4],
-[deployment, §9][later]).
+[deployment, §9][later]). Version 2.0.0 adds the transfer's, `transfer`,
+which the owner's transfer uses from outside the cluster, through a
+port-forward of the API server, since nothing exposes Garage's S3 API
+outside it ([GARAGE-5], [TRANSFER-2], [TRANSFER-5]).
 
 The discoverer reads each list, header, and index page from the bucket
 ([SEEN-1], [FILE-3]). The parse workers will read each XBRL instance from
@@ -314,6 +318,9 @@ would use SeaweedFS, which also offers object lock ([0002]).
 [GARAGE-2]: ../../spec/deployment.md#garage
 [GARAGE-3]: ../../spec/deployment.md#garage
 [GARAGE-4]: ../../spec/deployment.md#garage
+[GARAGE-5]: ../../spec/deployment.md#garage
+[TRANSFER-2]: ../../spec/deployment.md#the-transfer
+[TRANSFER-5]: ../../spec/deployment.md#the-transfer
 [KIND-1]: ../../spec/deployment.md#the-kind-cluster
 [KIND-2]: ../../spec/deployment.md#the-kind-cluster
 [later]: ../../spec/deployment.md#9-later-versions
@@ -340,6 +347,7 @@ would use SeaweedFS, which also offers object lock ([0002]).
 [LOG-2]: ../../spec/snapshots.md#8-history
 [LOG-3]: ../../spec/snapshots.md#8-history
 [LOG-4]: ../../spec/snapshots.md#8-history
+[LOG-5]: ../../spec/snapshots.md#8-history
 [OBJ-1]: ../../spec/snapshots.md#5-objects
 [OBJ-4]: ../../spec/snapshots.md#5-objects
 [REC-3]: ../../spec/snapshots.md#6-records

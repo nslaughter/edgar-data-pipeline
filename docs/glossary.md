@@ -473,6 +473,15 @@ says how long they're kept, so the
 [estimates](explanation/estimates.md#the-databases-archive) keep every
 one.
 
+### Channel binding
+
+A part of SCRAM, PostgreSQL's password authentication, that ties the
+password's exchange to the TLS connection it runs over. Only a server that
+holds the role's password verifier, and is the end of that same
+connection, completes it, so one in between that relays to the real server
+can't. The transfer requires it of the database, rather than checking the
+server's certificate ([TRANSFER-5]).
+
 ### Chart
 
 A Helm chart: Kubernetes manifests, templated from values, that Helm
@@ -562,6 +571,15 @@ of Kubernetes resources as metrics, the controls' status among them
 ([§2 of the telemetry][telemetry-terms],
 [§5 of the telemetry][telemetry-state]).
 
+### Kubeconfig and context
+
+A kubeconfig is the file that `kubectl` and other clients of Kubernetes
+read, and holds the user's contexts. Each context names a cluster's API
+server, the user's credentials for it, and a namespace. kind adds one for
+each cluster it makes, named `kind-` and the cluster's name. The transfer
+acts only on the cluster of the context the owner names, with that
+context's credentials ([TRANSFER-3], [TRANSFER-4]).
+
 ### Lease
 
 A Kubernetes object that one of several replicas holds, and renews, to be
@@ -586,6 +604,15 @@ A controller that runs a piece of software on Kubernetes from custom
 resources: CloudNativePG runs the database from its `Cluster`, and the
 Prometheus operator runs Prometheus and its rules ([0004], [0008],
 [0011]).
+
+### Port-forward
+
+A connection from a port of the user's machine to a port of one pod in a
+cluster, such as a pod behind a Service, carried through the API server to
+the pod's node, as `kubectl port-forward` opens one. It needs nothing
+exposed outside the cluster, only a context allowed to open it. The
+transfer reaches the database and Garage's S3 API through port-forwards
+([TRANSFER-5]).
 
 ### promtool
 
@@ -798,6 +825,9 @@ open. A statement checked by `operator` is the owner's to keep
 [METRIC-2]: ../spec/telemetry.md#4-metrics
 [LEASE-1]: ../spec/deployment.md#the-fetchers-lease
 [FETCHER-3]: ../spec/deployment.md#the-fetcher
+[TRANSFER-3]: ../spec/deployment.md#the-transfer
+[TRANSFER-4]: ../spec/deployment.md#the-transfer
+[TRANSFER-5]: ../spec/deployment.md#the-transfer
 [LAG-1]: ../spec/notices.md#10-times-and-lags
 [STATUS-1]: ../spec/site.md#6-status
 [STATUS-2]: ../spec/site.md#6-status

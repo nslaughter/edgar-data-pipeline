@@ -1,15 +1,15 @@
 # Specification: the snapshot store
 
-**Status:** Version 1.0.0, draft, October 12, 2026. This document governs
+**Status:** Version 1.1.0, draft, October 28, 2026. This document governs
 the pipeline's two stores of what it fetches from the SEC, and every
 program that writes or reads them. The git store, everything under `data/`,
 is written by `scripts/snapshot.py` and by the transfer from the cluster,
 checked by `scripts/verify.py`, and read by imports. The cluster store,
 objects in Garage and records in PostgreSQL, is written by the fetcher from
 the jobs that the scheduler and the discoverer queue, and read by the
-pipeline's other services. Where code and this document disagree, the code
-is wrong or this document needs a new version; say which before changing
-either.
+pipeline's other services and by the transfer. Where code and this document
+disagree, the code is wrong or this document needs a new version; say which
+before changing either.
 
 Version 1.0.0 extends the store to the cluster. It rests on the decisions
 to store bodies in Garage ([0002]), to queue work in NATS JetStream
@@ -18,9 +18,10 @@ request to the SEC through one active fetcher ([0005]), to control the
 pipeline through custom resources ([0007]), to read EDGAR through
 `edgar-asof` ([0009]), and to record every time raw, as its source gives it
 ([0010]). [§14](#14-changes-to-this-document) says how data written under
-version 0.2.0 is read. The data comes from the U.S. Securities and Exchange
-Commission's EDGAR system; this document depends on how EDGAR behaves only
-where it cites a finding.
+version 0.2.0 is read. Version 1.1.0 gives the transfer credentials of its
+own for the cluster store, which may only read it ([LOG-5]). The data comes
+from the U.S. Securities and Exchange Commission's EDGAR system; this
+document depends on how EDGAR behaves only where it cites a finding.
 
 ## 1. Guarantees
 
@@ -38,8 +39,9 @@ the statements it lists ([§3](#3-statement-ids)).
 4. **Nothing stored is changed or removed.** A correction is a new record.
    In the git store, its history shows this: [LOG-1], [LOG-2], with the one
    exception in [OBJ-3]. In the cluster, the database refuses a change to a
-   record ([LOG-3]). Garage can't refuse a change to an object ([0002]), so
-   the pipeline makes none ([LOG-4]), and a check of the objects finds any
+   record ([LOG-3], [LOG-5]). Garage can't refuse a change to an object
+   ([0002]), so the pipeline makes none ([LOG-4]), nor can the transfer,
+   whose key may only read ([LOG-5]), and a check of the objects finds any
    other ([STORE-3]).
 5. **No requester identity is stored.** [ID-1], [ID-2].
 6. **Every request keeps the SEC's rules,** whichever program sends it: the
@@ -63,9 +65,9 @@ the statements it lists ([§3](#3-statement-ids)).
 - **Writer:** a program that fetches into a store: `scripts/snapshot.py`,
   into the git store, and **the fetcher**, the pipeline's service that sends
   every request from the cluster ([0005]), into the cluster store.
-- **The transfer:** a program the owner runs, which copies records and their
-  objects from the cluster store into the git store
-  ([§9](#9-scope)). It sends no request to the SEC.
+- **The transfer:** a program the owner runs outside the cluster, where
+  `data/` is, which copies records and their objects from the cluster store
+  into the git store ([§9](#9-scope)). It sends no request to the SEC.
 - **Feed:** a named set of URLs fetched for one purpose. A name, of a feed or
   an import, matches `[a-z0-9][a-z0-9-]*`. Which feeds exist is for the
   source investigation ([open question 1](#13-open-questions)).
@@ -117,10 +119,12 @@ Go test sets ([0006]). A test, `tests/test_spec_coverage.py`, enforces both,
 except for a statement whose tests a later task in the
 [plan](../docs/plan.md) writes. It lists such a statement as awaiting that
 task, and fails if the statement has a test or the plan marks the task
-done. Of the statements new in this version, those of the schemas have
+done. Of the statements new in version 1.0.0, those of the schemas have
 their tests now. The others await the tasks that build what they describe:
-T35 brings `snapshot.py` and `verify.py` to this version, T22 builds the
+T35 brings `snapshot.py` and `verify.py` to that version, T22 builds the
 scheduler, T23 the fetcher, T24 the discoverer, and T36 the transfer.
+[LOG-5], new in version 1.1.0, awaits T36 too, which gives the transfer its
+role and key.
 
 ## 4. Layout
 
@@ -149,9 +153,9 @@ PostgreSQL, the pipeline's database:
 ```
 
 An object has the same name in both stores, and a record's `object` names
-its object in its own store. Which bucket and which database, and each
-service's credentials for them, are for the deployment specification
-([§13](#left-to-other-specifications)).
+its object in its own store. Which bucket and which database, and the
+credentials of each service and of the transfer for them, are for the
+deployment specification ([§13](#left-to-other-specifications)).
 
 - **STORE-1** (invariant) [`schemas/records.sql`](schemas/records.sql)
   defines the table `records`, with a column for each field of
@@ -314,6 +318,17 @@ and objects as they were:
 - **LOG-4** (rule) Objects are only added to the bucket: only the fetcher's
   key may write to it, and the fetcher never deletes or replaces an object.
   Each other service's key may only read it ([0002]).
+
+The transfer isn't one of the pipeline's services: the owner runs it,
+outside the cluster ([§2](#2-terms)). It reads the cluster store with
+credentials of its own, so that a mistake in it can't change what it
+copies, and so that it holds no service's:
+
+- **LOG-5** (rule) The transfer reads the cluster store only as a database
+  role of its own, which may only select records, and with a Garage key of
+  its own, which may only read the bucket. So neither may add, change, or
+  remove a record or an object. It never connects as the database's owner,
+  nor with a service's role or key ([0002], [0004]).
 
 ## 9. Scope
 
@@ -636,6 +651,7 @@ the bucket, and keeps its manifest as the facts specification will say
 | LOG-2 | invariant | verify | Objects and manifests are only added. |
 | LOG-3 | rule | kind | The database lets only the fetcher add records, and no one change them. |
 | LOG-4 | rule | kind | Only the fetcher writes to the bucket, and it never deletes or replaces an object. |
+| LOG-5 | rule | kind | The transfer reads the cluster store with a role and a key of its own, which may only read it. |
 | SCOPE-1 | invariant | verify | `scope.json` lists URLs, each with a reason. |
 | SCOPE-2 | invariant | verify | The scope covers every record's URL. |
 | SCOPE-3 | rule | tests | Only URLs in the scope are fetched. |
@@ -714,9 +730,10 @@ This version leaves to others what the store relies on:
   each response's `date` ([0010]); and how often the cluster store is
   checked against [STORE-3] in operation, with the alert on a problem.
 - **Deployment:** the bucket and the database; each service's credentials,
-  with the grants [LOG-3] and [LOG-4] describe; how the table and the
-  streams are created, and the streams' replicas; and the Lease's duration
-  and renewal deadline ([FETCH-16]).
+  with the grants [LOG-3] and [LOG-4] describe; the transfer's, with those
+  [LOG-5] describes, and how it reaches the cluster store from outside the
+  cluster; how the table and the streams are created, and the streams'
+  replicas; and the Lease's duration and renewal deadline ([FETCH-16]).
 
 ## 14. Changes to this document
 
@@ -726,6 +743,21 @@ the layout, or a guarantee is a major version, and must say how data written
 under the earlier version is read. The schemas in [`schemas/`](schemas/)
 that this document names are part of it, so changing one changes it. IDs are
 never reused, and a retired statement stays in the index.
+
+### From version 1.0.0
+
+Version 1.1.0 adds [LOG-5]: the transfer reads the cluster store with a
+database role and a Garage key of its own, which may only read it, and
+which the deployment specification gives it
+([§13](#left-to-other-specifications)). It adds a statement, so it's a
+minor version: no statement's or field's meaning changes, and nothing
+stored is rewritten. [LOG-3] and [LOG-4] still name the services' roles
+and keys, and guarantee 4 now rests on [LOG-5] too. [§2](#2-terms)'s term
+for the transfer now says where the owner runs it, outside the cluster,
+where `data/` is, which its access to the cluster store rests on. The owner
+decided on October 28, 2026 that this document states the transfer's
+grants, beside [LOG-3] and [LOG-4], so that guarantee 4 reaches the
+transfer as it does each service.
 
 ### Reading data written under version 0.2.0
 
@@ -774,6 +806,7 @@ this version's in three ways:
 [LOG-2]: #8-history
 [LOG-3]: #8-history
 [LOG-4]: #8-history
+[LOG-5]: #8-history
 [SCOPE-2]: #9-scope
 [SCOPE-3]: #9-scope
 [SCOPE-4]: #9-scope
