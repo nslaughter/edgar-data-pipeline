@@ -440,9 +440,9 @@ cluster, its access to the cluster store, before [T36] builds it
 own, `transfer`, each of which may only read, with their credentials in
 Secrets that no service reads; and, since nothing exposes the database or
 Garage outside the cluster, a way in through the API server of the cluster
-the owner names ([PG-15], [GARAGE-5], [TRANSFER-1] to [TRANSFER-6]). It
-settles these details, each with a default the owner hasn't yet confirmed
-or changed, listed with their alternatives:
+the owner names ([PG-15], [GARAGE-5], [TRANSFER-1] to [TRANSFER-6]). The
+owner confirmed on October 28, 2026 each of the details it settles,
+keeping each default; these are listed with their alternatives:
 
 1. **A major version** ([PG-8]). [PG-8]'s Job now grants the transfer's
    role `SELECT` on `records`, where it granted no role but the services'

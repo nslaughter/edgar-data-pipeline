@@ -1579,7 +1579,8 @@ settles. The owner decided on October 28, 2026 that the transfer's access
 to the cluster store is specified in a version of this document before the
 transfer is built, as each service's deployment is, and that the snapshot
 store's specification states the transfer's grants, in its version 1.1.0:
-version 2.0.0.
+version 2.0.0. The owner confirmed the same day the details that version
+settles, its major version among them.
 
 ## 10. Changes to this document
 
