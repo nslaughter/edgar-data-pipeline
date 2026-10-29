@@ -3014,6 +3014,32 @@ def test_no_ingress_routes_to_the_database_or_garage() -> None:
         assert not set(routed) & stores, doc["metadata"]["name"]
 
 
+def transfer_names() -> dict[str, str]:
+    """The names of what the transfer reads, as internal/transfer gives them,
+    which the chart and the transfer agree on (section 5, the transfer)."""
+    source = (ROOT / "internal" / "transfer" / "cluster.go").read_text(encoding="utf-8")
+    return dict(re.findall(r'^\t([A-Z]\w*)\s*= "?([^"\n]*)"?$', source, re.M))
+
+
+@pytest.mark.spec("TRANSFER-1", "TRANSFER-5")
+def test_the_transfer_reads_what_the_chart_renders_by_its_names() -> None:
+    names = transfer_names()
+    [namespace] = [n for chart, _, n in RELEASES if chart == UMBRELLA]
+    garage = named(UMBRELLA, "Service", names["S3Service"])
+    key = named(UMBRELLA, "Secret", names["KeySecret"])["stringData"]
+
+    assert names["Namespace"] == namespace
+    assert names["Cluster"] == the_cluster()["metadata"]["name"]
+    assert names["Database"] == the_cluster()["spec"]["bootstrap"]["initdb"]["database"]
+    assert names["PasswordSecret"] == roles()[names["Role"]]["passwordSecret"]["name"]
+    assert key["AWS_ACCESS_KEY_ID"] == CREDENTIALS["garageKeys"]["transfer"]["id"]
+    assert int(names["S3Port"]) in {port["port"] for port in garage["spec"]["ports"]}
+    assert "transfer" in garage_setup()["buckets"][names["Bucket"]]
+    # The port of the Service CloudNativePG makes for the primary.
+    assert names["DatabasePort"] == "5432"
+    assert named(UMBRELLA, "Deployment", names["FakeEDGAR"])
+
+
 @pytest.mark.spec("TRANSFER-2")
 def test_kind_maps_no_port_of_a_node_to_the_host() -> None:
     for node in kind_config()["nodes"]:

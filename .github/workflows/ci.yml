@@ -117,6 +117,12 @@ jobs:
           install_only: true
       - name: Install the development environment
         run: uv sync --locked
+      # The Go of go.mod's toolchain line, with which the tests build the
+      # transfer and run it as the owner does, outside the cluster
+      # (spec/deployment.md, section 5, the transfer).
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: go.mod
       - name: Create the kind cluster
         run: kind create cluster --config deploy/kind.yaml --wait 120s
       # The pipeline's own images, built from the commit checked out, tagged

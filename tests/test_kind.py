@@ -8,7 +8,9 @@ EDGAR_CHARTS_UPGRADED is true, as in CI, each release must also have been
 upgraded since it was installed, which a cluster only installed hasn't; and
 where EDGAR_FAKE_EDGAR is true, as in CI, the fake EDGAR must be installed,
 which only CI installs (FAKE-4). They reach the cluster through kubectl and
-Helm, and nothing else: each check inside it runs in a pod there. A
+Helm, and nothing else: each check inside it runs in a pod there. The one
+exception is the transfer, which they build and run as the owner does,
+outside the cluster, through the API server of the context they're given. A
 credential they read from a Secret goes to its pod on standard input, never
 in a command's arguments, so a failure never shows it. Each test carries
 the IDs of the statements it checks, as @pytest.mark.spec(...).
@@ -22,6 +24,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import time
 import uuid
@@ -1271,10 +1274,12 @@ def acknowledge(at: str) -> None:
     )
 
 
-def s3(key: str, method: str, path: str, body: str = "") -> tuple[int, dict[str, str], bytes]:
-    """A request to Garage's S3 API for the store's bucket, signed with a
-    key's credentials, given on standard input, and its status, headers, and
-    body."""
+def s3(
+    key: str, method: str, path: str, body: str = "", bucket: str = "snapshots"
+) -> tuple[int, dict[str, str], bytes]:
+    """A request to Garage's S3 API for a bucket, the store's unless another
+    is named, signed with a key's credentials, given on standard input, and
+    its status, headers, and body."""
     credentials = "\n".join(
         secret(f"garage-key-{key}", name) for name in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
     )
@@ -1289,7 +1294,7 @@ def s3(key: str, method: str, path: str, body: str = "") -> tuple[int, dict[str,
         'echo "$code"; base64 "$head" | tr -d "\\n"; echo; base64 "$out" | tr -d "\\n"; echo',
         method,
         values()["garage"]["garage"]["s3"]["api"]["region"],
-        f"http://garage:3900/snapshots{path}",
+        f"http://garage:3900/{bucket}{path}",
         body,
         input=credentials + "\n",
     )
@@ -1707,3 +1712,146 @@ def test_another_pod_holds_the_lease_once_its_duration_passes_after_its_holder_i
                 assert received > acquired, entry["n"]
     finally:
         kubectl("rollout", "status", "-n", NAMESPACE, "deployment/fetcher", "--timeout=180s")
+
+
+# TRANSFER: the transfer's role and key, and the transfer itself, which the
+# owner runs outside the cluster, where data/ is, and which these tests run
+# as the owner does, through the API server of the context they're given
+# (spec/deployment.md, section 5, the transfer).
+
+
+@pytest.mark.spec("PG-15", "LOG-5")
+def test_the_transfers_role_logs_in_without_special_attributes_and_only_reads_records() -> None:
+    attributes = psql(
+        "transfer",
+        "SELECT rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls"
+        " FROM pg_roles WHERE rolname = current_user",
+    )
+    insert = (
+        "INSERT INTO records (job, feed, url, requested_at, attempts, error, tool)"
+        " VALUES (gen_random_uuid(), 'submissions', 'https://data.sec.gov/kind-test', now(), 1,"
+        " 'test', 'fetcher@' || repeat('0', 40))"
+    )
+
+    assert attributes.returncode == 0, attributes.stderr
+    assert attributes.stdout.strip() == "t|f|f|f|f|f"
+    assert psql("transfer", "SELECT count(*) FROM records").returncode == 0
+    for statement in (
+        insert,
+        "UPDATE records SET attempts = attempts",
+        "DELETE FROM records",
+        "TRUNCATE records",
+    ):
+        result = attempt("transfer", statement)
+        assert result.returncode != 0, statement
+        assert "permission denied" in result.stderr, (statement, result.stderr)
+
+
+@pytest.mark.spec("PG-15")
+def test_the_transfers_role_reads_neither_the_notices_nor_the_dashboards() -> None:
+    for relation in notices():
+        for granted in ["SELECT", *WRITES]:
+            assert not privilege("transfer", relation, granted), (relation, granted)
+    for view in defined("dashboards.sql"):
+        read = psql("transfer", f"SELECT count(*) FROM {view}")
+        assert read.returncode != 0, view
+        assert "permission denied" in read.stderr, (view, read.stderr)
+
+
+@pytest.mark.spec("GARAGE-5", "LOG-5")
+@fetcher_on_kind
+def test_the_transfers_key_may_only_read_the_stores_bucket() -> None:
+    [name, *_] = bucket()
+
+    listed, _, _ = s3("transfer", "GET", "?list-type=2")
+    status, _, data = s3("transfer", "GET", f"/{name}")
+    written, _, _ = s3("transfer", "PUT", "/objects/kind-tests-transfer", "written by the tests")
+    deleted, _, _ = s3("transfer", "DELETE", f"/{name}")
+    elsewhere, _, _ = s3("transfer", "GET", "?list-type=2", bucket="database-backups")
+
+    assert (listed, status) == (200, 200)
+    assert (written, deleted, elsewhere) == (403, 403, 403)
+    assert s3("discoverer", "GET", f"/{name}")[2] == data
+    assert "objects/kind-tests-transfer" not in bucket()
+
+
+@pytest.fixture(scope="module")
+def transfer_command(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The transfer, built from the commit checked out, as the owner runs it."""
+    go = shutil.which("go")
+    assert go, "the tests of the transfer build it with Go, which isn't installed"
+    command = tmp_path_factory.mktemp("transfer") / "transfer"
+    subprocess.run([go, "build", "-o", str(command), "./cmd/transfer"], cwd=ROOT, check=True)
+    return command
+
+
+@pytest.mark.spec("TRANSFER-4", "TRANSFER-5", "TRANSFER-6", "XFER-1", "LOG-5")
+@fetcher_on_kind
+def test_the_transfer_reads_the_range_through_the_api_server_and_copies_nothing_with_the_fake_edgar(
+    transfer_command: Path, tmp_path: Path
+) -> None:
+    found = records()
+    assert len(found) >= 2
+    # From the first record up to one in the middle, whose own isn't in the
+    # range: a record the fetcher adds meanwhile comes after it.
+    start, end = found[0]["requested_at"], found[len(found) // 2]["requested_at"]
+    in_range = [r for r in found if start <= r["requested_at"] < end]
+    scope, problems = verify.read_scope(ROOT / "data")
+    assert scope is not None
+    assert problems == []
+    in_scope = [r for r in in_range if verify.covers(scope, r["url"])]
+    objects = {r["object"] for r in in_scope if r["object"]}
+    data = tmp_path / "data"
+    data.mkdir()
+    shutil.copy(ROOT / "data" / "scope.json", data / "scope.json")
+    # Credentials in the environment and in the files libpq and S3 clients
+    # read, none of them the transfer's, which it must not take (TRANSFER-4).
+    decoys = tmp_path / "decoys"
+    decoys.mkdir()
+    (decoys / "pgpass").write_text("*:*:*:*:not-the-transfers\n")
+    (decoys / "pgpass").chmod(0o600)
+    (decoys / "aws").write_text(
+        "[default]\naws_access_key_id = GKnotthetransfers\naws_secret_access_key = not\n"
+    )
+    environment = {
+        **os.environ,
+        "PGUSER": "fetcher",
+        "PGPASSWORD": "not-the-transfers",
+        "PGPASSFILE": str(decoys / "pgpass"),
+        "PGSSLMODE": "disable",
+        "PGCHANNELBINDING": "disable",
+        "AWS_ACCESS_KEY_ID": "GKnotthetransfers",
+        "AWS_SECRET_ACCESS_KEY": "not-the-transfers",
+        "AWS_SHARED_CREDENTIALS_FILE": str(decoys / "aws"),
+        "AWS_REGION": "us-east-1",
+    }
+
+    result = subprocess.run(
+        [
+            str(transfer_command),
+            *("--context", CONTEXT, "--data", str(data), "--from", start, "--until", end),
+        ],
+        capture_output=True,
+        text=True,
+        env=environment,
+        timeout=300,
+        check=False,
+    )
+
+    # It read the range through its port-forwards, as its role and with its
+    # key, the objects of its records among it (TRANSFER-5, LOG-5, XFER-1).
+    assert objects
+    assert f"Read {len(in_range)} records" in result.stdout, (result.stdout, result.stderr)
+    assert f"{len(in_scope)} in the scope" in result.stdout, result.stdout
+    assert f"To copy: {len(in_scope)} records, with {len(objects)} objects" in result.stdout
+    # But copied nothing, since the fake EDGAR answered its fetches (TRANSFER-6).
+    assert result.returncode == 3, result.stderr
+    assert "the fake EDGAR is installed" in result.stderr
+    assert [p.relative_to(data).as_posix() for p in data.rglob("*")] == ["scope.json"]
+    # And showed none of its credentials (TRANSFER-4).
+    for name, key in [
+        ("postgres-transfer", "password"),
+        ("garage-key-transfer", "AWS_ACCESS_KEY_ID"),
+        ("garage-key-transfer", "AWS_SECRET_ACCESS_KEY"),
+    ]:
+        assert secret(name, key) not in result.stdout + result.stderr, (name, key)
