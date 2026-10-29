@@ -1,7 +1,7 @@
 # Security and access
 
 <!-- status: The controls; The charts; Fetcher; Scheduler; Discoverer; Garage; PostgreSQL 18; Monitoring: metrics, alerts, and dashboards; The snapshot store in git; The transfer from the cluster to git -->
-**Status** ([status page](../status.md)): The controls: Specified; built in part. The charts: Built. Fetcher: Built. Scheduler: Specified; built in part. Discoverer: Specified. Garage: Built. PostgreSQL 18: Built. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The snapshot store in git: Built. The transfer from the cluster to git: Specified.
+**Status** ([status page](../status.md)): The controls: Specified; built in part. The charts: Built. Fetcher: Built. Scheduler: Specified; built in part. Discoverer: Specified. Garage: Built. PostgreSQL 18: Built. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The snapshot store in git: Built. The transfer from the cluster to git: Built.
 <!-- end status -->
 
 Each credential the pipeline uses and where it's kept, how the user agent
@@ -237,7 +237,10 @@ certificate, since the Secret that holds the `Cluster`'s certificate
 authority holds the authority's key too, and the API server returns a
 Secret whole. It requires SCRAM's channel binding instead, so only a server
 that holds its role's password verifier completes its connection. Task T36
-builds the transfer, its role, and its key ([plan][plan-observing]).
+built the transfer, `cmd/transfer`, with its role and its key
+([plan][plan-observing]). The owner runs it with the context and the
+range named, as `go run ./cmd/transfer --context CONTEXT --from TIME
+--until TIME`.
 
 ## What runs
 

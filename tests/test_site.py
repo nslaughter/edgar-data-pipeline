@@ -669,16 +669,16 @@ def block_names(page: Path) -> set[str]:
 def test_a_task_marked_done_makes_the_status_page_out_of_date(tmp_path: Path) -> None:
     root = copy_sources(tmp_path)
     plan = root / "docs" / "plan.md"
-    row = next(line for line in plan.read_text("utf-8").splitlines() if line.startswith("| T36 |"))
+    row = next(line for line in plan.read_text("utf-8").splitlines() if line.startswith("| T29 |"))
     plan.write_text(
         plan.read_text("utf-8").replace(row, row[: -len(" |")] + "October 15, 2026 |"),
         "utf-8",
     )
 
-    # T36 builds the transfer, so its status changes: on the status page, on
-    # the home page, and on each explanation page whose status block names it,
-    # or all the parts.
-    changed = {"The transfer from the cluster to git", "all"}
+    # T29 builds the traces, so their status changes: on the status page, on
+    # the home page, and on each explanation page whose status block names
+    # them, or all the parts.
+    changed = {"Monitoring: traces", "all"}
     explanation = sorted(
         path.relative_to(root).as_posix()
         for path in (root / "docs" / "explanation").glob("*.md")

@@ -69,8 +69,8 @@ without the behavior it covers ([doing the next item][agents-next], step
 
 | Specification | Statements with tests now | Statements awaiting a task |
 | --- | --- | --- |
-| [`snapshots.md`][snapshots] 1.1.0 | Those `verify.py` checks, and `snapshot.py`'s rules, brought to this version by [T35], done October 13, 2026; the schemas': [STORE-1], [REC-13], [JOB-1]; the scheduler's jobs, [JOB-2], written by [T22]; and the fetcher's and the cluster store's, written by [T23] ([STORE-2], [STORE-3], [OBJ-4], [LOG-3], [LOG-4], [FETCH-16], [FETCH-17], [ID-2], [JOB-4] to [JOB-7]) | [T24], the discoverer's jobs and its use of `edgar-asof` ([FETCH-18]); [T36], the transfer ([XFER-1] to [XFER-3]) and its read-only role and key on kind ([LOG-5]) |
-| [`deployment.md`][deployment] 2.0.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind; and the pipeline's images' and the fake EDGAR's installation, written by [T21] ([IMG-1] to [IMG-3], [IMG-5], [FAKE-1] to [FAKE-5]); and the scheduler's Deployment, Lease, grants, and consumer, written by [T22] ([SCHED-1] to [SCHED-9]); and the fetcher's Lease, Deployment, grants, credentials, consumers, and trust of the fake EDGAR's authority, written by [T23] ([LEASE-1], [LEASE-2], [FETCHER-1] to [FETCHER-13]) | [T36], the transfer's role, key, and access to the cluster store ([PG-15], [GARAGE-5], [TRANSFER-1] to [TRANSFER-6]) |
+| [`snapshots.md`][snapshots] 1.1.0 | Those `verify.py` checks, and `snapshot.py`'s rules, brought to this version by [T35], done October 13, 2026; the schemas': [STORE-1], [REC-13], [JOB-1]; the scheduler's jobs, [JOB-2], written by [T22]; and the fetcher's and the cluster store's, written by [T23] ([STORE-2], [STORE-3], [OBJ-4], [LOG-3], [LOG-4], [FETCH-16], [FETCH-17], [ID-2], [JOB-4] to [JOB-7]); and the transfer's, with its read-only role and key, written by [T36] ([XFER-1] to [XFER-3], [LOG-5]) | [T24], the discoverer's jobs and its use of `edgar-asof` ([FETCH-18]) |
+| [`deployment.md`][deployment] 2.0.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind; and the pipeline's images' and the fake EDGAR's installation, written by [T21] ([IMG-1] to [IMG-3], [IMG-5], [FAKE-1] to [FAKE-5]); and the scheduler's Deployment, Lease, grants, and consumer, written by [T22] ([SCHED-1] to [SCHED-9]); and the fetcher's Lease, Deployment, grants, credentials, consumers, and trust of the fake EDGAR's authority, written by [T23] ([LEASE-1], [LEASE-2], [FETCHER-1] to [FETCHER-13]); and the transfer's role, key, and access to the cluster store, written by [T36] ([PG-15], [GARAGE-5], [TRANSFER-1] to [TRANSFER-6]) | None |
 | [`controls.md`][controls] 1.0.0 | [API-1]; and, written by [T22], the generated definitions and the API server's refusals ([API-2], [API-3]), the chart's controls ([VAL-1] to [VAL-4]), the scheduler's polls and Sources' status ([SOURCE-1] to [SOURCE-4], [ACCESS-2]), and its grants ([RBAC-1], [RBAC-4]), [SOURCE-4]'s ahead of [T23]; and, written by [T23], the fetcher's use of the SecAccess, its Backfills last, and its grants ([ACCESS-1], [ACCESS-3], [BACKFILL-2], [RBAC-2]) | [T24] and [T28] ([§3][controls-ids]) |
 | [`notices.md`][notices] 0.1.1 | [TABLE-1], [MSG-1] | [T24], the discoverer, with the scheduler's side of the Backfills ([§3][notices-ids]) |
 | [`telemetry.md`][telemetry] 0.1.0 | [VIEW-1] | [T28], the monitoring of observing filings; [T29], the traces ([§3][telemetry-ids]) |
@@ -179,6 +179,21 @@ sends only while requests are allowed, a stop after a `403` holding across
 a handover until it's acknowledged ([FETCH-16], [ACCESS-1], [ACCESS-3],
 [FETCH-9]). Without the owner's user agent it sends nothing ([FETCH-17]).
 
+**The transfer, against fakes of the cluster store and the API server.**
+The transfer's Go tests copy ranges from a cluster store held in memory
+into a `data/` of their own ([T36]). They check that it copies only the
+scope's records of the range, with their objects, and nothing if
+`scope.json` is malformed or the copy would break the budget, saying which
+limit ([XFER-1]); that it appends each record unchanged, as `snapshot.py`
+writes a line, after placing its object, in the order of the records' ids
+([XFER-2]); that it skips a record `data/` holds, and copies nothing when
+records conflict ([XFER-3]); and that it reads a cluster that holds the
+fake EDGAR but copies nothing from it ([TRANSFER-6]). Against a fake of the
+API server, and a kubeconfig of their own, they check that it acts only on
+the context it's given, reads only its two Secrets, and takes nothing of
+its connections from libpq's environment or the AWS SDK's ([TRANSFER-3] to
+[TRANSFER-5]).
+
 **The charts, rendered and installed.** The deployment's invariants are
 checked by rendering each of the four charts with `helm template`; the
 hook Jobs' scripts, against fakes of `nats`, of `psql`, and of Garage's
@@ -260,7 +275,13 @@ acknowledges an expired or malformed job without a request, and announces
 a recorded one again without one ([JOB-5] to [JOB-7]); that a body is
 stored once, under its name, and only the fetcher's key may write the
 bucket ([OBJ-4], [LOG-4]); that each ServiceAccount can
-do exactly what the table of grants allows ([RBAC-5]); and that the
+do exactly what the table of grants allows ([RBAC-5]); that the
+transfer's role may only read records, and its key only the store's bucket
+([PG-15], [GARAGE-5], [LOG-5]); that the transfer, built and run as the
+owner runs it, with other credentials in its environment and its files,
+reads a range of CI's cluster store through its port-forwards but copies
+nothing, since the fake EDGAR is installed there, and shows none of its
+credentials ([TRANSFER-4] to [TRANSFER-6]); and that the
 notices' and dashboards' views give what their sections define ([GAP-2],
 [LAG-1], [VIEW-4]). The cluster store's own invariants, that every object
 hashes to its name and every record finds its object, are checked the same
@@ -533,6 +554,7 @@ clock check relies on, waits on a finding
 [SCOPE-4]: ../../spec/snapshots.md#9-scope
 [SCOPE-5]: ../../spec/snapshots.md#9-scope
 [XFER-1]: ../../spec/snapshots.md#records-the-cluster-made
+[XFER-2]: ../../spec/snapshots.md#records-the-cluster-made
 [XFER-3]: ../../spec/snapshots.md#records-the-cluster-made
 [FETCH-1]: ../../spec/snapshots.md#10-fetching
 [FETCH-2]: ../../spec/snapshots.md#10-fetching
@@ -567,6 +589,9 @@ clock check relies on, waits on a finding
 [PG-15]: ../../spec/deployment.md#the-stores-database
 [GARAGE-5]: ../../spec/deployment.md#garage
 [TRANSFER-1]: ../../spec/deployment.md#the-transfer
+[TRANSFER-3]: ../../spec/deployment.md#the-transfer
+[TRANSFER-4]: ../../spec/deployment.md#the-transfer
+[TRANSFER-5]: ../../spec/deployment.md#the-transfer
 [TRANSFER-6]: ../../spec/deployment.md#the-transfer
 [NATS-2]: ../../spec/deployment.md#nats
 [NATS-6]: ../../spec/deployment.md#durable-consumers

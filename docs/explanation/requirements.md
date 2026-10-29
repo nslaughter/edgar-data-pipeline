@@ -3,8 +3,8 @@
 <!-- status: all -->
 **What's built,** as the [status page](../status.md) gives it:
 
-- **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The charts; The fake EDGAR.
-- **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The transfer from the cluster to git; The controls (built in part); The documentation site (built in part).
+- **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
+- **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
 - **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The drills.
 <!-- end status -->
@@ -31,7 +31,7 @@ cited document's, and that document governs.
 | Parse each filing's XBRL instance into facts, with the filing's acceptance time, under an import manifest | [Components][design-components], [IMP-1] to [IMP-3] | The parse workers; the facts specification, task T17, isn't written |
 | Answer "as of T" | [Times][design-times], [0009] | The query API, tasks T17 and T26 |
 | Export the facts to Parquet, deterministically, with each file's SHA-256 | [Components][design-components], [0004] | The exporter; the export's specification is task T18 |
-| Bring the records of the git store's scope from the cluster into `data/`, so findings can cite them | [0010], [XFER-1] to [XFER-3] | The transfer, which the owner runs, task T36 |
+| Bring the records of the git store's scope from the cluster into `data/`, so findings can cite them | [0010], [XFER-1] to [XFER-3] | The transfer, `cmd/transfer`, which the owner runs, built by task T36 |
 | Report what it does: metrics, alerts, the views Grafana reads, and traces | [Telemetry's guarantees][telemetry-guarantees] | The services, kube-state-metrics, Prometheus, and Grafana |
 
 All but the facts, the "as of T" answers, and the export are specified.
