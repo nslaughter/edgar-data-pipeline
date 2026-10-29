@@ -1,7 +1,7 @@
 # Deployment
 
-<!-- status: The charts; The fake EDGAR -->
-**Status** ([status page](../status.md)): The charts: Built. The fake EDGAR: Built.
+<!-- status: The charts; The fake EDGAR; The transfer from the cluster to git -->
+**Status** ([status page](../status.md)): The charts: Built. The fake EDGAR: Built. The transfer from the cluster to git: Specified.
 <!-- end status -->
 
 The pipeline is installed on Kubernetes with Helm, by four charts in a
