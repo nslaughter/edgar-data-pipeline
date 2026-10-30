@@ -2,8 +2,11 @@ package transfer
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -19,6 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
 	k8stesting "k8s.io/client-go/testing"
 )
 
@@ -351,6 +355,82 @@ func TestAPortForwardReachesAReadyPodOfTheServiceOnItsContainersPort(t *testing.
 	}
 	if _, _, err := kube.target(context.Background(), "garage", 3903); err == nil {
 		t.Errorf("forwarded a port the Service lacks")
+	}
+}
+
+// apiServer is an API server that serves the objects given, each at its
+// path, and passes each request for a port-forward to forward.
+func apiServer(t *testing.T, objects map[string]any, forward http.HandlerFunc) *httptest.Server {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/portforward") {
+			forward(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		object, ok := objects[r.URL.Path]
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			object = &metav1.Status{
+				TypeMeta: metav1.TypeMeta{Kind: "Status", APIVersion: "v1"},
+				Status:   metav1.StatusFailure, Reason: metav1.StatusReasonNotFound, Code: http.StatusNotFound,
+			}
+		}
+		_ = json.NewEncoder(w).Encode(object)
+	}))
+	t.Cleanup(server.Close)
+	return server
+}
+
+// spec: TRANSFER-5
+func TestAPortForwardWhoseUpgradeStallsEndsOnceTheTransferIsInterrupted(t *testing.T) {
+	labels := map[string]string{"app.kubernetes.io/name": "garage"}
+	garage := service(S3Service, labels, S3Port, intstr.FromInt32(3900))
+	garage.TypeMeta = metav1.TypeMeta{Kind: "Service", APIVersion: "v1"}
+	pods := &corev1.PodList{
+		TypeMeta: metav1.TypeMeta{Kind: "PodList", APIVersion: "v1"},
+		Items:    []corev1.Pod{*pod("garage-0", true, labels)},
+	}
+	upgrades, answer := make(chan struct{}, 4), make(chan struct{})
+	server := apiServer(t, map[string]any{
+		"/api/v1/namespaces/edgar/services/garage": garage,
+		"/api/v1/namespaces/edgar/pods":            pods,
+	}, func(w http.ResponseWriter, r *http.Request) {
+		// It never answers the upgrade, until the test ends.
+		upgrades <- struct{}{}
+		select {
+		case <-answer:
+		case <-r.Context().Done():
+		}
+		http.Error(w, "the test has ended", http.StatusServiceUnavailable)
+	})
+	t.Cleanup(func() { close(answer) })
+	kube, err := NewKube(&rest.Config{Host: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, interrupt := context.WithCancel(context.Background())
+	defer interrupt()
+	ended := make(chan error, 1)
+	go func() {
+		_, err := kube.Forward(ctx, S3Service, S3Port)
+		ended <- err
+	}()
+	select {
+	case <-upgrades:
+	case <-time.After(30 * time.Second):
+		t.Fatal("no upgrade reached the API server")
+	}
+
+	interrupt()
+
+	select {
+	case err := <-ended:
+		if err == nil {
+			t.Errorf("forwarded a port")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the port-forward didn't end once interrupted")
 	}
 }
 

@@ -191,6 +191,7 @@ func (k Kube) Forward(ctx context.Context, service string, port int32) (*Forward
 	dialer = portforward.NewFallbackDialerForStreaming(tunneling, dialer, func(err error) bool {
 		return streamhttp.IsUpgradeFailure(err) || streamhttp.IsHTTPSProxyError(err)
 	})
+	dialer = cancellable{ctx: ctx, dialer: dialer}
 	f := &Forward{stop: make(chan struct{}), done: make(chan error, 1)}
 	ready := make(chan struct{})
 	forwarder, err := portforward.NewOnAddressesForStreaming(dialer, []string{"127.0.0.1"},
@@ -214,6 +215,41 @@ func (k Kube) Forward(ctx context.Context, service string, port int32) (*Forward
 	}
 	f.Port = ports[0].Local
 	return f, nil
+}
+
+// cancellable is a dialer that gives up once its context is done. client-go's
+// dialers send their upgrade requests without a context, and wait for the
+// API server's answer however long it takes, so a handshake that stalls
+// would hold the transfer, and Close, even once the owner interrupts it. The
+// handshake it gives up on goes on alone, and the connection it makes, if
+// any, is closed.
+type cancellable struct {
+	ctx    context.Context
+	dialer streamhttp.Dialer
+}
+
+func (d cancellable) Dial(protocols ...string) (streamhttp.Connection, string, error) {
+	type dialed struct {
+		conn     streamhttp.Connection
+		protocol string
+		err      error
+	}
+	result := make(chan dialed, 1)
+	go func() {
+		conn, protocol, err := d.dialer.Dial(protocols...)
+		result <- dialed{conn, protocol, err}
+	}()
+	select {
+	case r := <-result:
+		return r.conn, r.protocol, r.err
+	case <-d.ctx.Done():
+		go func() {
+			if r := <-result; r.conn != nil {
+				_ = r.conn.Close()
+			}
+		}()
+		return nil, "", d.ctx.Err()
+	}
 }
 
 // Close closes the port-forward, waits until it has, and gives the error
