@@ -350,9 +350,10 @@ func TestACopyThatWouldPutAFileOverFiftyMiBCopiesNothingAndSaysSo(t *testing.T) 
 	}
 }
 
-// spec: XFER-1
-func TestACopyThatWouldPutDataOverOneGBCopiesNothingAndSaysSo(t *testing.T) {
-	store := newStore(t)
+// fill adds files to data/ that take no room on disk, until its files
+// total all but the bytes given of the budget.
+func fill(t *testing.T, store GitStore, room int64) {
+	t.Helper()
 	sizes, err := store.Sizes()
 	if err != nil {
 		t.Fatal(err)
@@ -365,15 +366,59 @@ func TestACopyThatWouldPutDataOverOneGBCopiesNothingAndSaysSo(t *testing.T) {
 		sparse(t, filepath.Join(store.Dir, "objects", fmt.Sprintf("%02x", i), "filler"), FileLimit)
 		total += FileLimit
 	}
-	sparse(t, filepath.Join(store.Dir, "objects", "zz", "filler"), TotalLimit-total-5)
+	sparse(t, filepath.Join(store.Dir, "objects", "zz", "filler"), TotalLimit-total-room)
+}
+
+// spec: XFER-1
+func TestACopyThatWouldPutDataOverOneGBCopiesNothingAndSaysSo(t *testing.T) {
+	store := newStore(t)
+	fill(t, store, 5)
 	source := &fakeSource{stored: []Stored{{ID: 1, Record: notFound("submissions", submissions, at(1))}}}
 
-	_, err = Plan(context.Background(), source, store, testRange)
+	_, err := Plan(context.Background(), source, store, testRange)
 
 	r := refusal(t, err)
 	if len(r.Reasons) != 1 || !strings.HasPrefix(r.Reasons[0], "SCOPE-5: data/'s files would total") {
 		t.Errorf("reasons: %q", r.Reasons)
 	}
+}
+
+// spec: XFER-1
+func TestTheObjectsACopyWouldPlaceCountTowardTheBudget(t *testing.T) {
+	t.Run("SCOPE-5", func(t *testing.T) {
+		store := newStore(t)
+		o := newObject(t, "a body the copy would place")
+		record := ok(submissions, at(1), o)
+		// Room for the record's line, and all but a byte of its object.
+		fill(t, store, int64(len(record.Line())+len(o.data)-1))
+		source := &fakeSource{stored: []Stored{{ID: 1, Record: record}}, objects: map[string][]byte{o.name: o.data}}
+
+		_, err := Plan(context.Background(), source, store, testRange)
+
+		r := refusal(t, err)
+		if len(r.Reasons) != 1 || !strings.HasPrefix(r.Reasons[0], "SCOPE-5: data/'s files would total 1,000,000,001") {
+			t.Errorf("reasons: %q", r.Reasons)
+		}
+		if _, err := os.Stat(filepath.Join(store.Dir, filepath.FromSlash(o.name))); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("an object was placed")
+		}
+	})
+	t.Run("SCOPE-4", func(t *testing.T) {
+		// An object of a body that gzip barely shrinks would take too long
+		// to make, so the copy holds one over 50 MiB as Plan would.
+		name := objectPath(strings.Repeat("ab", 32))
+		c := &Copy{store: newStore(t), objects: map[string][]byte{name: make([]byte, FileLimit+1)}}
+
+		reasons, err := c.overBudget()
+
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := "SCOPE-4: " + name + " would be 52,428,801 bytes, over 52,428,800"; fmt.Sprint(reasons) !=
+			fmt.Sprint([]string{want}) {
+			t.Errorf("reasons: %q", reasons)
+		}
+	})
 }
 
 // recorder writes down what a copy writes, in order.
