@@ -42,7 +42,9 @@ func (s Scope) Covers(url string) bool {
 }
 
 // Scope reads scope.json, or says how it's malformed (SCOPE-1), as
-// scripts/verify.py reads it.
+// scripts/verify.py reads it: each key by its exact name, as Python's
+// dictionaries match them, and not as Go's decoding of a struct does,
+// which takes "URL" for "url".
 func (g GitStore) Scope() (Scope, error) {
 	data, err := os.ReadFile(filepath.Join(g.Dir, "scope.json"))
 	if errors.Is(err, fs.ErrNotExist) {
@@ -61,17 +63,27 @@ func (g GitStore) Scope() (Scope, error) {
 	}
 	var scope Scope
 	for number, raw := range entries {
-		var entry struct {
-			URL    *string `json:"url"`
-			Reason *string `json:"reason"`
-		}
-		if err := json.Unmarshal(raw, &entry); err != nil || entry.URL == nil || entry.Reason == nil ||
-			*entry.Reason == "" {
+		var entry map[string]json.RawMessage
+		_ = json.Unmarshal(raw, &entry)
+		url, isURL := stringField(entry, "url")
+		reason, isReason := stringField(entry, "reason")
+		if !isURL || !isReason || reason == "" {
 			return nil, fmt.Errorf("scope.json's entry %d needs a url and a reason", number+1)
 		}
-		scope = append(scope, *entry.URL)
+		scope = append(scope, url)
 	}
 	return scope, nil
+}
+
+// stringField gives the string a JSON object's field of that exact name
+// holds, or false if the object has no such field or it holds no string.
+func stringField(object map[string]json.RawMessage, name string) (string, bool) {
+	var value *string
+	raw, ok := object[name]
+	if !ok || json.Unmarshal(raw, &value) != nil || value == nil {
+		return "", false
+	}
+	return *value, true
 }
 
 // held is a record a log holds, and where.

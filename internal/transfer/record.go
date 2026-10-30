@@ -3,6 +3,7 @@ package transfer
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -171,9 +172,25 @@ func quote(s string) string {
 
 // parseLine reads a line of a log. A field it doesn't know is ignored, and
 // received_at or date, absent from a record written under version 0.2.0, is
-// read as null (REC-1, REC-9).
+// read as null (REC-1, REC-9). It reads each field by its exact name, as
+// scripts/verify.py does, and not as Go's decoding of a struct does, which
+// takes "URL" for "url".
 func parseLine(line []byte) (Record, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(line, &fields); err != nil {
+		return Record{}, err
+	}
 	var r Record
-	err := json.Unmarshal(line, &r)
-	return r, err
+	record := reflect.ValueOf(&r).Elem()
+	for i := range record.NumField() {
+		name := record.Type().Field(i).Tag.Get("json")
+		raw, ok := fields[name]
+		if !ok {
+			continue
+		}
+		if err := json.Unmarshal(raw, record.Field(i).Addr().Interface()); err != nil {
+			return Record{}, fmt.Errorf("its %s: %w", name, err)
+		}
+	}
+	return r, nil
 }

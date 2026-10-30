@@ -240,13 +240,18 @@ func TestTheTransferCopiesTheScopesRecordsOfTheRangeWithTheirObjectsAndNothingEl
 // spec: XFER-1
 func TestAMalformedScopeCopiesNothingAndReadsNothing(t *testing.T) {
 	for name, scope := range map[string]*string{
-		"missing":                 nil,
-		"not JSON":                ptr(`{"urls": [`),
-		"not an object":           ptr(`["` + submissions + `"]`),
-		"urls not a list":         ptr(`{"urls": "` + submissions + `"}`),
-		"an entry without reason": ptr(`{"urls": [{"url": "` + submissions + `"}]}`),
-		"an empty reason":         ptr(`{"urls": [{"url": "` + submissions + `", "reason": ""}]}`),
-		"a url not a string":      ptr(`{"urls": [{"url": 1, "reason": "A reason."}]}`),
+		"missing":                  nil,
+		"not JSON":                 ptr(`{"urls": [`),
+		"not an object":            ptr(`["` + submissions + `"]`),
+		"urls not a list":          ptr(`{"urls": "` + submissions + `"}`),
+		"an entry without reason":  ptr(`{"urls": [{"url": "` + submissions + `"}]}`),
+		"an empty reason":          ptr(`{"urls": [{"url": "` + submissions + `", "reason": ""}]}`),
+		"a url not a string":       ptr(`{"urls": [{"url": 1, "reason": "A reason."}]}`),
+		"a url null":               ptr(`{"urls": [{"url": null, "reason": "A reason."}]}`),
+		"a url under another case": ptr(`{"urls": [{"URL": "` + submissions + `", "reason": "A reason."}]}`),
+		"a reason under another case": ptr(
+			`{"urls": [{"url": "` + submissions + `", "Reason": "A reason."}]}`),
+		"an entry not an object": ptr(`{"urls": ["` + submissions + `"]}`),
 	} {
 		t.Run(name, func(t *testing.T) {
 			store := newStore(t)
@@ -273,6 +278,37 @@ func TestAMalformedScopeCopiesNothingAndReadsNothing(t *testing.T) {
 				t.Errorf("data/ changed")
 			}
 		})
+	}
+}
+
+// spec: XFER-1
+func TestTheScopeIsReadByItsExactKeysAsVerifyPyReadsIt(t *testing.T) {
+	store := newStore(t)
+	// verify.py reads the entry's url, and takes "URL" for another key.
+	write(t, filepath.Join(store.Dir, "scope.json"), `{"urls": [
+  {"url": "`+outside+`", "URL": "`+submissions+`", "reason": "Another company's filing history."}
+]}`)
+	source := &fakeSource{stored: []Stored{{ID: 1, Record: notFound("submissions", submissions, at(1))}}}
+
+	c, err := Plan(context.Background(), source, store, testRange)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.InScope != 0 || c.Records() != 0 {
+		t.Errorf("in the scope %d, to copy %d", c.InScope, c.Records())
+	}
+}
+
+// spec: XFER-3
+func TestALogsLineIsReadByItsExactKeysAsVerifyPyReadsIt(t *testing.T) {
+	record := notFound("submissions", submissions, at(1))
+	line := strings.Replace(record.Line(), `"tool": `, `"URL": "`+outside+`", "Tool": "another", "tool": `, 1)
+
+	got, err := parseLine([]byte(line))
+
+	if err != nil || got.Line() != record.Line() {
+		t.Errorf("read %s: %v", got.Line(), err)
 	}
 }
 
