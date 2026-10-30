@@ -1777,11 +1777,22 @@ def test_the_transfers_key_may_only_read_the_stores_bucket() -> None:
 
 @pytest.fixture(scope="module")
 def transfer_command(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """The transfer, built from the commit checked out, as the owner runs it."""
+    """The transfer, built from the commit checked out, as the owner runs it.
+
+    Tests never reach the network, so the build takes the Go installed and
+    the modules already in Go's cache, which CI's kind job downloads before
+    the tests, and fails rather than download either.
+    """
     go = shutil.which("go")
     assert go, "the tests of the transfer build it with Go, which isn't installed"
     command = tmp_path_factory.mktemp("transfer") / "transfer"
-    subprocess.run([go, "build", "-o", str(command), "./cmd/transfer"], cwd=ROOT, check=True)
+    offline = {"GOPROXY": "off", "GOTOOLCHAIN": "local", "GOFLAGS": "-mod=readonly"}
+    subprocess.run(
+        [go, "build", "-o", str(command), "./cmd/transfer"],
+        cwd=ROOT,
+        env={**os.environ, **offline},
+        check=True,
+    )
     return command
 
 
