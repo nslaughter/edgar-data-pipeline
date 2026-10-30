@@ -1786,7 +1786,19 @@ def transfer_command(tmp_path_factory: pytest.TempPathFactory) -> Path:
     go = shutil.which("go")
     assert go, "the tests of the transfer build it with Go, which isn't installed"
     command = tmp_path_factory.mktemp("transfer") / "transfer"
-    offline = {"GOPROXY": "off", "GOTOOLCHAIN": "local", "GOFLAGS": "-mod=readonly"}
+    # Each setting is set here, so that none inherited, from the environment
+    # or Go's own configuration, undoes it: GONOPROXY=none sends no module
+    # around GOPROXY=off to its origin, as GOPRIVATE or GONOPROXY would, and
+    # GOWORK=off keeps the build to go.mod and go.sum, whose sums -mod=readonly
+    # requires, rather than a workspace, whose missing sums the go command asks
+    # the checksum database for.
+    offline = {
+        "GOPROXY": "off",
+        "GONOPROXY": "none",
+        "GOWORK": "off",
+        "GOTOOLCHAIN": "local",
+        "GOFLAGS": "-mod=readonly",
+    }
     subprocess.run(
         [go, "build", "-o", str(command), "./cmd/transfer"],
         cwd=ROOT,
