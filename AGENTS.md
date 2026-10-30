@@ -148,6 +148,7 @@ investigation/
 | Build the pipeline's images and load them into kind | `uv run scripts/build_images.py` |
 | Test the installed charts | `EDGAR_KUBE_CONTEXT=kind-edgar uv run pytest tests/test_kind.py` |
 | Snapshot a feed | `uv run scripts/snapshot.py FEED URL ...`, with `SEC_USER_AGENT` in the environment or `.env.dev` |
+| Transfer a range of the cluster store into `data/` | `go run ./cmd/transfer --context CONTEXT --from TIME --until TIME`, then `uv run scripts/verify.py` |
 | Verify the store | `uv run scripts/verify.py -v` |
 | Verify history since a commit | `uv run scripts/verify.py --since origin/main` |
 | Build and check the documentation site | `uv run scripts/build_site.py` |
