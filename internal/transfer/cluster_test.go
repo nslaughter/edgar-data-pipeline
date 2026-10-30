@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -169,39 +170,66 @@ func TestASecretWithoutItsKeyIsAnErrorThatNamesTheKeyNotAValue(t *testing.T) {
 
 // spec: TRANSFER-4, TRANSFER-5
 func TestTheDatabaseConnectionTakesNothingFromLibpqsEnvironmentOrItsFiles(t *testing.T) {
-	passfile := filepath.Join(t.TempDir(), "pgpass")
+	dir := t.TempDir()
+	passfile := filepath.Join(dir, "pgpass")
 	write(t, passfile, "*:*:*:*:a password from a file\n")
 	if err := os.Chmod(passfile, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for name, value := range map[string]string{
-		"PGHOST": "elsewhere.invalid", "PGPORT": "6543", "PGDATABASE": "other", "PGUSER": "edgar",
-		"PGPASSWORD": "a password from the environment", "PGPASSFILE": passfile, "PGSSLMODE": "disable",
-		"PGCHANNELBINDING": "disable", "PGSSLROOTCERT": filepath.Join(t.TempDir(), "absent.crt"),
-		"PGAPPNAME": "other", "PGOPTIONS": "-c default_transaction_read_only=off",
-		"PGTARGETSESSIONATTRS": "standby",
+	services := filepath.Join(dir, "pg_service.conf")
+	write(t, services, "[edgar]\nhost=elsewhere.invalid\nport=6543\ndbname=other\nuser=edgar\n"+
+		"password=a password from a service\nsslmode=disable\nrequire_auth=password\n"+
+		"min_protocol_version=3.2\noptions=-c default_transaction_read_only=off\n")
+	for name, servicefile := range map[string]string{
+		"a service its file names":   services,
+		"a service without its file": filepath.Join(dir, "absent.conf"),
 	} {
-		t.Setenv(name, value)
-	}
+		t.Run(name, func(t *testing.T) {
+			environment := map[string]string{
+				"PGHOST": "elsewhere.invalid", "PGPORT": "6543", "PGDATABASE": "other", "PGUSER": "edgar",
+				"PGPASSWORD": "a password from the environment", "PGPASSFILE": passfile, "PGSSLMODE": "disable",
+				"PGCHANNELBINDING": "disable", "PGSSLROOTCERT": filepath.Join(dir, "absent.crt"),
+				"PGAPPNAME": "other", "PGOPTIONS": "-c default_transaction_read_only=off",
+				"PGTARGETSESSIONATTRS": "standby", "PGSERVICE": "edgar", "PGSERVICEFILE": servicefile,
+				"PGREQUIREAUTH": "password", "PGCONNECT_TIMEOUT": "1", "PGSSLNEGOTIATION": "direct",
+				"PGMINPROTOCOLVERSION": "3.2", "PGMAXPROTOCOLVERSION": "3.2", "PGTZ": "America/New_York",
+			}
+			for name, value := range environment {
+				t.Setenv(name, value)
+			}
 
-	config, err := databaseConfig(15432, testCredentials.Password)
+			config, err := databaseConfig(15432, testCredentials.Password)
 
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := fmt.Sprintf("%s:%d %s %s", config.Host, config.Port, config.Database, config.User)
-	if got != "127.0.0.1:15432 edgar transfer" {
-		t.Errorf("connects to %s", got)
-	}
-	if config.Password != testCredentials.Password {
-		t.Errorf("the password isn't the Secret's")
-	}
-	if config.TLSConfig == nil || len(config.Fallbacks) != 0 || config.ChannelBinding != "require" {
-		t.Errorf("TLS %v, %d fallbacks, channel binding %q", config.TLSConfig != nil, len(config.Fallbacks),
-			config.ChannelBinding)
-	}
-	if fmt.Sprint(config.RuntimeParams) != "map[application_name:transfer]" || config.ValidateConnect != nil {
-		t.Errorf("parameters %v", config.RuntimeParams)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := fmt.Sprintf("%s:%d %s %s", config.Host, config.Port, config.Database, config.User)
+			if got != "127.0.0.1:15432 edgar transfer" {
+				t.Errorf("connects to %s", got)
+			}
+			if config.Password != testCredentials.Password {
+				t.Errorf("the password isn't the Secret's")
+			}
+			if config.TLSConfig == nil || len(config.Fallbacks) != 0 || config.ChannelBinding != "require" ||
+				config.SSLNegotiation != "postgres" {
+				t.Errorf("TLS %v, %d fallbacks, channel binding %q, negotiation %q", config.TLSConfig != nil,
+					len(config.Fallbacks), config.ChannelBinding, config.SSLNegotiation)
+			}
+			if config.RequireAuth != "" || config.ConnectTimeout != 30*time.Second ||
+				config.MinProtocolVersion != "3.0" || config.MaxProtocolVersion != "3.0" {
+				t.Errorf("require_auth %q, timeout %v, protocol %s to %s", config.RequireAuth, config.ConnectTimeout,
+					config.MinProtocolVersion, config.MaxProtocolVersion)
+			}
+			if fmt.Sprint(config.RuntimeParams) != "map[application_name:transfer]" || config.ValidateConnect != nil {
+				t.Errorf("parameters %v", config.RuntimeParams)
+			}
+			// It hid the environment from pgx only while it read the connection.
+			for name, value := range environment {
+				if os.Getenv(name) != value {
+					t.Errorf("%s is %q", name, os.Getenv(name))
+				}
+			}
+		})
 	}
 }
 

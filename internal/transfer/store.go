@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -57,24 +60,60 @@ func (k Kube) Open(ctx context.Context, creds Credentials) (*ClusterStore, error
 // channel_binding=require ask (TRANSFER-5). TLS doesn't check the server's
 // certificate, since channel binding authenticates the server instead.
 //
-// Nothing of it comes from the environment or a file. The connection
-// string sets each setting libpq's environment could change, a setting
-// that names a file to the empty string, so none is read; the password is
-// the one given, never PGPASSWORD's; and of the parameters the environment
-// can add to a connection, such as PGOPTIONS's, it sends only its name
-// (TRANSFER-4).
+// Nothing of it comes from the environment or a file. pgx reads libpq's
+// variables, such as PGSERVICE, which names a service file to read, and
+// PGREQUIREAUTH, which no connection string can unset, so it parses the
+// connection string while none of them is set. The connection string sets
+// each setting that names a file, which pgx would otherwise find in the
+// home directory, to the empty string, so none is read; the password is the
+// one given; and it sends no parameter but its name (TRANSFER-4).
 func databaseConfig(port uint16, password string) (*pgx.ConnConfig, error) {
-	config, err := pgx.ParseConfig(fmt.Sprintf(
+	connString := fmt.Sprintf(
 		"host=127.0.0.1 port=%d dbname=%s user=%s sslmode=require channel_binding=require "+
 			"sslnegotiation=postgres passfile='' sslrootcert='' sslcert='' sslkey='' "+
 			"target_session_attrs=any connect_timeout=30",
-		port, Database, Role))
+		port, Database, Role)
+	var config *pgx.ConnConfig
+	err := withoutLibpqEnvironment(func() (err error) {
+		config, err = pgx.ParseConfig(connString)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
 	config.Password = password
 	config.RuntimeParams = map[string]string{"application_name": "transfer"}
 	return config, nil
+}
+
+// libpqEnvironment keeps two callers from hiding libpq's variables at once.
+var libpqEnvironment sync.Mutex
+
+// withoutLibpqEnvironment runs parse with every variable whose name begins
+// with PG, as each of libpq's does, taken out of the process's environment,
+// and puts them back once it returns. Nothing else in the transfer reads
+// them.
+func withoutLibpqEnvironment(parse func() error) error {
+	libpqEnvironment.Lock()
+	defer libpqEnvironment.Unlock()
+	hidden := map[string]string{}
+	for _, variable := range os.Environ() {
+		name, value, _ := strings.Cut(variable, "=")
+		if strings.HasPrefix(name, "PG") {
+			hidden[name] = value
+		}
+	}
+	defer func() {
+		for name, value := range hidden {
+			_ = os.Setenv(name, value)
+		}
+	}()
+	for name := range hidden {
+		if err := os.Unsetenv(name); err != nil {
+			return err
+		}
+	}
+	return parse()
 }
 
 // s3Client gives a client of Garage's S3 API at the endpoint, with the
