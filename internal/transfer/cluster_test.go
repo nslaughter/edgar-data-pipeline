@@ -1,6 +1,7 @@
 package transfer
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -374,6 +375,7 @@ func apiServer(t *testing.T, objects map[string]any, forward http.HandlerFunc) *
 			object = &metav1.Status{
 				TypeMeta: metav1.TypeMeta{Kind: "Status", APIVersion: "v1"},
 				Status:   metav1.StatusFailure, Reason: metav1.StatusReasonNotFound, Code: http.StatusNotFound,
+				Message: r.URL.Path + " not found",
 			}
 		}
 		_ = json.NewEncoder(w).Encode(object)
@@ -431,6 +433,42 @@ func TestAPortForwardWhoseUpgradeStallsEndsOnceTheTransferIsInterrupted(t *testi
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("the port-forward didn't end once interrupted")
+	}
+}
+
+// spec: TRANSFER-6
+func TestWhereTheTransferCantReadItsCredentialsItSaysTheFakeEDGARIsThereIfItIs(t *testing.T) {
+	deployment := &appsv1.Deployment{
+		TypeMeta:   metav1.TypeMeta{Kind: "Deployment", APIVersion: "apps/v1"},
+		ObjectMeta: metav1.ObjectMeta{Name: FakeEDGAR, Namespace: Namespace},
+	}
+	for _, fake := range []bool{true, false} {
+		objects := map[string]any{}
+		if fake {
+			objects["/apis/apps/v1/namespaces/edgar/deployments/fake-edgar"] = deployment
+		}
+		server := apiServer(t, objects, http.NotFound)
+		config := filepath.Join(t.TempDir(), "config")
+		write(t, config, `apiVersion: v1
+kind: Config
+clusters:
+- name: test
+  cluster: {server: "`+server.URL+`"}
+users:
+- name: owner
+  user: {token: "a token of the owner's"}
+contexts:
+- name: test
+  context: {cluster: test, user: owner}
+`)
+
+		err := Run(context.Background(), Options{Context: "test", Kubeconfig: config, Data: t.TempDir(),
+			Range: testRange}, &bytes.Buffer{})
+
+		if err == nil || !strings.Contains(err.Error(), "reading the Secret "+PasswordSecret) ||
+			strings.Contains(err.Error(), "the fake EDGAR is installed") != fake {
+			t.Errorf("with the fake EDGAR %v: %v", fake, err)
+		}
 	}
 }
 

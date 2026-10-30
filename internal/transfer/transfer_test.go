@@ -668,6 +668,39 @@ func TestNothingIsCopiedFromAClusterThatHoldsTheFakeEDGARThoughTheRangeIsRead(t 
 	}
 }
 
+// spec: TRANSFER-6
+func TestWhateverElseStopsACopyFromAClusterThatHoldsTheFakeEDGARItSaysThatToo(t *testing.T) {
+	o := newObject(t, "body")
+	for name, c := range map[string]struct {
+		scope   string
+		objects map[string][]byte
+		refused bool
+		reason  string
+	}{
+		"a refusal": {scope: `{"urls": []`, refused: true, reason: "scope.json"},
+		"a failure": {scope: `{"urls": [{"url": "` + submissions + `", "reason": "A reason."}]}`,
+			objects: map[string][]byte{}, reason: "reading the object " + o.name},
+	} {
+		t.Run(name, func(t *testing.T) {
+			store := newStore(t)
+			write(t, filepath.Join(store.Dir, "scope.json"), c.scope)
+			before := snapshot(t, store.Dir)
+			source := &fakeSource{stored: []Stored{{ID: 1, Record: ok(submissions, at(1), o)}}, objects: c.objects}
+
+			err := copyRange(context.Background(), source, store, testRange, true, &bytes.Buffer{})
+
+			var r *Refusal
+			if err == nil || errors.As(err, &r) != c.refused || !strings.Contains(err.Error(), c.reason) ||
+				!strings.Contains(err.Error(), "the fake EDGAR is installed") {
+				t.Errorf("error: %v", err)
+			}
+			if after := snapshot(t, store.Dir); fmt.Sprint(after) != fmt.Sprint(before) {
+				t.Errorf("data/ changed")
+			}
+		})
+	}
+}
+
 func TestACopyFromAClusterWithoutTheFakeEDGARIsWrittenAndReported(t *testing.T) {
 	store := newStore(t)
 	source := &fakeSource{stored: []Stored{{ID: 1, Record: notFound("submissions", submissions, at(1))}}}
