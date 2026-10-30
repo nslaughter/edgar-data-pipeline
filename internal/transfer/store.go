@@ -58,7 +58,11 @@ func (k Kube) Open(ctx context.Context, creds Credentials) (*ClusterStore, error
 // to edgar, as the role transfer, with its password, over TLS, and with
 // SCRAM's channel binding, as libpq's sslmode=require and
 // channel_binding=require ask (TRANSFER-5). TLS doesn't check the server's
-// certificate, since channel binding authenticates the server instead.
+// certificate, since channel binding authenticates the server instead. Once
+// connected, it checks that the server is the primary, as libpq's
+// target_session_attrs=primary asks, so a replica that took the primary's
+// place after the transfer chose the pod isn't read: a replica can lag
+// behind the primary, and miss records of the range.
 //
 // Nothing of it comes from the environment or a file. pgx reads libpq's
 // variables, such as PGSERVICE, which names a service file to read, and
@@ -71,7 +75,7 @@ func databaseConfig(port uint16, password string) (*pgx.ConnConfig, error) {
 	connString := fmt.Sprintf(
 		"host=127.0.0.1 port=%d dbname=%s user=%s sslmode=require channel_binding=require "+
 			"sslnegotiation=postgres passfile='' sslrootcert='' sslcert='' sslkey='' "+
-			"target_session_attrs=any connect_timeout=30",
+			"target_session_attrs=primary connect_timeout=30",
 		port, Database, Role)
 	var config *pgx.ConnConfig
 	err := withoutLibpqEnvironment(func() (err error) {

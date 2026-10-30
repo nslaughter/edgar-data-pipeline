@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -220,8 +223,8 @@ func TestTheDatabaseConnectionTakesNothingFromLibpqsEnvironmentOrItsFiles(t *tes
 				t.Errorf("require_auth %q, timeout %v, protocol %s to %s", config.RequireAuth, config.ConnectTimeout,
 					config.MinProtocolVersion, config.MaxProtocolVersion)
 			}
-			if fmt.Sprint(config.RuntimeParams) != "map[application_name:transfer]" || config.ValidateConnect != nil {
-				t.Errorf("parameters %v", config.RuntimeParams)
+			if fmt.Sprint(config.RuntimeParams) != "map[application_name:transfer]" || !checksThePrimary(config) {
+				t.Errorf("parameters %v; checks the primary %v", config.RuntimeParams, checksThePrimary(config))
 			}
 			// It hid the environment from pgx only while it read the connection.
 			for name, value := range environment {
@@ -230,6 +233,25 @@ func TestTheDatabaseConnectionTakesNothingFromLibpqsEnvironmentOrItsFiles(t *tes
 				}
 			}
 		})
+	}
+}
+
+// checksThePrimary says whether a connection checks that its server is the
+// primary once it's connected, as target_session_attrs=primary asks.
+func checksThePrimary(config *pgx.ConnConfig) bool {
+	return config.ValidateConnect != nil && reflect.ValueOf(config.ValidateConnect).Pointer() ==
+		reflect.ValueOf(pgconn.ValidateConnectTargetSessionAttrsPrimary).Pointer()
+}
+
+// spec: TRANSFER-5
+func TestTheDatabaseConnectionReadsOnlyThePrimary(t *testing.T) {
+	config, err := databaseConfig(15432, testCredentials.Password)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !checksThePrimary(config) {
+		t.Errorf("a connection to a replica isn't refused")
 	}
 }
 
