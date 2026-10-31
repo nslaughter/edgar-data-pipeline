@@ -5,8 +5,8 @@
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
 - **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
-- **Planned:** The drills.
+- **Decided:** Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Planned:** Parse workers (decided in part); The drills.
 <!-- end status -->
 
 What the design still waits on, and what could undo it: the investigation's
@@ -626,9 +626,12 @@ T3][asof-first-release]).
 ### What isn't written yet
 
 Two specifications: the facts ([T17]) and the export ([T18]), with a minor
-version of the telemetry for them ([T32]). Two decision records: how the
-parse workers scale with their queue's depth ([T10]), and which XBRL parser
-reads the instances, a narrow parser on lxml or Arelle ([T12]). And one
+version of the telemetry for them ([T32]). One decision record: which
+XBRL parser reads the instances, a narrow parser on lxml or Arelle
+([T12]); how the parse workers scale with their queue's depth is proposed
+in [0014], which the owner hasn't yet accepted ([T10]), and the version of
+the deployment specification that states it has no task in the plan yet.
+And one
 revisit: whether to keep each company's `submissions` as the notice source
 ([T11]). And a version of the snapshot store's specification that states
 what the fetcher does while a write can't be made, as the owner decided
@@ -768,6 +771,7 @@ consequence that fetching continues while PostgreSQL fails over.
 [0001]: ../decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
 [0002]: ../decisions/0002-store-bodies-in-garage.md
 [0003]: ../decisions/0003-queue-work-in-nats-jetstream.md
+[0014]: ../decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
 [0004]: ../decisions/0004-keep-the-record-in-postgresql-18.md
 [0005]: ../decisions/0005-send-sec-requests-through-one-active-fetcher.md
 [0006]: ../decisions/0006-write-the-services-in-go-and-python.md

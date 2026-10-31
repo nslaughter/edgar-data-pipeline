@@ -322,10 +322,12 @@ down, at the default scope ([estimates](estimates.md#the-queues-streams)).
 The consumers scale differently. The fetcher can't scale out: one replica
 is active, through a Lease, so that the limit holds across the cluster
 ([0005]). The discoverer reads poll events one at a time ([DISC-1]). The
-parse workers are to scale by their queue's depth ([components]), and how
-they do is a decision record still to come, task T10 ([plan][plan-facts]).
-Queue depth, redeliveries, and consumer lag are the metrics the workers are
-scaled by ([0003]). Of these, telemetry's version 0.1.0 gives the jobs
+parse workers are to scale by their queue's depth ([components]), and
+queue depth, redeliveries, and consumer lag are the metrics the workers are
+scaled by ([0003]). Decision record [0014], which the owner hasn't yet
+accepted, has KEDA read `parse-workers-notices`' backlog from each server's
+monitoring port, its notices not yet delivered with those not yet
+acknowledged, and scale the workers from zero to three by it. Of these, telemetry's version 0.1.0 gives the jobs
 `JOBS` holds of each kind, which the active fetcher serves ([METRIC-4]);
 NATS's own metrics of its streams and consumers come in a later version
 ([telemetry, left to other specifications][telemetry-left]).
@@ -412,6 +414,7 @@ metrics workers scale by, and steps that are safe to repeat ([0003]).
 
 [0001]: ../decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
 [0003]: ../decisions/0003-queue-work-in-nats-jetstream.md
+[0014]: ../decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
 [0005]: ../decisions/0005-send-sec-requests-through-one-active-fetcher.md
 [0006]: ../decisions/0006-write-the-services-in-go-and-python.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md

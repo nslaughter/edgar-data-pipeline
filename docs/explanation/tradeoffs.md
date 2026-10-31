@@ -5,11 +5,11 @@
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
 - **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
-- **Planned:** The drills.
+- **Decided:** Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Planned:** Parse workers (decided in part); The drills.
 <!-- end status -->
 
-For each decision record, 0001 to 0013: what it chose, the alternatives it
+For each decision record, 0001 to 0014: what it chose, the alternatives it
 weighed and why they lost, what the choice costs, and what would change it.
 Where a record says what would change it, this page cites it. Where it
 doesn't, what follows is analysis, set apart as such. The records
@@ -33,9 +33,11 @@ themselves hold the full context and their sources; the
 | [0011] | Four Helm releases, installed in order | One release with workarounds; one chart as two releases; three releases | Not stated |
 | [0012] | Zensical, from the documents where they are, served by GitHub Pages | GitHub's own rendering; MkDocs with Material; Sphinx with MyST; generators outside Python; another static host | Not stated for the generator; the site's one version is revisited when the pipeline has releases ([§9 of the site][site-questions]) |
 | [0013] | A bounded study of `submissions`' lag, with a record of every poll; then only the lists' changes and coverage | Keeping [0010] as it is; keeping only changes at once; building nightly from the daily index | The study's lags: if no use needs filings within the day, a later record can replace the polls with the nightly index |
+| [0014], proposed | KEDA, in the operators' chart, scaling the parse workers from zero to three by their consumer's backlog | A HorizontalPodAutoscaler on an external metric from Prometheus; the scheduler scaling them; a HorizontalPodAutoscaler on CPU; a fixed number of replicas | The parser [T12] chooses and the workers' measurements, for the ceiling; the lag from acceptance to facts available ([T32]), for the floor |
 
-Two decisions are still to come: how the parse workers scale with their
-queue's depth ([T10]), and which XBRL parser reads the instances ([T12])
+One decision is still to come: which XBRL parser reads the instances
+([T12]). How the parse workers scale with their queue's depth is proposed
+in [0014], which the owner hasn't yet accepted ([T10])
 ([decisions][design-decisions]). One is to be revisited: the notice source
 and its cadence, from the lags the record shows ([T11]).
 
@@ -633,6 +635,63 @@ which the study shows ([0013]).
 that no use needs filings within the day, a later record can replace the
 polls with the nightly index ([0013]).
 
+## 0014: Scale the parse workers with KEDA, by their consumer's backlog
+
+**Proposed.** Task T10 proposed this record on October 31, 2026, and the
+owner hasn't accepted it; the [index](../decisions/README.md) gives its
+status ([0014]).
+
+**The choice.** KEDA, installed by the operators' chart, scales the parse
+workers' Deployment by the backlog of their consumer,
+`parse-workers-notices`: the filing notices it hasn't delivered yet, with
+those it has delivered that aren't acknowledged ([NATS-5]). KEDA reads the
+backlog from NATS's monitoring port every 10 seconds. A notice in it
+starts one worker, the workers grow to one for each 10 notices, up to
+three, and they return to zero 5 minutes after the backlog last held one
+([0014]).
+
+**Why.** The design and [0003] have the workers scaled by queue depth, and
+[0001] has each component show how it scales. Their work is rare and comes
+in bursts: about 1.4 filings a day, or 208 at once in a Backfill of the
+three companies' XBRL reports ([SRC-20]). So a worker kept running would
+sit idle almost all day, holding memory, which is scarce on kind
+([0001]). Kind's Kubernetes 1.36 lets a
+HorizontalPodAutoscaler go no lower than one replica without an alpha
+feature gate; KEDA starts the first worker itself. Three workers keep up
+with what the fetcher's limit lets arrive, at the estimated rate ([0014]).
+
+**Alternatives weighed.**
+
+- **A HorizontalPodAutoscaler on an external metric from Prometheus,**
+  through NATS's exporter and prometheus-adapter: no new definitions, but
+  scaling waits on Prometheus's scrape, stops while Prometheus's one
+  replica is down, and can't reach zero on Kubernetes 1.36.
+  prometheus-adapter's last release is of May 2024.
+- **The scheduler scaling them:** no new component, but autoscaling code
+  to write and test that KEDA already has, a grant to scale a Deployment,
+  and parsing that depends on the scheduler's active replica.
+- **A HorizontalPodAutoscaler on CPU:** it needs metrics-server, follows
+  work already running rather than work waiting, and can't scale from
+  zero.
+- **A fixed number of replicas:** the simplest, and one worker would parse
+  a Backfill in minutes, but nothing would scale by queue depth.
+
+**What it costs.** The first filing after 5 idle minutes waits for KEDA's
+next check and a pod's start before its facts. KEDA adds three pods to the
+operators' release, each requesting 100 MiB by its chart's default, and
+six definitions, most of their size `ScaledJob`'s. It holds the cluster's
+external metrics API, which no other server can then serve. A notice whose
+parse always fails is delivered again without limit, so it keeps one
+worker running. A version of the deployment specification states it all,
+before [T25] builds the workers ([0014]).
+
+**What would change it.** The record says what would. The parser [T12]
+chooses, and the workers' measurements on kind, may move the ceiling:
+Arelle's 0.5 to 2 GB a worker would put three at 1.5 to 6 GB. The lag from
+acceptance to facts available ([T32]) may move the floor to one, if
+starting from zero delays facts more than a running worker is worth
+([0014]).
+
 [0001]: ../decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
 [0002]: ../decisions/0002-store-bodies-in-garage.md
 [0003]: ../decisions/0003-queue-work-in-nats-jetstream.md
@@ -646,6 +705,7 @@ polls with the nightly index ([0013]).
 [0011]: ../decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md
 [0012]: ../decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md
 [0013]: ../decisions/0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md
+[0014]: ../decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
 [design-decisions]: ../design.md#decisions
 [notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [notices-lags]: ../../spec/notices.md#10-times-and-lags
@@ -654,6 +714,10 @@ polls with the nightly index ([0013]).
 [T10]: ../plan.md#facts
 [T11]: ../plan.md#observing-filings
 [T12]: ../plan.md#facts
+[T25]: ../plan.md#facts
+[T32]: ../plan.md#facts
+[NATS-5]: ../../spec/deployment.md#durable-consumers
+[SRC-20]: ../../investigation/edgar.md#findings-so-far
 [T17]: ../plan.md#facts
 [T28]: ../plan.md#observing-filings
 [T31]: ../plan.md#traces-logs-and-drills

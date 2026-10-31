@@ -1,7 +1,7 @@
 # The interfaces
 
 <!-- status: The controls; Scheduler; Fetcher; Discoverer; Parse workers; NATS JetStream; Query API; `edgar-asof` -->
-**Status** ([status page](../status.md)): The controls: Specified; built in part. Scheduler: Specified; built in part. Fetcher: Built. Discoverer: Specified. Parse workers: Decided. NATS JetStream: Built. Query API: Decided. `edgar-asof`: Decided.
+**Status** ([status page](../status.md)): The controls: Specified; built in part. Scheduler: Specified; built in part. Fetcher: Built. Discoverer: Specified. Parse workers: Planned; decided in part. NATS JetStream: Built. Query API: Decided. `edgar-asof`: Decided.
 <!-- end status -->
 
 This page covers the pipeline's three interfaces: the custom resources the

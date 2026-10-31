@@ -546,11 +546,28 @@ One installation of a chart on a cluster, which Helm records, upgrades, and
 uninstalls as a whole. The pipeline is four releases, installed in order
 ([0011], [§5 of the deployment][deployment-dependencies]).
 
+### HorizontalPodAutoscaler
+
+Kubernetes's own autoscaler, which sets a Deployment's replicas from a
+metric, such as its pods' CPU, or an external metric that a metrics server
+serves. On kind's Kubernetes 1.36, it goes no lower than one replica unless
+an alpha feature gate is turned on ([0014]).
+
 ### Host directory
 
 The directory of the machine kind runs on that's mounted into every worker
 node, where every volume's data is kept, so that stored data outlives the
 cluster ([§2 of the deployment][deployment-terms], [KIND-2]).
+
+### KEDA
+
+Kubernetes Event-driven Autoscaling: an operator that scales a Deployment
+by the backlog of a source of work, such as a JetStream consumer. It
+starts the first replica itself, and creates a
+[HorizontalPodAutoscaler](#horizontalpodautoscaler) that scales from one
+up. Decision record 0014, which the owner hasn't yet accepted, has it
+scale the parse workers from zero to three by their consumer's backlog
+([0014]).
 
 ### kind
 
@@ -720,6 +737,7 @@ open. A statement checked by `operator` is the owner's to keep
 [0009]: decisions/0009-read-edgar-through-a-public-point-in-time-library.md
 [0010]: decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
 [0011]: decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md
+[0014]: decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
 [design-keeps]: design.md#what-the-pipeline-keeps
 [design-times]: design.md#times
 [design-components]: design.md#components
