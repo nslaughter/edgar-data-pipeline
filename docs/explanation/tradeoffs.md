@@ -652,13 +652,17 @@ three, and they return to zero 5 minutes after the backlog last held one
 
 **Why.** The design and [0003] have the workers scaled by queue depth, and
 [0001] has each component show how it scales. Their work is rare and comes
-in bursts: about 1.4 filings a day, or 208 at once in a Backfill of the
-three companies' XBRL reports ([SRC-20]). So a worker kept running would
-sit idle almost all day, holding memory, which is scarce on kind
-([0001]). Kind's Kubernetes 1.36 lets a
+in bursts: about 1.4 filings a day, or every filing in a Backfill's range
+of dates ([BACKFILL-1]), 9,689 over the three companies' listed history,
+484 of them with an instance ([SRC-19], [SRC-20]). So a worker kept
+running would sit idle almost all day, holding memory, which is scarce on
+kind ([0001]). Kind's Kubernetes 1.36 lets a
 HorizontalPodAutoscaler go no lower than one replica without an alpha
-feature gate; KEDA starts the first worker itself. Three workers keep up
-with what the fetcher's limit lets arrive, at the estimated rate ([0014]).
+feature gate; KEDA starts the first worker itself. Instances can come
+faster than three workers parse them, up to 5 a second once a Backfill's
+headers and index pages are fetched, so a burst waits in the backlog;
+three workers drain the 484 in 1.3 to 5.4 minutes at the estimated rate
+([0014]).
 
 **Alternatives weighed.**
 
@@ -674,16 +678,19 @@ with what the fetcher's limit lets arrive, at the estimated rate ([0014]).
   work already running rather than work waiting, and can't scale from
   zero.
 - **A fixed number of replicas:** the simplest, and one worker would parse
-  a Backfill in minutes, but nothing would scale by queue depth.
+  the 484 instances in 4 to 16 minutes, but nothing would scale by queue
+  depth.
 
 **What it costs.** The first filing after 5 idle minutes waits for KEDA's
-next check and a pod's start before its facts. KEDA adds three pods to the
-operators' release, each requesting 100 MiB by its chart's default, and
-six definitions, most of their size `ScaledJob`'s. It holds the cluster's
-external metrics API, which no other server can then serve. A notice whose
-parse always fails is delivered again without limit, so it keeps one
-worker running. A version of the deployment specification states it all,
-before [T25] builds the workers ([0014]).
+next check and a pod's start before its facts. The backlog counts
+notices, not instances, so a burst of notices with nothing to parse, such
+as a Backfill's Form 4s, can start all three workers for 5 minutes. KEDA
+adds three pods to the operators' release, each requesting 100 MiB by its
+chart's default, and six definitions, most of their size `ScaledJob`'s.
+It holds the cluster's external metrics API, which no other server can
+then serve. A notice whose parse always fails is delivered again without
+limit, so it keeps one worker running. A version of the deployment
+specification states it all, before [T25] builds the workers ([0014]).
 
 **What would change it.** The record says what would. The parser [T12]
 chooses, and the workers' measurements on kind, may move the ceiling:
@@ -717,6 +724,8 @@ starting from zero delays facts more than a running worker is worth
 [T25]: ../plan.md#facts
 [T32]: ../plan.md#facts
 [NATS-5]: ../../spec/deployment.md#durable-consumers
+[BACKFILL-1]: ../../spec/controls.md#7-backfill
+[SRC-19]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far
 [T17]: ../plan.md#facts
 [T28]: ../plan.md#observing-filings

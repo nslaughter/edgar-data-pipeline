@@ -168,23 +168,35 @@ one worker, the workers grow to one for each 10 notices, up to three, and
 they return to zero 5 minutes after the backlog last held one. Between
 filings no worker runs, so the first filing after an idle spell waits for
 KEDA's next check and a pod's start. Redeliveries are counted while they
-await acknowledgment, but their count isn't an input; it stays a metric
+await acknowledgment, but their count isn't an input; it stays a metric.
+The backlog counts notices, not instances, so a burst of notices with
+nothing to parse, such as a Backfill's Form 4s, can start all three
+workers for the 5 minutes before the autoscaler scales them down
 ([0014]).
 
 The work comes in two kinds. New filings arrive at the pace companies
 file: the three companies filed 126 times in the 13 weeks to October 7,
-2026, mostly Form 4s ([0010]). A Backfill brings many at once: the three
-companies' XBRL 10-Ks, 10-Qs, and amendments are 208 filings ([SRC-20]).
+2026, mostly Form 4s ([0010]). A Backfill brings many at once: every
+filing its company's lists name in its range of dates, whatever its form
+([BACKFILL-1]). Over the three companies' listed history, that's 9,689
+filings, of which 484 have an instance, and 208 of those are their XBRL
+10-Ks, 10-Qs, and amendments ([SRC-19], [SRC-20]). Each filing gets a
+notice, whether or not it has an instance ([FILE-5]).
 The six stored XBRL instances of 10-Ks and 10-Qs are from 0.9 MB to
 10.9 MB each ([SRC-18]). The
 [estimates](estimates.md#cpu-memory-and-storage) assume 150 to 250 MB of
 memory a worker with lxml, or 0.5 to 2 GB with Arelle, and 0.5 to 2
 seconds an instance with lxml, until the parser is chosen, task T12, and
 the workers are measured. Under [0014], three workers parse 1.5 to 6
-instances a second at that rate, against the 1.7 a second at most that the
-fetcher's limit lets arrive, since each notice with an instance follows
-three requests: the header, the index page, and the instance ([FILE-1],
-[FETCH-6]).
+instances a second at that rate. Notices with an instance can come
+faster. The fetcher's limit of 5 requests a second ([FETCH-6]) holds them
+to about 1.7 a second on average, at three requests each: the header, the
+index page, and the instance ([FILE-1]). But once a Backfill's headers and
+index pages are fetched, each request for an instance that waited behind
+them completes a filing, so they can come at up to 5 a second ([FILE-3],
+[JOB-4]). A burst waits in the backlog until the workers drain it: three
+take 1.3 to 5.4 minutes for the 484 instances at the estimated rate
+([0014]).
 
 ## How they fail
 
@@ -293,9 +305,12 @@ builds them; and T10 and T12, which decide them ([status page][status]).
 [0009]: ../decisions/0009-read-edgar-through-a-public-point-in-time-library.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
 [0014]: ../decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
+[BACKFILL-1]: ../../spec/controls.md#7-backfill
 [FETCH-6]: ../../spec/snapshots.md#10-fetching
 [FILE-1]: ../../spec/notices.md#7-a-filings-files
+[FILE-3]: ../../spec/notices.md#7-a-filings-files
 [DISC-2]: ../../spec/notices.md#processing
+[JOB-4]: ../../spec/snapshots.md#jobs-and-events
 [JOB-6]: ../../spec/snapshots.md#jobs-and-events
 [SEEN-2]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [status]: ../status.md
@@ -311,6 +326,7 @@ builds them; and T10 and T12, which decide them ([status page][status]).
 [plan-drills]: ../plan.md#traces-logs-and-drills
 [SRC-14]: ../../investigation/edgar.md#findings-so-far
 [SRC-18]: ../../investigation/edgar.md#findings-so-far
+[SRC-19]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far
 [notice.schema.json]: ../../spec/schemas/notice.schema.json
 [snapshots-imports]: ../../spec/snapshots.md#11-imports
