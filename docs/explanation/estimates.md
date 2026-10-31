@@ -5,8 +5,8 @@
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
 - **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
-- **Planned:** The drills.
+- **Decided:** Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Planned:** Parse workers (decided in part); The drills.
 <!-- end status -->
 
 This page estimates what the pipeline asks of the SEC and of the machine it
@@ -369,7 +369,7 @@ of its kind take, which that measurement replaces.
 | Scheduler | 2, one active ([design][design-components]) | 30 to 100 MB: a Go controller | A job a poll: a few millicores at the default | None |
 | Fetcher | 2, one active ([0005]) | 50 to 150 MB: a Go service that holds a body of up to 10.9 MB ([SRC-18]) | A request, a hash, and a gzip a poll: under 10 millicores at the default | None |
 | Discoverer | 1 or 2: a Deployment ([design][design-components]) | 100 to 250 MB: a Python service that reads a list of up to 314 KB ([SRC-18]) | Reading each poll's list, and reading `gaps` every 10 seconds ([GAP-3], [METRIC-5]), which grows with the polls ([scale and limits](scale-and-limits.md#reading-the-gaps)) | None |
-| Parse workers | Scaled by queue depth, task T10 | 150 to 250 MB with lxml, 0.5 to 2 GB with Arelle, task T12 | 0.5 to 2 seconds an instance with lxml: 28 a year at the default, 12 of them reports, or 2 to 7 minutes for a Backfill of 208 reports | None |
+| Parse workers | Scaled by queue depth: 0 to 3, as [0014] proposes | 150 to 250 MB with lxml, 0.5 to 2 GB with Arelle, task T12 | 0.5 to 2 seconds an instance with lxml: 28 a year at the default, 12 of them reports, or 2 to 7 minutes for a Backfill of 208 reports | None |
 | Exporter | 1, while it runs: a CronJob | 100 to 500 MB | A run a day | Its files, in Garage |
 | Query API | 1 or 2: a stateless Deployment | 30 to 100 MB | Each query's | None |
 | NATS JetStream | 3 ([NATS-1]) | 30 to 150 MB | Little | Its streams ([above](#the-queues-streams)) |
@@ -382,7 +382,10 @@ of its kind take, which that measurement replaces.
 
 Memory adds up to 3.4 to 8.7 GB for what observing filings needs, and 4.0
 to 14.4 GB with one or two parse workers, the query API, the exporter,
-Tempo, and Loki.
+Tempo, and Loki. Decision record [0014], which the owner hasn't yet
+accepted, would run from zero to three parse workers, and add KEDA's three
+pods, each requesting 100 MiB by its chart's default; these totals don't
+include it.
 
 NATS, Garage, and the database each place one replica on each of the three
 worker nodes ([PLACE-1]), 0.3 to 1.35 GB on each. With everything, and
@@ -413,6 +416,7 @@ so its cost grows with the polls' rate and with time
 [0005]: ../decisions/0005-send-sec-requests-through-one-active-fetcher.md
 [0008]: ../decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
+[0014]: ../decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
 [barman-compression]: https://github.com/cloudnative-pg/plugin-barman-cloud/blob/72440855ce8c33ae71d0f3d8aca6634d2f3b8c7c/web/docs/compression.md
 [barman-retention]: https://github.com/cloudnative-pg/plugin-barman-cloud/blob/72440855ce8c33ae71d0f3d8aca6634d2f3b8c7c/web/docs/retention.md
 [BACKFILL-2]: ../../spec/controls.md#7-backfill

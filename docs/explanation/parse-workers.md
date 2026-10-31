@@ -1,7 +1,7 @@
 # The parse workers
 
 <!-- status: Parse workers -->
-**Status** ([status page](../status.md)): Parse workers: Decided.
+**Status** ([status page](../status.md)): Parse workers: Planned; decided in part.
 <!-- end status -->
 
 The parse workers turn each filing's stored XBRL instance into facts, each
@@ -129,18 +129,20 @@ and every service already apply to them.
 
 | What's open | The task that settles it | It waits on |
 | --- | --- | --- |
-| How the parse workers scale with their queue's depth on kind | T10, a decision record ([0003]) | Nothing |
+| How the parse workers scale with their queue's depth on kind | [0014], a decision record that T10 proposed ([0003]) | The owner's acceptance |
+| Their deployment: KEDA in the operators' chart, their Deployment, and the `ScaledObject` that scales it | A version of the deployment specification, before T25 ([0014]) | A task the plan doesn't yet have, and 0014's acceptance |
 | The XBRL parser: a narrow parser on lxml, or Arelle, an open-source XBRL processor whose plugins include the SEC's EDGAR Renderer ([0006]) | T12, a decision record; `edgar-asof` reads XBRL instances with the same parser | T1 and T2, both done |
 | How facts are stored, and their times: the fact table, citing a version of `edgar-asof`'s specification for the fact model and what "as of T" returns | T17, `spec/facts.md` | T12, T16, and an `edgar-asof` release that specifies the fact model |
 | What the parse workers do with a filing notice, and how they find the complete filings whose notices they didn't read | T17 ([§12 of the notices][notices-left]) | As above |
 | Where an import in the cluster keeps its manifest | T17 ([§13 of the store][snapshots-left]) | As above |
 | What an import's output is, and how a rerun is compared with the original | T18, the export ([open question 3 of the store][snapshots-open]) | T17 |
 | Their metrics and traces, and the view of each filing's times from acceptance to facts available | T32, a minor version of the telemetry specification ([§11 of telemetry][telemetry-left]) | T17, T18, T19 |
-| Building them | T25 | T10, T17, T24, and an `edgar-asof` release that reads XBRL instances |
+| Building them | T25 | T17, T24, and an `edgar-asof` release that reads XBRL instances |
 
 The tasks are in the plan's facts section ([plan][plan-facts]). The design
-lists two decisions still to come, scaling workers by queue depth and the
-XBRL parser ([decisions][design-decisions]), which are T10 and T12.
+lists the XBRL parser as a decision still to come, T12, and how workers
+scale by queue depth as proposed in [0014]
+([decisions][design-decisions]).
 
 ## State, replicas, and scaling
 
@@ -155,29 +157,46 @@ written is the facts specification's to say ([T17]).
 
 They run as a Deployment scaled by queue depth
 ([components][design-components]). Queue depth, redeliveries, and consumer
-lag are metrics, and what workers are scaled by ([0003]). How the
-Deployment scales with them on kind, and between how many replicas, is
-task T10's decision ([plan][plan-facts]).
+lag are metrics, and what workers are scaled by ([0003]).
+
+Decision record [0014], which T10 proposed and the owner hasn't yet
+accepted, has KEDA scale the Deployment by their consumer's backlog: the
+filing notices that `parse-workers-notices` hasn't delivered yet, with
+those it has delivered that aren't acknowledged ([NATS-5]). KEDA reads the
+backlog from NATS's monitoring port every 10 seconds. A notice in it starts
+one worker, the workers grow to one for each 10 notices, up to three, and
+they return to zero 5 minutes after the backlog last held one. Between
+filings no worker runs, so the first filing after an idle spell waits for
+KEDA's next check and a pod's start. Redeliveries are counted while they
+await acknowledgment, but their count isn't an input; it stays a metric.
+The backlog counts notices, not instances, so a burst of notices with
+nothing to parse, such as a Backfill's Form 4s, can start all three
+workers for the 5 minutes before the autoscaler scales them down
+([0014]).
 
 The work comes in two kinds. New filings arrive at the pace companies
 file: the three companies filed 126 times in the 13 weeks to October 7,
-2026, mostly Form 4s ([0010]). A Backfill brings many at once: the three
-companies' XBRL 10-Ks, 10-Qs, and amendments are 208 filings ([SRC-20]).
+2026, mostly Form 4s ([0010]). A Backfill brings many at once: every
+filing its company's lists name in its range of dates, whatever its form
+([BACKFILL-1]). Over the three companies' listed history, that's 9,689
+filings, of which 484 have an instance, and 208 of those are their XBRL
+10-Ks, 10-Qs, and amendments ([SRC-19], [SRC-20]). Each filing gets a
+notice, whether or not it has an instance ([FILE-5]).
 The six stored XBRL instances of 10-Ks and 10-Qs are from 0.9 MB to
 10.9 MB each ([SRC-18]). The
 [estimates](estimates.md#cpu-memory-and-storage) assume 150 to 250 MB of
 memory a worker with lxml, or 0.5 to 2 GB with Arelle, and 0.5 to 2
 seconds an instance with lxml, until the parser is chosen, task T12, and
-the workers are measured.
-
-> **Analysis.** No task, decision record, or specification covers this.
-> Scaling a Deployment by a queue's depth on Kubernetes could be done by
-> KEDA, which reads a JetStream consumer's pending messages and drives a
-> HorizontalPodAutoscaler, or by a HorizontalPodAutoscaler on an external
-> metric that a Prometheus adapter serves from the queue's metrics. Either
-> could scale the parse workers to zero between Backfills, at the cost of a
-> new filing's facts waiting for a pod to start. Task T10 decides how
-> they scale.
+the workers are measured. Under [0014], three workers parse 1.5 to 6
+instances a second at that rate. Notices with an instance can come
+faster. The fetcher's limit of 5 requests a second ([FETCH-6]) holds them
+to about 1.7 a second on average, at three requests each: the header, the
+index page, and the instance ([FILE-1]). But once a Backfill's headers and
+index pages are fetched, each request for an instance that waited behind
+them completes a filing, so they can come at up to 5 a second ([FILE-3],
+[JOB-4]). A burst waits in the backlog until the workers drain it: three
+take 1.3 to 5.4 minutes for the 484 instances at the estimated rate
+([0014]).
 
 ## How they fail
 
@@ -194,6 +213,14 @@ The documents say this much now:
   store's specification that states the held fetch, as the owner also
   decided
   ([Failures and recovery](failures-and-recovery.md#losing-the-databases-primary)).
+- **A worker stopped partway adds nothing,** under [0014] as proposed.
+  When the autoscaler removes a replica in the middle of a parse, its
+  notice isn't acknowledged and is delivered again after 30 seconds
+  ([NATS-5]), and its facts' transaction isn't committed. While no worker
+  runs and KEDA can't read the backlog, notices wait in `NOTICES`. A notice
+  whose parse always fails is delivered again without limit, so it keeps
+  one worker running; what a worker does with a parse that fails is the
+  facts specification's to say ([0014], [T17]).
 - **A message delivered twice repeats its step harmlessly,** since filings
   are named by their accession numbers and bodies by their SHA-256
   ([one filing, end to end][design-filing], [0003]).
@@ -216,6 +243,8 @@ the facts specification's, task T17
   through their durable consumer ([NATS-5]).
 - **Garage,** for the stored instances, read over its S3 API ([IMP-3]).
 - **PostgreSQL 18,** for the facts ([0004]).
+- **KEDA,** which scales them by their consumer's backlog, reading it from
+  NATS's monitoring port, under [0014] as proposed.
 - **`edgar-asof`,** at a pinned release that reads XBRL instances, and the
   XBRL parser that task T12 chooses ([plan][plan-facts]).
 - **Their libraries:** nats-py, psycopg, boto3, and the parser ([0006]).
@@ -238,6 +267,16 @@ the facts specification's, task T17
   waits through a failover.
 - **The parser** ([0006]): a narrow parser on lxml, or Arelle; task T12
   decides.
+- **How they scale** ([0014], proposed). A HorizontalPodAutoscaler on an
+  external metric served from Prometheus, through prometheus-adapter,
+  needs no new definitions, but stops scaling while Prometheus is down,
+  and can't scale to zero on kind's Kubernetes 1.36. The scheduler could
+  scale them, with code to write that KEDA already has. A
+  HorizontalPodAutoscaler on CPU follows work already running, and can't
+  scale from zero. A fixed number of replicas wouldn't scale by queue
+  depth, as the design and [0003] have them. KEDA's own cost includes its
+  operator's grants, which at its chart's defaults reach the pipeline's
+  controls and every Secret, until two of its values narrow them.
 - **Building facts in a library** ([0009]): a package in this repository,
   a separate public library, or none. The owner chose `edgar-asof`, a
   separate public repository, which can be public and usable before the
@@ -251,22 +290,29 @@ the facts specification's, task T17
 | [0006] | Python, and the parser's two candidates. |
 | [0009] | Facts built through a pinned `edgar-asof`, whose specification defines the fact model. |
 | [0003], [0004] | Their queue, which they're scaled by, and the database their facts are kept in. |
+| [0014], proposed | How they scale: KEDA, from zero to three, by their consumer's backlog. |
 | [IMP-1], [IMP-2], [IMP-3] | Their manifests, and reading only stored objects. |
 | [FETCH-18] | `edgar-asof` reads bodies from the store, never fetching. |
 | [LOG-3], [LOG-4], [TABLE-3], [GARAGE-4], [PG-7] | What their role and key may read, and that each is their own. |
 | [MSG-2] | How they treat a notice. |
 | [NATS-5], [NATS-6] | Their durable consumer of filing notices, made before the first is published. |
 
-The status page names their decision records, 0006 and 0009; tasks T17 and
-T32, which specify them; T25, which builds them; and T10 and T12, which
-decide them ([status page][status]).
+The status page names their decision records, 0006, 0009, and 0014, which
+isn't yet Accepted; tasks T17 and T32, which specify them; T25, which
+builds them; and T10 and T12, which decide them ([status page][status]).
 
 [0003]: ../decisions/0003-queue-work-in-nats-jetstream.md
 [0004]: ../decisions/0004-keep-the-record-in-postgresql-18.md
 [0006]: ../decisions/0006-write-the-services-in-go-and-python.md
 [0009]: ../decisions/0009-read-edgar-through-a-public-point-in-time-library.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
+[0014]: ../decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
+[BACKFILL-1]: ../../spec/controls.md#7-backfill
+[FETCH-6]: ../../spec/snapshots.md#10-fetching
+[FILE-1]: ../../spec/notices.md#7-a-filings-files
+[FILE-3]: ../../spec/notices.md#7-a-filings-files
 [DISC-2]: ../../spec/notices.md#processing
+[JOB-4]: ../../spec/snapshots.md#jobs-and-events
 [JOB-6]: ../../spec/snapshots.md#jobs-and-events
 [SEEN-2]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [status]: ../status.md
@@ -282,6 +328,7 @@ decide them ([status page][status]).
 [plan-drills]: ../plan.md#traces-logs-and-drills
 [SRC-14]: ../../investigation/edgar.md#findings-so-far
 [SRC-18]: ../../investigation/edgar.md#findings-so-far
+[SRC-19]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far
 [notice.schema.json]: ../../spec/schemas/notice.schema.json
 [snapshots-imports]: ../../spec/snapshots.md#11-imports

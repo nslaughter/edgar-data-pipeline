@@ -1,6 +1,6 @@
 # Design: the EDGAR data pipeline
 
-**Status:** Draft, October 26, 2026. This document explains the pipeline's
+**Status:** Draft, October 31, 2026. This document explains the pipeline's
 architecture and the reasons for it. It makes no rules: the specifications
 under [`spec/`](../spec/) govern, the records under
 [`docs/decisions/`](decisions/) record each significant choice, and
@@ -298,7 +298,9 @@ The normative parts become specifications, one per component or boundary:
 
 ## Decisions
 
-See [`docs/decisions/`](decisions/) for each record and its status.
-Decisions still to come: scaling workers by queue depth, and the XBRL
-parser. How the documents are published as a site is decided in
+See [`docs/decisions/`](decisions/) for each record and its status. How
+the parse workers scale by queue depth is proposed in
+[0014](decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md),
+which the owner hasn't yet accepted, and the XBRL parser is still to come.
+How the documents are published as a site is decided in
 [0012](decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md).
