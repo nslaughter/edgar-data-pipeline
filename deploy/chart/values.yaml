@@ -6,8 +6,8 @@
 #
 #   credentials:
 #     garage: {rpcSecret, adminToken}
-#     garageKeys: {database-backups, fetcher, discoverer}, each {id, secret}
-#     database: {fetcher, discoverer, grafana}, each a role's password
+#     garageKeys: {database-backups, fetcher, discoverer, transfer}, each {id, secret}
+#     database: {fetcher, discoverer, grafana, transfer}, each a role's password
 #     grafana: {adminPassword}
 #   database:
 #     backups: {serverName}
@@ -168,7 +168,8 @@ jetstream:
 # its admin API (GARAGE-2): each node's capacity in the layout, in bytes, its
 # data claim's size; and each bucket, with the keys it grants, each a key of
 # credentials.garageKeys. Only the fetcher's key may write the store's bucket,
-# and no key may own a bucket (GARAGE-4).
+# and no key may own a bucket (GARAGE-4). The transfer's key may only read it
+# (GARAGE-5).
 garageSetup:
   image: docker.io/library/python:3.14-alpine@sha256:f6a589d43c42b9e7f7dc67a12d37132491f362859a5d750607710cc56da3bc72
   capacity: 10737418240
@@ -178,6 +179,7 @@ garageSetup:
     snapshots:
       fetcher: {read: true, write: true}
       discoverer: {read: true, write: false}
+      transfer: {read: true, write: false}
 
 garage:
   fullnameOverride: garage

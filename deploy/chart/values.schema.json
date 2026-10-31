@@ -159,23 +159,25 @@
         "garageKeys": {
           "description": "Each Garage key the buckets grant, by name.",
           "type": "object",
-          "required": ["database-backups", "fetcher", "discoverer"],
+          "required": ["database-backups", "fetcher", "discoverer", "transfer"],
           "additionalProperties": {"$ref": "#/definitions/garageKey"},
           "properties": {
             "database-backups": {"$ref": "#/definitions/garageKey"},
             "fetcher": {"$ref": "#/definitions/garageKey"},
-            "discoverer": {"$ref": "#/definitions/garageKey"}
+            "discoverer": {"$ref": "#/definitions/garageKey"},
+            "transfer": {"$ref": "#/definitions/garageKey"}
           }
         },
         "database": {
-          "description": "The password of each database role, the services' and Grafana's.",
+          "description": "The password of each database role: the services', Grafana's, and the transfer's.",
           "type": "object",
-          "required": ["fetcher", "discoverer", "grafana"],
+          "required": ["fetcher", "discoverer", "grafana", "transfer"],
           "additionalProperties": {"$ref": "#/definitions/password"},
           "properties": {
             "fetcher": {"$ref": "#/definitions/password"},
             "discoverer": {"$ref": "#/definitions/password"},
-            "grafana": {"$ref": "#/definitions/password"}
+            "grafana": {"$ref": "#/definitions/password"},
+            "transfer": {"$ref": "#/definitions/password"}
           }
         },
         "grafana": {

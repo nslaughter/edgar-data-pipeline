@@ -35,15 +35,13 @@ TESTED_BY = {"verify", "tests", "kind"}
 # Statements whose tests a later task in docs/plan.md writes, with that task:
 # of spec/controls.md's, T24 the discoverer, and T28 the monitoring, after
 # which each ServiceAccount in RBAC-5's table has its grants on kind; of
-# spec/snapshots.md's, T24 the discoverer's jobs and its use of edgar-asof,
-# and T36 the transfer; of spec/deployment.md's, T36 the transfer's role,
-# key, and access to the cluster store; of spec/notices.md's, T24 the
-# discoverer, with the scheduler's orders and the status it sets from
-# notices; and of spec/telemetry.md's, T28 the monitoring of observing
-# filings, with the services' metrics, and T29 the traces. Strict, like
-# xfail_strict: a statement listed here that has a test fails too, and so
-# does one whose task the plan marks done, or one checked by verify that
-# verify.py already reports.
+# spec/snapshots.md's, T24 the discoverer's jobs and its use of edgar-asof;
+# of spec/notices.md's, T24 the discoverer, with the scheduler's orders and
+# the status it sets from notices; and of spec/telemetry.md's, T28 the
+# monitoring of observing filings, with the services' metrics, and T29 the
+# traces. Strict, like xfail_strict: a statement listed here that has a test
+# fails too, and so does one whose task the plan marks done, or one checked
+# by verify that verify.py already reports.
 AWAITING = {
     **dict.fromkeys(["SOURCE-5", "BACKFILL-1", "BACKFILL-3", "FETCH-18", "JOB-3"], "T24"),
     **dict.fromkeys(
@@ -113,20 +111,6 @@ AWAITING = {
             "TRACE-8",
         ],
         "T29",
-    ),
-    **dict.fromkeys(["XFER-1", "XFER-2", "XFER-3", "LOG-5"], "T36"),
-    **dict.fromkeys(
-        [
-            "PG-15",
-            "GARAGE-5",
-            "TRANSFER-1",
-            "TRANSFER-2",
-            "TRANSFER-3",
-            "TRANSFER-4",
-            "TRANSFER-5",
-            "TRANSFER-6",
-        ],
-        "T36",
     ),
 }
 

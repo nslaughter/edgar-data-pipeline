@@ -117,6 +117,15 @@ jobs:
           install_only: true
       - name: Install the development environment
         run: uv sync --locked
+      # The Go of go.mod's toolchain line, with which the tests build the
+      # transfer and run it as the owner does, outside the cluster
+      # (spec/deployment.md, section 5, the transfer). Its modules are
+      # downloaded here, since the tests' build of it reaches no network.
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Download the Go modules
+        run: go mod download
       - name: Create the kind cluster
         run: kind create cluster --config deploy/kind.yaml --wait 120s
       # The pipeline's own images, built from the commit checked out, tagged
@@ -172,10 +181,12 @@ jobs:
               database-backups: {id: "GK$(hex 12)", secret: "$(hex 32)"}
               fetcher: {id: "GK$(hex 12)", secret: "$(hex 32)"}
               discoverer: {id: "GK$(hex 12)", secret: "$(hex 32)"}
+              transfer: {id: "GK$(hex 12)", secret: "$(hex 32)"}
             database:
               fetcher: "$(hex 24)"
               discoverer: "$(hex 24)"
               grafana: "$(hex 24)"
+              transfer: "$(hex 24)"
             grafana:
               adminPassword: "$(hex 24)"
           database:

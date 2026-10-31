@@ -1,7 +1,7 @@
 # Garage
 
 <!-- status: Garage; The snapshot store in the cluster; The transfer from the cluster to git -->
-**Status** ([status page](../status.md)): Garage: Built. The snapshot store in the cluster: Built. The transfer from the cluster to git: Specified.
+**Status** ([status page](../status.md)): Garage: Built. The snapshot store in the cluster: Built. The transfer from the cluster to git: Built.
 <!-- end status -->
 
 Garage is the pipeline's object store, which holds every body the fetcher

@@ -1,7 +1,7 @@
 # PostgreSQL 18
 
 <!-- status: PostgreSQL 18; The transfer from the cluster to git -->
-**Status** ([status page](../status.md)): PostgreSQL 18: Built. The transfer from the cluster to git: Specified.
+**Status** ([status page](../status.md)): PostgreSQL 18: Built. The transfer from the cluster to git: Built.
 <!-- end status -->
 
 PostgreSQL 18 holds the pipeline's record: a row for every fetch, what the

@@ -1,7 +1,7 @@
 # The data model and its times
 
 <!-- status: The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; Discoverer; Parse workers; Query API; `edgar-asof`; Monitoring: metrics, alerts, and dashboards -->
-**Status** ([status page](../status.md)): The snapshot store in git: Built. The snapshot store in the cluster: Built. The transfer from the cluster to git: Specified. Discoverer: Specified. Parse workers: Decided. Query API: Decided. `edgar-asof`: Decided. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part.
+**Status** ([status page](../status.md)): The snapshot store in git: Built. The snapshot store in the cluster: Built. The transfer from the cluster to git: Built. Discoverer: Specified. Parse workers: Decided. Query API: Decided. `edgar-asof`: Decided. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part.
 <!-- end status -->
 
 This page covers what the pipeline stores: the snapshot store's objects and
@@ -79,6 +79,13 @@ the records of a range of time the owner names, whose URLs `scope.json`
 covers, with their objects, unchanged, and nothing at all if that would
 break the budget ([XFER-1], [XFER-2]). A finding then cites them as it
 cites any stored version ([0010]).
+
+The transfer is `cmd/transfer`, which the owner runs where `data/` is,
+naming the range and the context of the cluster to read. It reads the
+cluster store through that cluster's API server, as a role and with a key
+of its own that may only read it, and copies nothing from a cluster that
+holds the fake EDGAR, whose records are of fetches the fake EDGAR answered
+([LOG-5], [the transfer][deployment-transfer]).
 
 ## The record of notices
 
@@ -477,6 +484,7 @@ recovery][design-outages]).
 [asof-facts-7]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#7-as-of-t
 [asof-facts-10]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#left-to-other-specifications
 [dashboards-sql]: ../../spec/schemas/dashboards.sql
+[deployment-transfer]: ../../spec/deployment.md#the-transfer
 [design-filing]: ../design.md#one-filing-end-to-end
 [design-keeps]: ../design.md#what-the-pipeline-keeps
 [design-outages]: ../design.md#outages-and-recovery
@@ -501,6 +509,7 @@ recovery][design-outages]).
 [LOG-2]: ../../spec/snapshots.md#8-history
 [LOG-3]: ../../spec/snapshots.md#8-history
 [LOG-4]: ../../spec/snapshots.md#8-history
+[LOG-5]: ../../spec/snapshots.md#8-history
 [NOTICE-2]: ../../spec/notices.md#8-backfills
 [notices-backfills]: ../../spec/notices.md#8-backfills
 [notices-files]: ../../spec/notices.md#7-a-filings-files
