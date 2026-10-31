@@ -175,6 +175,11 @@ the ruleset before the merge, or the pull request can't merge. A job newly
 required joins it after the merge, and each other open pull request then
 merges `origin/main`, so that the job runs on it.
 
+A second ruleset on `main` requires each pull request's review threads to be
+resolved before it merges: GitHub refuses the merge while any thread is
+unresolved, an outdated one included. It also requires every change to `main`
+to come through a pull request, but needs no approval.
+
 No pull request merges until the owner's iterative review has run on it and
 ended, whatever it changes: documents, data, and this file included. The
 owner starts the review, with `/iterative-review`. Each of its reviews is by a
