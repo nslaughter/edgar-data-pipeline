@@ -1,11 +1,11 @@
 # Plan: the EDGAR data pipeline
 
-**Status:** October 29, 2026. T1 to T5, T13 to T16, T19 to T23, T34 to
-T36, T38, T39 to T42, T44, and T47 to T50 are done, and T37 is split into
-T39 to T43. The next ready is T10, the decision record of how the parse
-workers scale by queue depth; T24, the discoverer, waits for
-`edgar-asof`'s first release. T6, T7, and T9 wait for each company's next
-report; the investigation's daily refetches can run when the owner asks.
+**Status:** October 31, 2026. T1 to T5, T10, T13 to T16, T19 to T23,
+T34 to T36, T38, T39 to T42, T44, and T47 to T50 are done, and T37 is
+split into T39 to T43. The next ready is T12, the decision record of the
+XBRL parser; T24, the discoverer, waits for `edgar-asof`'s first release.
+T6, T7, and T9 wait for each company's next report; the investigation's
+daily refetches can run when the owner asks.
 
 The tasks that build the pipeline, in the order they're to be done, and
 which are done. When the owner asks for the next item, an agent takes the
@@ -124,7 +124,7 @@ first part.
 
 | ID | Task | Depends on | Done |
 | --- | --- | --- | --- |
-| T10 | **How workers scale by queue depth.** A decision record: how the parse workers scale with their queue's depth on kind ([0003](decisions/0003-queue-work-in-nats-jetstream.md)). | — | |
+| T10 | **How workers scale by queue depth.** A decision record: how the parse workers scale with their queue's depth on kind ([0003](decisions/0003-queue-work-in-nats-jetstream.md)). | — | October 31, 2026: [0014](decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md), Proposed: KEDA, installed by the operators' chart, scales the parse workers' Deployment from zero to three replicas, one for each 10 notices that their consumer, `parse-workers-notices`, hasn't delivered or hasn't had acknowledged, checking every 10 seconds, and back to zero 5 minutes after the last. A version of [`spec/deployment.md`](../spec/deployment.md) states it, before T25; that version's task is still to be added. |
 | T12 | **The XBRL parser.** A decision record: a narrow parser on lxml, or Arelle ([0006](decisions/0006-write-the-services-in-go-and-python.md)), for what the facts need, from Q2's and Q3's findings. `edgar-asof` reads XBRL instances with the same parser once it's chosen. | T1, T2 | |
 | T17 | **Facts, `spec/facts.md`.** How facts are stored, and their times. It cites a version of `edgar-asof`'s specification for the fact model and what "as of T" returns, and adds the fact table. | T12, T16, an `edgar-asof` release that specifies the fact model | |
 | T18 | **The export, `spec/export.md`.** Its format, its determinism, and its hashes, answering the store's [open question 3](../spec/snapshots.md#13-open-questions). | T17 | |
