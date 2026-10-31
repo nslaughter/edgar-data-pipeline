@@ -274,7 +274,9 @@ the facts specification's, task T17
   scale them, with code to write that KEDA already has. A
   HorizontalPodAutoscaler on CPU follows work already running, and can't
   scale from zero. A fixed number of replicas wouldn't scale by queue
-  depth, as the design and [0003] have them.
+  depth, as the design and [0003] have them. KEDA's own cost includes its
+  operator's grants, which at its chart's defaults reach the pipeline's
+  controls and every Secret, until two of its values narrow them.
 - **Building facts in a library** ([0009]): a package in this repository,
   a separate public library, or none. The owner chose `edgar-asof`, a
   separate public repository, which can be public and usable before the

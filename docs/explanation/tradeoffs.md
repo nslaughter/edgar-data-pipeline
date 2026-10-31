@@ -688,7 +688,12 @@ as a Backfill's Form 4s, can start all three workers for 5 minutes. KEDA
 adds three pods to the operators' release, each requesting 100 MiB by its
 chart's default, and six definitions, most of their size `ScaledJob`'s.
 It holds the cluster's external metrics API, which no other server can
-then serve. A notice whose parse always fails is delivered again without
+then serve. Its operator's grants are broad: at its chart's defaults,
+`get` on every resource, the pipeline's controls among them, which
+[RBAC-4] forbids, and `list` on every Secret. Two of the chart's values
+narrow them, but leave it able to scale every Deployment, and to read the
+Secrets of `cnpg-system`, the namespace it shares with the other
+operators. A notice whose parse always fails is delivered again without
 limit, so it keeps one worker running. A version of the deployment
 specification states it all, before [T25] builds the workers ([0014]).
 
@@ -724,6 +729,7 @@ starting from zero delays facts more than a running worker is worth
 [T25]: ../plan.md#facts
 [T32]: ../plan.md#facts
 [NATS-5]: ../../spec/deployment.md#durable-consumers
+[RBAC-4]: ../../spec/controls.md#9-who-may-change-what
 [BACKFILL-1]: ../../spec/controls.md#7-backfill
 [SRC-19]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far

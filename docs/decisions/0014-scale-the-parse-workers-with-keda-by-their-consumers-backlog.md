@@ -85,7 +85,13 @@ must be installed by an earlier release than the resource
   chart its project maintains that renders its definitions as templates.
   It adds three pods, the operator, its metrics server, and its admission
   webhooks, each requesting 100 MiB by its chart's default, and six
-  definitions to the cluster.
+  definitions to the cluster. Its operator's grants are broad: at its
+  chart's defaults, its ClusterRole grants `get` on every resource of
+  every API group, the pipeline's controls among them, which
+  [RBAC-4](../../spec/controls.md#9-who-may-change-what) forbids, and
+  `list` and `watch` on every Secret in the cluster. Two of its chart's
+  values narrow both, but leave it able to scale every Deployment in the
+  cluster, where the scheduler would need a grant to scale one.
 - **A HorizontalPodAutoscaler on an external metric, served from
   Prometheus.** NATS's exporter, a sidecar NATS's chart offers but doesn't
   enable, exports the consumer's backlog; Prometheus scrapes it, and
@@ -119,6 +125,17 @@ to three by their consumer's backlog:
    chart, `deploy/operators/`, the third release, so its definitions are on
    the cluster before the umbrella chart renders a resource of their kinds
    ([0011](0011-install-the-definitions-and-operators-before-the-umbrella-chart.md)).
+   The operators' chart sets KEDA's value
+   `rbac.enabledCustomScaledRefKinds` to `false`, so its operator's
+   ClusterRole keeps only its fixed rules, which let it scale Deployments
+   and StatefulSets, all the parse workers need, and grant nothing on the
+   pipeline's controls
+   ([RBAC-4](../../spec/controls.md#9-who-may-change-what)). It sets
+   `permissions.operator.restrict.secret` to `true`, so the operator
+   reads Secrets only in its own namespace, not those in the release
+   namespace that hold the database roles' passwords, the Garage keys,
+   and the user agent that only the fetcher's containers read
+   ([ID-2](../../spec/snapshots.md#the-fetcher)).
 2. **What scales them.** The umbrella chart renders a `ScaledObject` of the
    parse workers' Deployment, with one trigger of the scaler: the stream
    `NOTICES`, the consumer `parse-workers-notices`, and NATS's default
@@ -183,6 +200,18 @@ delays facts more than a running worker is worth.
 - **The cluster's external metrics API is KEDA's.** KEDA serves it
   through an `APIService` that only one server in a cluster can hold, so
   prometheus-adapter couldn't serve external metrics beside it.
+- **KEDA's operator still holds grants across the cluster.** With the two
+  values above, it may scale every Deployment and StatefulSet; make,
+  change, and delete any HorizontalPodAutoscaler and Job; and read, make,
+  and change the Secrets in `cnpg-system`, among them the CloudNativePG
+  operator's and the Barman Cloud plugin's. While it makes its own
+  certificates, as its chart does by default, it may also change every
+  validating webhook configuration and `APIService` in the cluster, to
+  write its certificate authority into its own; it wouldn't need to if
+  cert-manager, which the second release installs, issued them. A release
+  of KEDA's own, in a namespace of its own, would keep the other
+  operators' Secrets from it, but would make a fifth release
+  ([0011](0011-install-the-definitions-and-operators-before-the-umbrella-chart.md)).
 - **0003's consequence, as it applies here.** The backlog holds the
   consumer's lag behind its stream, the queue's depth for the parse
   workers, and the notices awaiting their acknowledgment, among them those
@@ -208,14 +237,17 @@ delays facts more than a running worker is worth.
   [CRD-4](../../spec/deployment.md#definitions)'s annotation, which its
   chart's values add; its images by digest
   ([PIN-4](../../spec/deployment.md#6-pins)), which its chart names by tag
-  alone; the `ScaledObject`, with the bounds and timings above; a parse
-  workers' Deployment that leaves its replicas to the autoscaler, so a
-  `helm upgrade` doesn't reset them; and tests on kind that a filing
-  notice starts a worker and the workers return to zero. The telemetry's
-  version for the facts, [T32](../plan.md#facts), says which of KEDA's
-  metrics Prometheus scrapes, and whether an alert fires when the scaler
-  can't read the backlog. The deployment's version needs a task in the
-  plan, before [T25](../plan.md#facts) builds the parse workers.
+  alone; the two values that narrow its operator's grants, the first of
+  which RBAC-4's test checks, since it renders every release; whether
+  cert-manager issues KEDA's certificates; the `ScaledObject`, with the
+  bounds and timings above; a parse workers' Deployment that leaves its
+  replicas to the autoscaler, so a `helm upgrade` doesn't reset them; and
+  tests on kind that a filing notice starts a worker and the workers
+  return to zero. The telemetry's version for the facts,
+  [T32](../plan.md#facts), says which of KEDA's metrics Prometheus
+  scrapes, and whether an alert fires when the scaler can't read the
+  backlog. The deployment's version needs a task in the plan, before
+  [T25](../plan.md#facts) builds the parse workers.
 
 ## Sources
 
@@ -226,8 +258,9 @@ delays facts more than a running worker is worth.
 - [KEDA: the `ScaledObject` specification](https://keda.sh/docs/2.21/reference/scaledobject-spec/),
   for the polling interval, the cooldown period, and the replicas' bounds.
 - [KEDA's chart, version 2.21.0](https://github.com/kedacore/charts/tree/v2.21.0/keda),
-  for its definitions as templates, its pods' resource requests, and its
-  images.
+  for its definitions as templates, its pods' resource requests, its
+  images, and its operator's roles, as `templates/manager/clusterrole.yaml`
+  and `templates/manager/minimal-rbac.yaml` render them from its values.
 - [CNCF: the graduation of KEDA](https://www.cncf.io/announcements/2023/08/22/cloud-native-computing-foundation-announces-graduation-of-kubernetes-autoscaler-keda/),
   August 22, 2023.
 - [Kubernetes: the feature gate `HPAScaleToZero`](https://github.com/kubernetes/website/blob/main/content/en/docs/reference/command-line-tools-reference/feature-gates/HPAScaleToZero.md),
