@@ -565,9 +565,8 @@ Kubernetes Event-driven Autoscaling: an operator that scales a Deployment
 by the backlog of a source of work, such as a JetStream consumer. It
 starts the first replica itself, and creates a
 [HorizontalPodAutoscaler](#horizontalpodautoscaler) that scales from one
-up. Decision record 0014, which the owner hasn't yet accepted, has it
-scale the parse workers from zero to three by their consumer's backlog
-([0014]).
+up. Decision record 0014 has it scale the parse workers from zero to
+three by their consumer's backlog ([0014]).
 
 ### kind
 

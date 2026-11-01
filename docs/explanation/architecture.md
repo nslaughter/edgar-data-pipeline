@@ -1,7 +1,7 @@
 # The architecture
 
 <!-- status: Scheduler; Fetcher; Discoverer; Parse workers; Exporter; Query API; NATS JetStream; Garage; PostgreSQL 18; The controls; `edgar-asof`; The snapshot store in the cluster -->
-**Status** ([status page](../status.md)): Scheduler: Specified; built in part. Fetcher: Built. Discoverer: Specified. Parse workers: Planned; decided in part. Exporter: Decided. Query API: Decided. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified; built in part. `edgar-asof`: Decided. The snapshot store in the cluster: Built.
+**Status** ([status page](../status.md)): Scheduler: Specified; built in part. Fetcher: Built. Discoverer: Specified. Parse workers: Decided. Exporter: Decided. Query API: Decided. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified; built in part. `edgar-asof`: Decided. The snapshot store in the cluster: Built.
 <!-- end status -->
 
 This page covers the pipeline's components and the boundaries between
@@ -32,8 +32,8 @@ kind ([components][design-components], [0001]).
 The languages and libraries are decision 0006's ([0006]), and the
 discoverer's use of `edgar-asof` is task T24's ([plan][plan-observing]).
 The parse workers' parser is a decision still to come, task T12, and how
-they scale by queue depth is proposed in [0014], which the owner hasn't
-yet accepted ([decision records][decisions]). The
+they scale by queue depth is decided in [0014]
+([decision records][decisions]). The
 facts, and where the parse workers keep their manifests, are for the facts
 specification, task T17, which isn't written; the query API is built after
 it, in task T26 ([plan][plan-facts]). The pages on the

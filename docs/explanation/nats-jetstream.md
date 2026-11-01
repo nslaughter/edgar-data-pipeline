@@ -328,10 +328,9 @@ scaled by ([0003]). Of these, telemetry's version 0.1.0 gives the jobs
 `JOBS` holds of each kind, which the active fetcher serves ([METRIC-4]);
 NATS's own metrics of its streams and consumers come in a later version
 ([telemetry, left to other specifications][telemetry-left]). Decision
-record [0014], which the owner hasn't yet accepted, has KEDA read
-`parse-workers-notices`' backlog from each server's monitoring port, its
-notices not yet delivered with those not yet acknowledged, and scale the
-workers from zero to three by it.
+record [0014] has KEDA read `parse-workers-notices`' backlog from each
+server's monitoring port, its notices not yet delivered with those not
+yet acknowledged, and scale the workers from zero to three by it.
 
 ## How it fails
 

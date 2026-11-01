@@ -1,6 +1,7 @@
 # 14. Scale the parse workers with KEDA, by their consumer's backlog
 
-**Status:** Proposed, October 31, 2026.
+**Status:** Accepted, November 1, 2026. Task T10 proposed it on October 31,
+2026, and the owner accepted it, with each of its details, on November 1.
 
 ## Context
 
@@ -240,14 +241,15 @@ delays facts more than a running worker is worth.
   ([PIN-4](../../spec/deployment.md#6-pins)), which its chart names by tag
   alone; the two values that narrow its operator's grants, the first of
   which RBAC-4's test checks, since it renders every release; whether
-  cert-manager issues KEDA's certificates; the `ScaledObject`, with the
-  bounds and timings above; a parse workers' Deployment that leaves its
-  replicas to the autoscaler, so a `helm upgrade` doesn't reset them; and
-  tests on kind that a filing notice starts a worker and the workers
-  return to zero. The telemetry's version for the facts,
-  [T32](../plan.md#facts), says which of KEDA's metrics Prometheus
-  scrapes, and whether an alert fires when the scaler can't read the
-  backlog. The deployment's version needs a task in the plan, before
+  cert-manager issues KEDA's certificates, which the owner left to that
+  version; the `ScaledObject`, with the bounds and timings above; a parse
+  workers' Deployment that leaves its replicas to the autoscaler, so a
+  `helm upgrade` doesn't reset them; and tests on kind that a filing
+  notice starts a worker and the workers return to zero. The telemetry's
+  version for the facts, [T32](../plan.md#facts), says which of KEDA's
+  metrics Prometheus scrapes, and whether an alert fires when the scaler
+  can't read the backlog. The owner decided on November 1, 2026 that a
+  task of its own in the plan specifies that version, before
   [T25](../plan.md#facts) builds the parse workers.
 
 ## Sources

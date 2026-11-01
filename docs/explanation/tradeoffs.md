@@ -5,8 +5,8 @@
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
 - **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
-- **Planned:** Parse workers (decided in part); The drills.
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Planned:** The drills.
 <!-- end status -->
 
 For each decision record, 0001 to 0014: what it chose, the alternatives it
@@ -33,12 +33,10 @@ themselves hold the full context and their sources; the
 | [0011] | Four Helm releases, installed in order | One release with workarounds; one chart as two releases; three releases | Not stated |
 | [0012] | Zensical, from the documents where they are, served by GitHub Pages | GitHub's own rendering; MkDocs with Material; Sphinx with MyST; generators outside Python; another static host | Not stated for the generator; the site's one version is revisited when the pipeline has releases ([§9 of the site][site-questions]) |
 | [0013] | A bounded study of `submissions`' lag, with a record of every poll; then only the lists' changes and coverage | Keeping [0010] as it is; keeping only changes at once; building nightly from the daily index | The study's lags: if no use needs filings within the day, a later record can replace the polls with the nightly index |
-| [0014], proposed | KEDA, in the operators' chart, scaling the parse workers from zero to three by their consumer's backlog | A HorizontalPodAutoscaler on an external metric from Prometheus; the scheduler scaling them; a HorizontalPodAutoscaler on CPU; a fixed number of replicas | The parser [T12] chooses and the workers' measurements, for the ceiling; the lag from acceptance to facts available ([T32]), for the floor |
+| [0014] | KEDA, in the operators' chart, scaling the parse workers from zero to three by their consumer's backlog | A HorizontalPodAutoscaler on an external metric from Prometheus; the scheduler scaling them; a HorizontalPodAutoscaler on CPU; a fixed number of replicas | The parser [T12] chooses and the workers' measurements, for the ceiling; the lag from acceptance to facts available ([T32]), for the floor |
 
 One decision is still to come: which XBRL parser reads the instances
-([T12]). How the parse workers scale with their queue's depth is proposed
-in [0014], which the owner hasn't yet accepted ([T10])
-([decisions][design-decisions]). One is to be revisited: the notice source
+([T12]) ([decisions][design-decisions]). One is to be revisited: the notice source
 and its cadence, from the lags the record shows ([T11]).
 
 ## 0001: Deploy on Kubernetes with Helm, on kind
@@ -637,9 +635,9 @@ polls with the nightly index ([0013]).
 
 ## 0014: Scale the parse workers with KEDA, by their consumer's backlog
 
-**Proposed.** Task T10 proposed this record on October 31, 2026, and the
-owner hasn't accepted it; the [index](../decisions/README.md) gives its
-status ([0014]).
+**Accepted.** Task T10 proposed this record on October 31, 2026, and the
+owner accepted it, with each of its details, on November 1; the
+[index](../decisions/README.md) gives its status ([0014]).
 
 **The choice.** KEDA, installed by the operators' chart, scales the parse
 workers' Deployment by the backlog of their consumer,
