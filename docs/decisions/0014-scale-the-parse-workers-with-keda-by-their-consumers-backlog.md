@@ -197,8 +197,8 @@ delays facts more than a running worker is worth.
   and the operators' chart now to about 0.23 MB, so the release stays
   within Helm's 1 MiB. KEDA runs in the release's namespace, `cnpg-system`,
   and adds three pods, each requesting 100 MiB by its chart's default,
-  which the estimates count with the parse workers, not in what observing
-  filings needs.
+  which the estimates count in what observing filings needs, since the
+  release installs them whether or not a parse worker runs.
 - **The cluster's external metrics API is KEDA's.** KEDA serves it
   through an `APIService` that only one server in a cluster can hold, so
   prometheus-adapter couldn't serve external metrics beside it.

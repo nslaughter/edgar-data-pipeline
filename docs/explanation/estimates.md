@@ -381,12 +381,13 @@ of its kind take, which that measurement replaces.
 | KEDA | 3 pods: its operator, its metrics server, and its admission webhooks ([0014]) | 100 MiB each, the request its chart sets by default ([0014]) | A check of the parse workers' backlog every 10 seconds ([0014]) | None |
 | kind's control plane, and each node's agents | 1 control-plane node; agents on all 4 nodes ([KIND-1]) | 1 to 2 GB in all | 0.5 to 1.5 cores in all, with Prometheus's scrapes | Its own |
 
-Memory adds up to 3.4 to 8.7 GB for what observing filings needs, and 4.2
-to 16.7 GB with the parse workers, KEDA, the query API, the exporter,
-Tempo, and Loki. In the low case no parse worker runs, as between
-filings, and in the high case three do, with Arelle: 3 × 2 GB = 6 GB
-([0014]). KEDA, which only the parse workers need, takes 3 × 100 MiB =
-0.31 GB in both.
+Memory adds up to 3.7 to 9.0 GB for what observing filings needs, and 4.2
+to 16.7 GB with the parse workers, the query API, the exporter, Tempo, and
+Loki. Both count KEDA's three pods, 3 × 100 MiB = 0.31 GB: the operators'
+release installs KEDA whether or not a parse worker runs ([0014]), so its
+pods hold their memory from the first install, as cert-manager's do. In
+the low case no parse worker runs, as between filings, and in the high
+case three do, with Arelle: 3 × 2 GB = 6 GB ([0014]).
 
 NATS, Garage, and the database each place one replica on each of the three
 worker nodes ([PLACE-1]), 0.3 to 1.35 GB on each. With everything, and

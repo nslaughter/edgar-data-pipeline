@@ -213,7 +213,7 @@ each day, if they slow.
 ## Memory
 
 kind runs every node as a container on one machine, so memory is the
-scarce resource ([0001]). The estimates put the pipeline at 3.4 to 8.7 GB
+scarce resource ([0001]). The estimates put the pipeline at 3.7 to 9.0 GB
 for observing filings, and 4.2 to 16.7 GB with everything
 ([estimates](estimates.md#cpu-memory-and-storage)). Nearly all of it is
 spent before the first poll: the database's three instances, Prometheus,
