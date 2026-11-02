@@ -271,8 +271,10 @@ The scheduler scales with the number of Sources, not with replicas. Its
 work is one job per poll, and the chart holds the polls to the budget, 2.5
 a second ([VAL-3]). At 10 seconds, the budget covers about 25 companies;
 past that, decision 0010 expects a feed that covers every company to become
-the better notice source ([0010]), which task T11 revisits from the lags
-the record shows ([plan][plan-observing]). Each poll also starts a trace,
+the better notice source ([0010]). Decision 0015 makes the latest-filings
+feed that source, one poll every 10 seconds for every filer, whatever the
+number of companies, once the controls' specification follows it ([0015],
+[plan][plan-observing]). Each poll also starts a trace,
 25,920 a day at the starting cadence
 ([open question 3 of telemetry][telemetry-open]).
 
@@ -434,6 +436,7 @@ T29; and those of its side of the notices await T24
 [0007]: ../decisions/0007-control-the-pipeline-through-custom-resources.md
 [0009]: ../decisions/0009-read-edgar-through-a-public-point-in-time-library.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
+[0015]: ../decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md
 [design-components]: ../design.md#components
 [design-controls]: ../design.md#controls
 [design-outages]: ../design.md#outages-and-recovery
