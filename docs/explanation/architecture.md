@@ -31,8 +31,9 @@ kind ([components][design-components], [0001]).
 
 The languages and libraries are decision 0006's ([0006]), and the
 discoverer's use of `edgar-asof` is task T24's ([plan][plan-observing]).
-The parse workers' parser and how they scale by queue depth are decisions
-still to come, tasks T12 and T10 ([decision records][decisions]). The
+The parse workers' parser is a decision still to come, task T12, and how
+they scale by queue depth is decided in [0014]
+([decision records][decisions]). The
 facts, and where the parse workers keep their manifests, are for the facts
 specification, task T17, which isn't written; the query API is built after
 it, in task T26 ([plan][plan-facts]). The pages on the
@@ -380,6 +381,7 @@ library publishes, so both answer "as of T" the same way ([0009]).
 [0001]: ../decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
 [0002]: ../decisions/0002-store-bodies-in-garage.md
 [0003]: ../decisions/0003-queue-work-in-nats-jetstream.md
+[0014]: ../decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
 [0004]: ../decisions/0004-keep-the-record-in-postgresql-18.md
 [0005]: ../decisions/0005-send-sec-requests-through-one-active-fetcher.md
 [0006]: ../decisions/0006-write-the-services-in-go-and-python.md

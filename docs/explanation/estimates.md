@@ -369,7 +369,7 @@ of its kind take, which that measurement replaces.
 | Scheduler | 2, one active ([design][design-components]) | 30 to 100 MB: a Go controller | A job a poll: a few millicores at the default | None |
 | Fetcher | 2, one active ([0005]) | 50 to 150 MB: a Go service that holds a body of up to 10.9 MB ([SRC-18]) | A request, a hash, and a gzip a poll: under 10 millicores at the default | None |
 | Discoverer | 1 or 2: a Deployment ([design][design-components]) | 100 to 250 MB: a Python service that reads a list of up to 314 KB ([SRC-18]) | Reading each poll's list, and reading `gaps` every 10 seconds ([GAP-3], [METRIC-5]), which grows with the polls ([scale and limits](scale-and-limits.md#reading-the-gaps)) | None |
-| Parse workers | Scaled by queue depth, task T10 | 150 to 250 MB with lxml, 0.5 to 2 GB with Arelle, task T12 | 0.5 to 2 seconds an instance with lxml: 28 a year at the default, 12 of them reports, or 2 to 7 minutes for a Backfill of 208 reports | None |
+| Parse workers | 0 to 3, by their consumer's backlog: one for each 10 notices, and none 5 minutes after the backlog last held one ([0014]) | 150 to 250 MB with lxml, 0.5 to 2 GB with Arelle, task T12 | 0.5 to 2 seconds an instance with lxml: 28 a year at the default, 12 of them reports. A Backfill of the three companies' listed history brings 9,689 filings, 484 of them with an instance ([BACKFILL-1], [SRC-19], [SRC-20]): 4 to 16 minutes for one worker, 1.3 to 5.4 minutes for three ([0014]) | None |
 | Exporter | 1, while it runs: a CronJob | 100 to 500 MB | A run a day | Its files, in Garage |
 | Query API | 1 or 2: a stateless Deployment | 30 to 100 MB | Each query's | None |
 | NATS JetStream | 3 ([NATS-1]) | 30 to 150 MB | Little | Its streams ([above](#the-queues-streams)) |
@@ -378,15 +378,20 @@ of its kind take, which that measurement replaces.
 | kube-prometheus-stack | 1 of each part ([MON-4]) | About 1 GB in all, most of it Prometheus ([0008]) | Its scrapes, every 30 seconds | 0.6 to 3.5 GB |
 | Tempo, and Loki with Alloy | Later ([0008]) | A few hundred MB each ([0008]): 200 to 500 MB | Little | Their own volumes |
 | cert-manager | 3 pods | 30 to 100 MB each | Little | None |
+| KEDA | 3 pods: its operator, its metrics server, and its admission webhooks ([0014]) | 100 MiB each, the request its chart sets by default ([0014]) | A check of the parse workers' backlog every 10 seconds ([0014]) | None |
 | kind's control plane, and each node's agents | 1 control-plane node; agents on all 4 nodes ([KIND-1]) | 1 to 2 GB in all | 0.5 to 1.5 cores in all, with Prometheus's scrapes | Its own |
 
-Memory adds up to 3.4 to 8.7 GB for what observing filings needs, and 4.0
-to 14.4 GB with one or two parse workers, the query API, the exporter,
-Tempo, and Loki.
+Memory adds up to 3.7 to 9.0 GB for what observing filings needs, and 4.2
+to 16.7 GB with the parse workers, the query API, the exporter, Tempo, and
+Loki. Both count KEDA's three pods, 3 × 100 MiB = 0.31 GB: the operators'
+release installs KEDA whether or not a parse worker runs ([0014]), so its
+pods hold their memory from the first install, as cert-manager's do. In
+the low case no parse worker runs, as between filings, and in the high
+case three do, with Arelle: 3 × 2 GB = 6 GB ([0014]).
 
 NATS, Garage, and the database each place one replica on each of the three
 worker nodes ([PLACE-1]), 0.3 to 1.35 GB on each. With everything, and
-the rest spread evenly, each worker node holds 1.0 to 4.1 GB, and the
+the rest spread evenly, each worker node holds 1.1 to 4.9 GB, and the
 control-plane node kind's own 1 to 2 GB. Every node's volumes are on the
 host's one disk ([KIND-2]).
 
@@ -413,8 +418,10 @@ so its cost grows with the polls' rate and with time
 [0005]: ../decisions/0005-send-sec-requests-through-one-active-fetcher.md
 [0008]: ../decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
+[0014]: ../decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
 [barman-compression]: https://github.com/cloudnative-pg/plugin-barman-cloud/blob/72440855ce8c33ae71d0f3d8aca6634d2f3b8c7c/web/docs/compression.md
 [barman-retention]: https://github.com/cloudnative-pg/plugin-barman-cloud/blob/72440855ce8c33ae71d0f3d8aca6634d2f3b8c7c/web/docs/retention.md
+[BACKFILL-1]: ../../spec/controls.md#7-backfill
 [BACKFILL-2]: ../../spec/controls.md#7-backfill
 [cnpg-defaults]: https://github.com/cloudnative-pg/cloudnative-pg/blob/89e5adb773dac7fc00eff1a73f74795c37973c67/docs/src/postgresql_conf.md
 [controls-terms]: ../../spec/controls.md#2-terms

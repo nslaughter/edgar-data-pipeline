@@ -213,8 +213,8 @@ each day, if they slow.
 ## Memory
 
 kind runs every node as a container on one machine, so memory is the
-scarce resource ([0001]). The estimates put the pipeline at 3.4 to 8.7 GB
-for observing filings, and 4.0 to 14.4 GB with everything
+scarce resource ([0001]). The estimates put the pipeline at 3.7 to 9.0 GB
+for observing filings, and 4.2 to 16.7 GB with everything
 ([estimates](estimates.md#cpu-memory-and-storage)). Nearly all of it is
 spent before the first poll: the database's three instances, Prometheus,
 kind's control plane, and the three replicas each of NATS and Garage. The
@@ -223,7 +223,7 @@ scope adds little to it: each Source adds 18 to 23 series to Prometheus
 the scope.
 
 So memory doesn't limit the scope; it limits which machine can run the
-pipeline at all. At the high end, kind alone needs 14.4 GB. Each figure
+pipeline at all. At the high end, kind alone needs 16.7 GB. Each figure
 but those of the decision records is an assumption, until each
 component's memory is measured on kind
 ([§9 of the deployment][deployment-later]).

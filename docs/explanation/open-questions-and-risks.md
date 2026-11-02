@@ -626,10 +626,12 @@ T3][asof-first-release]).
 ### What isn't written yet
 
 Two specifications: the facts ([T17]) and the export ([T18]), with a minor
-version of the telemetry for them ([T32]). Two decision records: how the
-parse workers scale with their queue's depth ([T10]), and which XBRL parser
-reads the instances, a narrow parser on lxml or Arelle ([T12]). And one
-revisit: whether to keep each company's `submissions` as the notice source
+version of the telemetry for them ([T32]). One decision record: which
+XBRL parser reads the instances, a narrow parser on lxml or Arelle
+([T12]). A version of the deployment specification that states how the
+parse workers scale, as [0014] decides ([T10]): the owner decided that a
+task of its own specifies it, and the plan doesn't have that task yet. And
+one revisit: whether to keep each company's `submissions` as the notice source
 ([T11]). And a version of the snapshot store's specification that states
 what the fetcher does while a write can't be made, as the owner decided
 with [T23]: it holds the fetch and tries the write again, sending nothing
@@ -768,6 +770,7 @@ consequence that fetching continues while PostgreSQL fails over.
 [0001]: ../decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
 [0002]: ../decisions/0002-store-bodies-in-garage.md
 [0003]: ../decisions/0003-queue-work-in-nats-jetstream.md
+[0014]: ../decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
 [0004]: ../decisions/0004-keep-the-record-in-postgresql-18.md
 [0005]: ../decisions/0005-send-sec-requests-through-one-active-fetcher.md
 [0006]: ../decisions/0006-write-the-services-in-go-and-python.md
