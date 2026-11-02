@@ -156,12 +156,15 @@ the proposed default of the matching item under
    ([GAP-2](../../spec/notices.md#5-polls-coverage-and-gaps)).
 4. **Each day is checked against its master index.** A second `Source`
    polls the quarter's daily index listing every hour. For each day the
-   listing shows that the discoverer hasn't read yet, it queues that day's
-   master index and reads it. Each filing the index lists that no poll of
-   the feed showed is recorded as first shown by that index, and its files
-   are fetched, under the CIK of the first line that lists it (detail 11).
-   Filings are matched by accession number. The record counts each filing
-   that only one of the two sources showed.
+   listing shows that the discoverer hasn't read yet, from the day after
+   the feed's first poll whose list is read (detail 12), it queues that
+   day's master index and reads it. After a quarter ends, its listing is
+   still polled until its last days are read (detail 13). Each filing the
+   index lists that no poll of the feed showed is recorded as first shown
+   by that index, and its files are fetched, under the CIK of the first
+   line that lists it (detail 11). Filings are matched by accession
+   number. The record counts each filing that only one of the two sources
+   showed.
 5. **The three companies' `submissions` Sources stay through the study**
    ([0013](0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md),
    T45). So for their filings, the record bounds when each of the two feeds
@@ -261,6 +264,30 @@ decided, and keeps its number.
     alternative is the CIK of a line that a `submissions` Source polls,
     when one does, which keeps the three companies' filings in the scope's
     directories even when no Source showed them.
+12. **The first day checked.** Proposed default: the day after that of
+    the feed's first poll whose list is read, and every day after it.
+    Earlier days, which the feed didn't cover whole, are left to
+    Backfills, as
+    [FILE-2](../../spec/notices.md#7-a-filings-files) leaves the filings
+    a Source shows at its first poll. Checking every day the listing shows
+    would, at a start on December 1, 2026, read about 40 business days at
+    once: at 3,100 to 6,200 filings a day and 2.05 fetches a filing
+    ([estimates](../explanation/estimates.md#requests-a-second)), 254,000
+    to 508,000 fetches, 14 to 28 hours of the fetcher's whole limit. The
+    feed's new filings would wait behind them, since the fetcher takes a
+    filing's jobs in the order they were queued
+    ([JOB-4](../../spec/snapshots.md#jobs-and-events)), and each of those
+    days' filings would count as one the feed didn't show.
+13. **The listing at a quarter's end.** Proposed default: a quarter's
+    listing is still polled after the quarter ends, beside the new
+    quarter's, until the discoverer has read a poll of it made after the
+    new quarter's first day, and the master index of each day that poll
+    shows. The listing shows a day at about 1:45 a.m. Eastern the next
+    morning (SRC-23), so it shows the quarter's last day only in the new
+    quarter; and a pipeline that was down across the quarter's end reads
+    the days it missed once it's back. The alternative, polling only the
+    new quarter's listing from its first day, leaves the old quarter's
+    last day unchecked, and any day an outage left unread.
 
 ## Consequences
 
@@ -276,13 +303,13 @@ decided, and keeps its number.
   [BACKFILL-2](../../spec/controls.md#7-backfill)), take the rest: about
   4.7 a second on average, and more at night and on weekends. VAL-3's
   budget stays, though the polls use a twenty-fifth of it.
-- **Every filing in the master index is found.** A filing the feed shows
-  is first seen within a cadence, plus the feed's own delay. One it misses
-  is found within about a day. Either way its acceptance time comes from
-  its header, so "as of" answers don't depend on which source found it.
-  Whether the index lists every filing, and whether the feed shows every
-  filing, is for the record to show: the daily check counts each filing
-  that only one of them showed.
+- **Every filing in the master index of a day checked is found.** A
+  filing the feed shows is first seen within a cadence, plus the feed's
+  own delay. One it misses is found within about a day. Either way its
+  acceptance time comes from its header, so "as of" answers don't depend
+  on which source found it. Whether the index lists every filing, and
+  whether the feed shows every filing, is for the record to show: the
+  daily check counts each filing that only one of them showed.
 - **The record keeps a new kind of gap.** A poll that doesn't reach back is
   a gap in the feed's coverage, though the poll succeeded. Answers about
   what the pipeline held at a time carry it, as they carry a missed poll
@@ -306,10 +333,11 @@ decided, and keeps its number.
   `scope.json` covers the feed already, and the listing until the quarter
   ends.
 - **The daily index's URL names its quarter.** The listing's Source
-  changes each quarter: `2027/QTR1/` from January 1, 2027. `scope.json`
-  must change too before the transfer can copy the new quarter's records.
-  The controls' version says whether the chart's values name the quarter
-  or the scheduler derives it.
+  changes each quarter: `2027/QTR1/` from January 1, 2027, while
+  `2026/QTR4/`'s is still polled until its last days are read
+  (detail 13). `scope.json` must change too before the transfer can copy
+  the new quarter's records. The controls' version says whether the
+  chart's values name the quarter or the scheduler derives it.
 - **`edgar-asof` reads two more feeds.** The discoverer reads EDGAR through
   `edgar-asof`
   ([0009](0009-read-edgar-through-a-public-point-in-time-library.md)). So
