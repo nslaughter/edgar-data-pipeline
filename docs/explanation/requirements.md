@@ -236,7 +236,9 @@ network; a fake EDGAR in the cluster serves stored versions instead
   latest-filings feed, which covers every company, is in the git store's
   scope for the investigation, which recorded what it holds (task T5,
   [plan][plan-investigation]; [SRC-26] to [SRC-28]), but no Source polls
-  it.
+  it yet. Decision 0015 makes it the notice source for every filer, so the
+  cluster records every filer's filings once the specifications follow it
+  ([0015]).
 - **Filing documents in general.** For each filing, the pipeline fetches
   its header, its index page, and the XBRL instance the index page names
   ([FILE-1]). `edgar-asof` leaves filing documents and forms in general to
@@ -268,6 +270,7 @@ network; a fake EDGAR in the cluster serves stored versions instead
 [0008]: ../decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md
 [0009]: ../decisions/0009-read-edgar-through-a-public-point-in-time-library.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
+[0015]: ../decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md
 [ACCESS-1]: ../../spec/controls.md#8-secaccess
 [ACCESS-2]: ../../spec/controls.md#8-secaccess
 [ACCESS-3]: ../../spec/controls.md#8-secaccess

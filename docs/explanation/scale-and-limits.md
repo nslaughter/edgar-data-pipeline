@@ -64,18 +64,19 @@ about one cadence apart ([SEEN-3]). It bounds, too, when the filing became
 available: at 10 seconds, within about 10 seconds plus the source's own
 delay ([0010]). So more companies cost each filing's first-seen time its
 precision. Decision 0010 expects that past about 25 companies, a feed that
-covers every company becomes the better notice source ([0010]), and task
-T11 revisits the notice source and its cadence from the lags the record
-shows, in a decision record that supersedes 0010 if anything changes
-([plan][plan-observing]).
+covers every company becomes the better notice source ([0010]). Decision
+0015 makes that change, from the goal the owner stated rather than from
+the lags the record shows. One Source polls EDGAR's latest-filings feed,
+which serves every company in one poll, as long as the polls come closer
+together than its latest 100 entries span ([SRC-28]). Each day is checked
+against its master index, which covers every company too, but appears
+hours after acceptance ([SRC-5], [0015]). The specifications follow it in
+versions of their own, the notices' first ([plan][plan-observing]).
 
 > **Analysis.** No task, decision record, or specification covers this.
-> The pipeline could go past the budget in three ways. It could poll a
-> feed that covers every company, such as EDGAR's latest-filings feed, so
-> one poll serves every company, as long as the polls come closer together
-> than its latest 100 entries span ([SRC-28]); the daily indexes cover
-> every company too, but appear hours after acceptance ([SRC-5], [0010]).
-> It could poll closely only the companies whose filings matter soonest,
+> Besides the feed that [0015] chooses, the pipeline could go past the
+> budget in two ways. It could poll closely only the companies whose
+> filings matter soonest,
 > and the rest at longer cadences, as each Source's own cadence allows
 > ([§6 of the controls][controls-source]). Or it could give the polls more
 > of the fetcher's limit than half, at the cost of the new filings' fetches
@@ -308,6 +309,7 @@ each part would stop:
 [0002]: ../decisions/0002-store-bodies-in-garage.md
 [0005]: ../decisions/0005-send-sec-requests-through-one-active-fetcher.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
+[0015]: ../decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md
 [barman-compression]: https://github.com/cloudnative-pg/plugin-barman-cloud/blob/72440855ce8c33ae71d0f3d8aca6634d2f3b8c7c/web/docs/compression.md
 [barman-retention]: https://github.com/cloudnative-pg/plugin-barman-cloud/blob/72440855ce8c33ae71d0f3d8aca6634d2f3b8c7c/web/docs/retention.md
 [controls-source]: ../../spec/controls.md#6-source
