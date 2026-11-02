@@ -707,10 +707,10 @@ starting from zero delays facts more than a running worker is worth
 ## 0015: Poll the latest-filings feed for every filer's filings, and reconcile each day with the daily index
 
 **Proposed.** The owner asked for this record on November 2, 2026, from
-the goal the owner stated that day, and decided one of its details the
-same day: a filing's files are fetched under its issuer's CIK. The record
-is Accepted once the owner accepts it, and its other details are proposed
-defaults until the owner decides them; the
+the goal the owner stated that day, and decided six of its details the
+same day, among them that a filing's files are fetched under its issuer's
+CIK. The record is Accepted once the owner accepts it, and its other
+details are proposed defaults until the owner decides them; the
 [index](../decisions/README.md) gives its status ([0015]).
 
 **The choice.** One Source polls EDGAR's latest-filings feed, which lists

@@ -186,13 +186,54 @@ the proposed default of the matching item under
    have copied those the feed showed first
    ([XFER-1](../../spec/snapshots.md#records-the-cluster-made)). The CIK
    of a filing with no `Issuer` entry, and of one only the master index
-   lists, is still the owner's to decide (details 9 to 11).
+   lists, is in item 2.
+2. **Details 9 to 13: their proposed defaults,** on November 2, 2026:
+   - **Detail 9, a filing whose entries name a `Subject` and no
+     `Issuer`,** as a Form 144's and a Schedule 13D's, 13D/A's, or 13G's
+     do (SRC-27): fetched under the subject's CIK, as its `Subject`
+     entry's `link` gives it, over the first entry's CIK. The subject is
+     the company the filing concerns, as a Form 4's issuer is, so the three
+     companies' Forms 144 and Schedules are fetched under the directories
+     the scope covers. The findings don't show which party's directory
+     holds these filings.
+   - **Detail 10, a filing whose entries read name neither an `Issuer`
+     nor a `Subject`,** such as one with a single filer, or a Form 4 whose
+     issuer's entry a poll's 100 entries cut off, as the stored version's
+     last entry was (SRC-27): fetched under the CIK of its first entry
+     read, the filer's own for a single filer, over leaving it to that
+     night's check against the master index, which would find a single
+     filer's filings a day late.
+   - **Detail 11, a filing only the master index lists:** fetched under
+     the CIK of the first line that lists it, over the CIK of a line that
+     a `submissions` Source polls. The index lists a filing on a line for
+     each CIK it names (SRC-28), and no finding shows each one's role. A
+     filing that one of the three companies' `submissions` Sources showed
+     before the index is read has its fetches queued under the company's
+     CIK already, since FILE-1 keeps the URL of a file's first job.
+   - **Detail 12, the first day checked:** the day after that of the
+     feed's first poll whose list is read, and every day after it, over
+     every day the listing shows. Earlier days, which the feed didn't
+     cover whole, are left to Backfills, as
+     [FILE-2](../../spec/notices.md#7-a-filings-files) leaves the filings
+     a Source shows at its first poll. Checking every day at a start on
+     December 1, 2026 would queue 254,000 to 508,000 fetches, 14 to 28
+     hours of the fetcher's whole limit, ahead of the feed's new filings
+     ([JOB-4](../../spec/snapshots.md#jobs-and-events)).
+   - **Detail 13, the listing at a quarter's end:** a quarter's listing is
+     still polled after the quarter ends, beside the new quarter's, until
+     the discoverer has read a poll of it made after the new quarter's
+     first day, and the master index of each day that poll shows. That's
+     chosen over polling only the new quarter's listing from its first
+     day, which would leave the old quarter's last day unchecked, since
+     the listing shows a day only at about 1:45 a.m. Eastern the next
+     morning (SRC-23), and any day an outage across the quarter's end left
+     unread.
 
 ## Details for the owner to decide
 
 Each has a proposed default, which the decision above uses. The owner
-decides each one by keeping its default or choosing another. Detail 4 is
-decided, and keeps its number.
+decides each one by keeping its default or choosing another. Details 4
+and 9 to 13 are decided, and keep their numbers.
 
 1. **The feed's cadence.** Proposed default: 10 seconds, as 0010's
    Sources start. That bounds each filing's first-seen time within about
@@ -248,58 +289,19 @@ decided, and keeps its number.
    ([0013](0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md)),
    so the discoverer is built once.
 9. **The CIK of a filing whose entries name a `Subject` and no
-   `Issuer`,** as a Form 144's and a Schedule 13D's, 13D/A's, or 13G's do
-   (SRC-27). Proposed default: the subject's, as its `Subject` entry's
-   `link` gives it. The subject is the company the filing concerns, as a
-   Form 4's issuer is, so the three companies' Forms 144 and Schedules
-   would be fetched under the directories the scope covers. The
-   alternative is the first entry's CIK, a reporting owner's or a filer's
-   for each Form 144 and half the Schedules in the stored version; the
-   findings don't show which party's directory holds these filings.
+   `Issuer`.** The owner decided it: its subject's
+   ([what the owner decided](#what-the-owner-decided)).
 10. **The CIK of a filing whose entries read name neither an `Issuer` nor
-    a `Subject`.** That's a filing with a single filer, whose role no
-    stored entry shows, since the stored version's 50 filings are all
-    ownership forms and Schedules (SRC-28); or a Form 4 whose issuer's
-    entry a poll's 100 entries cut off, as the stored version's last entry
-    was (SRC-27). Proposed default: the CIK of its first entry read, as
-    its `link` gives it, which for a single filer is the filer's own. The
-    alternative leaves such a filing to that night's check against the
-    master index, as detail 3 leaves a gap's filings, but finds a single
-    filer's filings a day late.
-11. **The CIK of a filing only the master index lists.** The index lists a
-    filing on a line for each CIK it names (SRC-28), and no finding shows
-    that it gives each one's role. Proposed default: the CIK of the first
-    line that lists it. If one of the three companies' `submissions`
-    Sources showed the filing before the index is read, its fetches are
-    queued under the company's CIK already, and FILE-1 keeps the URL of a
-    file's first job. The
-    alternative is the CIK of a line that a `submissions` Source polls,
-    when one does, which keeps the three companies' filings in the scope's
-    directories even when no Source showed them.
-12. **The first day checked.** Proposed default: the day after that of
-    the feed's first poll whose list is read, and every day after it.
-    Earlier days, which the feed didn't cover whole, are left to
-    Backfills, as
-    [FILE-2](../../spec/notices.md#7-a-filings-files) leaves the filings
-    a Source shows at its first poll. Checking every day the listing shows
-    would, at a start on December 1, 2026, read about 40 business days at
-    once: at 3,100 to 6,200 filings a day and 2.05 fetches a filing
-    ([estimates](../explanation/estimates.md#requests-a-second)), 254,000
-    to 508,000 fetches, 14 to 28 hours of the fetcher's whole limit. The
-    feed's new filings would wait behind them, since the fetcher takes a
-    filing's jobs in the order they were queued
-    ([JOB-4](../../spec/snapshots.md#jobs-and-events)), and each of those
-    days' filings would count as one the feed didn't show.
-13. **The listing at a quarter's end.** Proposed default: a quarter's
-    listing is still polled after the quarter ends, beside the new
-    quarter's, until the discoverer has read a poll of it made after the
-    new quarter's first day, and the master index of each day that poll
-    shows. The listing shows a day at about 1:45 a.m. Eastern the next
-    morning (SRC-23), so it shows the quarter's last day only in the new
-    quarter; and a pipeline that was down across the quarter's end reads
-    the days it missed once it's back. The alternative, polling only the
-    new quarter's listing from its first day, leaves the old quarter's
-    last day unchecked, and any day an outage left unread.
+    a `Subject`.** The owner decided it: its first entry's
+    ([what the owner decided](#what-the-owner-decided)).
+11. **The CIK of a filing only the master index lists.** The owner decided
+    it: the first line's ([what the owner decided](#what-the-owner-decided)).
+12. **The first day checked.** The owner decided it: the day after that of
+    the feed's first poll whose list is read
+    ([what the owner decided](#what-the-owner-decided)).
+13. **The listing at a quarter's end.** The owner decided it: polled until
+    its last days are read
+    ([what the owner decided](#what-the-owner-decided)).
 
 ## Consequences
 
