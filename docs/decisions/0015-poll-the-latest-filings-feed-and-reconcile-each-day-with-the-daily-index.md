@@ -109,8 +109,10 @@ findings:
 - **D. The daily index alone**
   ([0013](0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md)'s
   option B). It's the simplest and cheapest, and as complete as the index
-  is. But each filing is first seen hours after its acceptance (SRC-5),
-  against the owner's goal, and no feed's lag within the day is measured.
+  is. But a day's filings are first seen only once its master index is
+  published, at about 10 p.m. Eastern on its date, or at about 1:45 a.m.
+  the next morning through the listing (SRC-5, SRC-23). That's against
+  the owner's goal, and no feed's lag within the day is measured.
 - **E. The Public Dissemination Service.** It pushes each filing as it's
   disseminated: by the SEC's account, it sends each accepted public filing
   to its subscribers in real time. But it's a paid subscription over a dedicated
@@ -310,9 +312,15 @@ decided, and keeps its number.
   ([estimates](../explanation/estimates.md#requests-a-second)). Backfills,
   whose fetches go last
   ([JOB-4](../../spec/snapshots.md#jobs-and-events),
-  [BACKFILL-2](../../spec/controls.md#7-backfill)), take the rest: about
-  4.7 a second on average, and more at night and on weekends. VAL-3's
-  budget stays, though the polls use a twenty-fifth of it.
+  [BACKFILL-2](../../spec/controls.md#7-backfill)), take the rest. On
+  average that's 4.45 to 4.53 a second while the study's Sources run,
+  less than the 4.7 they get now, and 4.75 to 4.83 after the study. The
+  estimates assume 90% of new filings come in three evening hours, when
+  their fetches take 0.53 to 1.06 a second. Then Backfills get 3.5 to
+  4.1 a second during the study, and 3.8 to 4.4 after it; at night and on
+  weekends they get more. These leave out the fetches of the filings
+  the daily check finds, which the record will count. VAL-3's budget
+  stays, though after the study the polls use a twenty-fifth of it.
 - **Every filing in the master index of a day checked is found.** A
   filing the feed shows is first seen within a cadence, plus the feed's
   own delay. One it misses is found within about a day. Either way its
@@ -345,8 +353,14 @@ decided, and keeps its number.
 
   A finding about them cites the records once the transfer copies them to
   `data/` ([XFER-1](../../spec/snapshots.md#records-the-cluster-made)).
-  `scope.json` covers the feed already, and the listing until the quarter
-  ends.
+  `scope.json` covers the feed already, and this quarter's listing and
+  master indexes, but not the next quarter's. It covers filings' files
+  only in the three companies' directories (SRC-27). So as the scope
+  stands, the two questions that need each filing's header (SRC-1), how
+  long after acceptance the feed shows a filing and whether its times are
+  acceptance times, are answered from the three companies' filings alone.
+  Answering them for other filers needs the scope widened, which is the
+  owner's to ask for.
 - **The daily index's URL names its quarter.** The listing's Source
   changes each quarter: `2027/QTR1/` from January 1, 2027, while
   `2026/QTR4/`'s is still polled until its last days are read
@@ -372,7 +386,7 @@ decided, and keeps its number.
 ## Sources
 
 - The findings SRC-1, SRC-4, SRC-5, SRC-18, SRC-19, SRC-21, SRC-23, and
-  SRC-26 to SRC-28 in [`investigation/edgar.md`](../../investigation/edgar.md#findings).
+  SRC-25 to SRC-28 in [`investigation/edgar.md`](../../investigation/edgar.md#findings).
 - The feed's stored version, of 56,306 bytes, kept as the object
   `36a5016d80ce782d8f2aed1d77fa2b31dbeb0fa6e63edfcdd7fb2dbc352416d6`, of
   4,035 bytes.
