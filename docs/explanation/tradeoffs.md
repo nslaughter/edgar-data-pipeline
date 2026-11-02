@@ -693,7 +693,8 @@ narrow them, but leave it able to scale every Deployment, and to read the
 Secrets of `cnpg-system`, the namespace it shares with the other
 operators. A notice whose parse always fails is delivered again without
 limit, so it keeps one worker running. A version of the deployment
-specification states it all, before [T25] builds the workers ([0014]).
+specification, [T51], states it all, before [T25] builds the workers
+([0014]).
 
 **What would change it.** The record says what would. The parser [T12]
 chooses, and the workers' measurements on kind, may move the ceiling:
@@ -726,6 +727,7 @@ starting from zero delays facts more than a running worker is worth
 [T12]: ../plan.md#facts
 [T25]: ../plan.md#facts
 [T32]: ../plan.md#facts
+[T51]: ../plan.md#facts
 [NATS-5]: ../../spec/deployment.md#durable-consumers
 [RBAC-4]: ../../spec/controls.md#9-who-may-change-what
 [BACKFILL-1]: ../../spec/controls.md#7-backfill
