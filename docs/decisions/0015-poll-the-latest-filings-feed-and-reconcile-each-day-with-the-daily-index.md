@@ -214,9 +214,19 @@ decided, and keeps its number.
    the header, the index page, and the instance, as FILE-1 to FILE-3 say
    now. The estimates put every filer's fetches at 0.07 to 0.15 a second
    on average, and up to 21% of the limit in the evening
-   ([estimates](../explanation/estimates.md#requests-a-second)). The
+   ([estimates](../explanation/estimates.md#requests-a-second)). They
+   put what those files store at 16.8 to 82.9 MB of new objects a day, 6.1
+   to 30 GB a year, which Garage keeps three times on the host's disk
+   ([GARAGE-3](../../spec/deployment.md#garage)). In PostgreSQL, a
+   filing's rows take 981 bytes and each fetch's 1,205: 10.7 to 21.4 MB a
+   day, more than the feed's polls add. Each of the database's three
+   instances keeps them
+   ([PG-3](../../spec/deployment.md#instances-and-backups)), and each
+   later day's base backup copies them again
+   ([estimates](../explanation/estimates.md#how-the-stores-grow)). The
    alternative is only each filing's header, for its acceptance time,
-   until the decision on the universe.
+   until the decision on the universe: about half the fetches, and none
+   of the instances, which are 2.6 to 41.7 MB of each day's objects.
 6. **The bodies of the feed's versions.** Proposed default: keep each one,
    as the snapshot store keeps every version now. If each body compresses
    as the stored one did, that's about 34.9 MB of gzip a day at 10
@@ -320,6 +330,11 @@ decided, and keeps its number.
   7.9 to 8.5 MB a day in PostgreSQL
   ([estimates](../explanation/estimates.md#postgresql)). The three
   companies' polls at the same cadence fetch 4.1 to 4.8 GB a day.
+- **What every filer's files cost.** As detail 5's default fetches them,
+  6,355 to 12,710 fetches a day store 16.8 to 82.9 MB of objects, which
+  Garage keeps three times over, and add 10.7 to 21.4 MB a day to PostgreSQL,
+  before any facts, which the decision on the universe sets
+  ([estimates](../explanation/estimates.md#how-the-stores-grow)).
 - **The investigation gains questions.** The record answers them as it
   answers Q4's lags
   ([0010](0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)):
