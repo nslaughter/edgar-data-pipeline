@@ -1,8 +1,9 @@
 # 15. Poll the latest-filings feed for every filer's filings, and reconcile each day with the daily index
 
-**Status:** Proposed, November 2, 2026. The owner asked for it on November
-2, 2026, ahead of T11, from the goal the owner stated that day rather than
-from measured lags. It would supersede the part of
+**Status:** Accepted, November 2, 2026. The owner asked for it on November
+2, 2026, from the goal the owner stated that day rather than from measured
+lags. The owner accepted it, with each of its details, the same day, and
+made it T11. It supersedes the part of
 [0010](0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)
 that makes each company's `submissions` the notice source, and the part of
 [0013](0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md)
@@ -124,10 +125,8 @@ findings:
 
 ## Decision
 
-C. Each detail below is the owner's, where
-[what the owner decided](#what-the-owner-decided) gives it, and otherwise
-the proposed default of the matching item under
-[details for the owner](#details-for-the-owner-to-decide):
+C, with each of its details as the owner decided it
+([what the owner decided](#what-the-owner-decided)):
 
 1. **The notice source is the latest-filings feed,** at the URL the scope
    holds: every form, ownership forms included, with `count=100` (T5). One
@@ -229,79 +228,91 @@ the proposed default of the matching item under
      morning (SRC-23), and any day an outage across the quarter's end left
      unread.
 
+3. **Details 1 to 3 and 5 to 8: their proposed defaults,** on November 2,
+   2026, when the owner accepted the record:
+   - **Detail 1, the feed's cadence:** 10 seconds, as 0010's Sources
+     start, over 60 seconds. That bounds each filing's first-seen time
+     within about 10 seconds, at 2% of the limit. At 60 seconds the polls
+     would cost a sixth as much and bound it within a minute, still well
+     within the 14 to 31 minutes that 100 entries span on average
+     (SRC-28).
+   - **Detail 2, the hours it polls:** all hours, at one cadence, since a
+     `Source` has no field for hours
+     ([§6 of the controls](../../spec/controls.md#6-source)), over only
+     EDGAR's hours, 6 a.m. to 10 p.m. Eastern (SRC-25). Those would make
+     5,760 polls a day rather than 8,640, and need a new field in the
+     `Source`.
+   - **Detail 3, a poll that doesn't reach back:** the gap is recorded,
+     and its filings are left to that night's check against the master
+     index, over asking for the feed's next page with `start`. That would
+     need a finding that `start` pages the feed, and widen the scope to
+     each page's URL.
+   - **Detail 5, which files of every filer's filings are fetched:** the
+     header, the index page, and the instance, as FILE-1 to FILE-3 say
+     now, over only each filing's header, for its acceptance time, until
+     the decision on the universe. That would take about half the
+     fetches, and none of the instances, which are 2.6 to 41.7 MB of each
+     day's objects. The estimates put every filer's fetches at 0.07 to
+     0.15 a second on average, and up to 21% of the limit in the evening
+     ([estimates](../explanation/estimates.md#requests-a-second)). They
+     put what those files store at 16.8 to 82.9 MB of new objects a day,
+     6.1 to 30 GB a year, which Garage keeps three times on the host's
+     disk ([GARAGE-3](../../spec/deployment.md#garage)). In PostgreSQL, a
+     filing's rows take 981 bytes and each fetch's 1,205: 10.7 to 21.4 MB
+     a day, more than the feed's polls add. Each of the database's three
+     instances keeps them
+     ([PG-3](../../spec/deployment.md#instances-and-backups)), and each
+     later day's base backup copies them again
+     ([estimates](../explanation/estimates.md#how-the-stores-grow)).
+   - **Detail 6, the bodies of the feed's versions:** each one is kept,
+     as the snapshot store keeps every version now. If each body
+     compresses as the stored one did, that's about 34.9 MB of gzip a day
+     at 10 seconds, or 12.7 GB a year, which Garage keeps three times over
+     ([GARAGE-3](../../spec/deployment.md#garage)). Keeping only changes,
+     which 0013 adopts after its study, doesn't shrink them, since every
+     poll's body differs. Whether a version of the store treats this feed
+     differently is for T46.
+   - **Detail 7, how often the listing is polled:** every hour, 24 polls a
+     day. A day's filings are then checked within about an hour of the
+     listing's showing them, by about 2:45 a.m. Eastern the next morning
+     (SRC-23).
+   - **Detail 8, the plan:** T11 is this record, and depends on the owner
+     alone, rather than also on T28. The notices' version for the feed and
+     the daily check, T52, comes before T24 builds the discoverer, as
+     T44's did
+     ([0013](0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md)),
+     so the discoverer is built once. That's chosen over keeping T11
+     waiting on T28, and building the discoverer on `submissions` first,
+     to be changed later.
+
 ## Details for the owner to decide
 
-Each has a proposed default, which the decision above uses. The owner
-decides each one by keeping its default or choosing another. Details 4
-and 9 to 13 are decided, and keep their numbers.
+Each had a proposed default. The owner decided all thirteen on November 2,
+2026, keeping the proposed default of each but detail 4
+([what the owner decided](#what-the-owner-decided)). Each keeps its
+number, which the rest of the record cites.
 
-1. **The feed's cadence.** Proposed default: 10 seconds, as 0010's
-   Sources start. That bounds each filing's first-seen time within about
-   10 seconds, at 2% of the limit. At 60 seconds the polls would cost a
-   sixth as much and bound it within a minute. That's still well within
-   the 14 to 31 minutes that 100 entries span on average (SRC-28).
-2. **The hours it polls.** Proposed default: all hours, at one cadence,
-   since a `Source` has no field for hours
-   ([§6 of the controls](../../spec/controls.md#6-source)). Polling only
-   during EDGAR's hours, 6 a.m. to 10 p.m. Eastern (SRC-25), would make
-   5,760 polls a day rather than 8,640. It needs a new field in the
-   `Source`.
-3. **A poll that doesn't reach back.** Proposed default: record the gap,
-   and leave its filings to that night's check against the master index.
-   The alternative is to ask for the feed's next page with `start`. That
-   needs a finding that `start` pages the feed, and widens the scope to
-   each page's URL.
-4. **The CIK a filing's files are fetched under.** The owner decided it:
-   its issuer's ([what the owner decided](#what-the-owner-decided)).
-5. **Which files of every filer's filings are fetched.** Proposed default:
-   the header, the index page, and the instance, as FILE-1 to FILE-3 say
-   now. The estimates put every filer's fetches at 0.07 to 0.15 a second
-   on average, and up to 21% of the limit in the evening
-   ([estimates](../explanation/estimates.md#requests-a-second)). They
-   put what those files store at 16.8 to 82.9 MB of new objects a day, 6.1
-   to 30 GB a year, which Garage keeps three times on the host's disk
-   ([GARAGE-3](../../spec/deployment.md#garage)). In PostgreSQL, a
-   filing's rows take 981 bytes and each fetch's 1,205: 10.7 to 21.4 MB a
-   day, more than the feed's polls add. Each of the database's three
-   instances keeps them
-   ([PG-3](../../spec/deployment.md#instances-and-backups)), and each
-   later day's base backup copies them again
-   ([estimates](../explanation/estimates.md#how-the-stores-grow)). The
-   alternative is only each filing's header, for its acceptance time,
-   until the decision on the universe: about half the fetches, and none
-   of the instances, which are 2.6 to 41.7 MB of each day's objects.
-6. **The bodies of the feed's versions.** Proposed default: keep each one,
-   as the snapshot store keeps every version now. If each body compresses
-   as the stored one did, that's about 34.9 MB of gzip a day at 10
-   seconds, or 12.7 GB a year, which Garage keeps three times over
-   ([GARAGE-3](../../spec/deployment.md#garage)). Keeping only changes,
-   which 0013 adopts after its study, doesn't shrink them, since every
-   poll's body differs. Whether a version of the store treats this feed
-   differently is for T46.
-7. **How often the listing is polled.** Proposed default: every hour, 24
-   polls a day. A day's filings are then checked within about an hour of
-   the listing's showing them, by about 2:45 a.m. Eastern the next
-   morning (SRC-23).
-8. **The plan.** Proposed default: T11 becomes this record. It then
-   depends on the owner alone, rather than also on T28. The notices'
-   version for the feed and the daily check comes before T24 builds the
-   discoverer, as T44's did
-   ([0013](0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md)),
-   so the discoverer is built once.
+1. **The feed's cadence:** 10 seconds.
+2. **The hours it polls:** all hours.
+3. **A poll that doesn't reach back:** the gap is recorded, and that
+   night's check finds its filings.
+4. **The CIK a filing's files are fetched under:** its issuer's.
+5. **Which files of every filer's filings are fetched:** the header, the
+   index page, and the instance.
+6. **The bodies of the feed's versions:** each one is kept.
+7. **How often the listing is polled:** every hour.
+8. **The plan:** T11 is this record, and the notices' version for the
+   feed and the daily check comes before T24 builds the discoverer.
 9. **The CIK of a filing whose entries name a `Subject` and no
-   `Issuer`.** The owner decided it: its subject's
-   ([what the owner decided](#what-the-owner-decided)).
+   `Issuer`:** its subject's.
 10. **The CIK of a filing whose entries read name neither an `Issuer` nor
-    a `Subject`.** The owner decided it: its first entry's
-    ([what the owner decided](#what-the-owner-decided)).
-11. **The CIK of a filing only the master index lists.** The owner decided
-    it: the first line's ([what the owner decided](#what-the-owner-decided)).
-12. **The first day checked.** The owner decided it: the day after that of
-    the feed's first poll whose list is read
-    ([what the owner decided](#what-the-owner-decided)).
-13. **The listing at a quarter's end.** The owner decided it: polled until
-    its last days are read
-    ([what the owner decided](#what-the-owner-decided)).
+    a `Subject`:** its first entry's.
+11. **The CIK of a filing only the master index lists:** the first
+    line's.
+12. **The first day checked:** the day after that of the feed's first
+    poll whose list is read.
+13. **The listing at a quarter's end:** polled until its last days are
+    read.
 
 ## Consequences
 
@@ -340,7 +351,7 @@ and 9 to 13 are decided, and keep their numbers.
   7.9 to 8.5 MB a day in PostgreSQL
   ([estimates](../explanation/estimates.md#postgresql)). The three
   companies' polls at the same cadence fetch 4.1 to 4.8 GB a day.
-- **What every filer's files cost.** As detail 5's default fetches them,
+- **What every filer's files cost.** As detail 5 fetches them,
   6,355 to 12,710 fetches a day store 16.8 to 82.9 MB of objects, which
   Garage keeps three times over, and add 10.7 to 21.4 MB a day to PostgreSQL,
   before any facts, which the decision on the universe sets

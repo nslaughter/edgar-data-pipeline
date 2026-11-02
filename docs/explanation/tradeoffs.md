@@ -29,17 +29,17 @@ themselves hold the full context and their sources; the
 | [0007] | Three custom resources, reconciled by the scheduler; a read-only dashboard | Controls in the dashboard; an admin API; Helm values and scaling; a separate operator | An admission webhook once something other than the chart changes Sources ([0010]); nothing else stated |
 | [0008] | kube-prometheus-stack and a read-only Grafana, then Tempo, then Loki with Alloy | Prometheus without its operator; VictoriaMetrics; `grafana/otel-lgtm`; Jaeger; no logs | A receiver outside the cluster, if the owner asks; a collector, to sample traces if Tempo's volume calls for it |
 | [0009] | A public library, `edgar-asof`, in a repository of its own | A package in this repository; no library | Not stated |
-| [0010] | Each company's `submissions` as the notice source, at its Source's cadence; each lag measured from the record | Waiting for the investigation; the latest-filings feed; the daily indexes | The lags the record shows ([T11]); past about 25 companies at 10 seconds, a feed that covers every company |
+| [0010] | Each company's `submissions` as the notice source, at its Source's cadence; each lag measured from the record | Waiting for the investigation; the latest-filings feed; the daily indexes | The lags the record shows ([T11]); past about 25 companies at 10 seconds, a feed that covers every company; its notice source is already superseded by [0015] |
 | [0011] | Four Helm releases, installed in order | One release with workarounds; one chart as two releases; three releases | Not stated |
 | [0012] | Zensical, from the documents where they are, served by GitHub Pages | GitHub's own rendering; MkDocs with Material; Sphinx with MyST; generators outside Python; another static host | Not stated for the generator; the site's one version is revisited when the pipeline has releases ([§9 of the site][site-questions]) |
-| [0013] | A bounded study of `submissions`' lag, with a record of every poll; then only the lists' changes and coverage | Keeping [0010] as it is; keeping only changes at once; building nightly from the daily index | The study's lags: if no use needs filings within the day, a later record can replace the polls with the nightly index |
+| [0013] | A bounded study of `submissions`' lag, with a record of every poll; then only the lists' changes and coverage | Keeping [0010] as it is; keeping only changes at once; building nightly from the daily index | The study's lags: if no use needs filings within the day, a later record can replace the polls with the nightly index; its study of `submissions` alone is already superseded by [0015] |
 | [0014] | KEDA, in the operators' chart, scaling the parse workers from zero to three by their consumer's backlog | A HorizontalPodAutoscaler on an external metric from Prometheus; the scheduler scaling them; a HorizontalPodAutoscaler on CPU; a fixed number of replicas | The parser [T12] chooses and the workers' measurements, for the ceiling; the lag from acceptance to facts available ([T32]), for the floor |
-| [0015], Proposed | The latest-filings feed as the notice source for every filer, every 10 seconds; each day checked against its master index | Keeping [0010] as it is; the feed alone; the daily index alone; the Public Dissemination Service; the XBRL RSS feeds | Not stated |
+| [0015] | The latest-filings feed as the notice source for every filer, every 10 seconds; each day checked against its master index | Keeping [0010] as it is; the feed alone; the daily index alone; the Public Dissemination Service; the XBRL RSS feeds | Not stated |
 
 One decision is still to come: which XBRL parser reads the instances
-([T12]) ([decisions][design-decisions]). One is to be revisited: the notice source
-and its cadence, from the lags the record shows ([T11]). Record [0015],
-Proposed, would settle it from the goal the owner stated instead.
+([T12]) ([decisions][design-decisions]). The notice source and its cadence, which
+[0010] left to be revisited from the lags the record shows, [0015] settled
+from the goal the owner stated instead ([T11]).
 
 ## 0001: Deploy on Kubernetes with Helm, on kind
 
@@ -485,9 +485,11 @@ revisited from the lags the record shows: whether to keep each company's
 this one; a new cadence is only a change to a Source. At 10 seconds, half
 the fetcher's limit covers about 25 companies, and past that a feed that
 covers every company becomes the better source ([0010]). The plan's [T11]
-makes that revisit when the owner asks for it, once the monitoring shows
-the lags ([T28]), and weighs the latest-filings feed, whose first version
-[T5] recorded ([SRC-26] to [SRC-28]).
+was to make that revisit once the monitoring showed the lags ([T28]), and
+weigh the latest-filings feed, whose first version [T5] recorded ([SRC-26]
+to [SRC-28]). The owner made it sooner: [0015], which the owner accepted
+on November 2, 2026 as [T11], makes the feed the notice source for every
+filer, from the goal the owner stated rather than from the lags.
 
 ## 0011: Install the definitions and the operators before the umbrella chart
 
@@ -706,12 +708,12 @@ starting from zero delays facts more than a running worker is worth
 
 ## 0015: Poll the latest-filings feed for every filer's filings, and reconcile each day with the daily index
 
-**Proposed.** The owner asked for this record on November 2, 2026, from
-the goal the owner stated that day, and decided six of its details the
-same day, among them that a filing's files are fetched under its issuer's
-CIK. The record is Accepted once the owner accepts it, and its other
-details are proposed defaults until the owner decides them; the
-[index](../decisions/README.md) gives its status ([0015]).
+**Accepted.** The owner asked for this record on November 2, 2026, from
+the goal the owner stated that day, and accepted it, with each of its
+details, the same day, as [T11]. Of its thirteen details, the owner
+decided one otherwise than its default proposed: a filing's files are
+fetched under its issuer's CIK. The [index](../decisions/README.md) gives
+its status ([0015]).
 
 **The choice.** One Source polls EDGAR's latest-filings feed, which lists
 the latest filings of every filer and form, every 10 seconds at all hours.

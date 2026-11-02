@@ -2,7 +2,10 @@
 
 **Status:** Accepted, October 10, 2026. Superseded in part by
 [0013](0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md),
-which ends the record of every poll after a bounded study.
+which ends the record of every poll after a bounded study, and by
+[0015](0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md),
+November 2, 2026, which makes the latest-filings feed the notice source in
+place of each company's `submissions`.
 
 ## Context
 
