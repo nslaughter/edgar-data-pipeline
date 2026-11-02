@@ -122,7 +122,9 @@ findings:
 
 ## Decision
 
-C. Each detail below is the proposed default of the matching item under
+C. Each detail below is the owner's, where
+[what the owner decided](#what-the-owner-decided) gives it, and otherwise
+the proposed default of the matching item under
 [details for the owner](#details-for-the-owner-to-decide):
 
 1. **The notice source is the latest-filings feed,** at the URL the scope
@@ -140,9 +142,12 @@ C. Each detail below is the proposed default of the matching item under
    the discoverer fetches its header, its index page, and the XBRL
    instance the index page names, as
    [FILE-1 to FILE-3](../../spec/notices.md#7-a-filings-files) say, under
-   the CIK its first entry's `link` gives. Which filers' facts the parse
-   workers write, and how the universe is kept, is a decision still to
-   come.
+   its issuer's CIK, as the `link` of its `Issuer` entry gives it
+   (SRC-27), as the owner decided. A filing with no `Issuer` entry read is
+   fetched under its `Subject` entry's CIK, if one is read, and otherwise
+   under its first entry's (details 9 and 10). Which filers' facts the
+   parse workers write, and how the universe is kept, is a decision still
+   to come.
 3. **A poll that doesn't reach back leaves a gap.** When a successful poll
    names none of the filings the previous poll named, the feed may have
    shown filings between them that neither poll caught. The record keeps
@@ -154,18 +159,35 @@ C. Each detail below is the proposed default of the matching item under
    listing shows that the discoverer hasn't read yet, it queues that day's
    master index and reads it. Each filing the index lists that no poll of
    the feed showed is recorded as first shown by that index, and its files
-   are fetched. Filings are matched by accession number. The record counts
-   each filing that only one of the two sources showed.
+   are fetched, under the CIK of the first line that lists it (detail 11).
+   Filings are matched by accession number. The record counts each filing
+   that only one of the two sources showed.
 5. **The three companies' `submissions` Sources stay through the study**
    ([0013](0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md),
    T45). So for their filings, the record bounds when each of the two feeds
    first showed each one, and the study measures both lags. After the
    study they end, unless the owner keeps them.
 
+## What the owner decided
+
+1. **The CIK a filing's files are fetched under: its issuer's,** on
+   November 2, 2026, over the CIK of the first entry read for the filing,
+   which detail 4 proposed. A filing's `Issuer` entry gives the issuer's
+   CIK in its `link` (SRC-27). In the feed's stored version, 35 of the 41
+   Forms 4 and 4/A list a reporting owner's entry first, so the first
+   entry's CIK would fetch most Forms 4 under an insider's CIK. Forms 4 are
+   60% to 74% of the three companies' filings (SRC-19), and the scope
+   covers only the companies' own directories, so the transfer wouldn't
+   have copied those the feed showed first
+   ([XFER-1](../../spec/snapshots.md#records-the-cluster-made)). The CIK
+   of a filing with no `Issuer` entry, and of one only the master index
+   lists, is still the owner's to decide (details 9 to 11).
+
 ## Details for the owner to decide
 
 Each has a proposed default, which the decision above uses. The owner
-decides each one by keeping its default or choosing another.
+decides each one by keeping its default or choosing another. Detail 4 is
+decided, and keeps its number.
 
 1. **The feed's cadence.** Proposed default: 10 seconds, as 0010's
    Sources start. That bounds each filing's first-seen time within about
@@ -183,12 +205,8 @@ decides each one by keeping its default or choosing another.
    The alternative is to ask for the feed's next page with `start`. That
    needs a finding that `start` pages the feed, and widens the scope to
    each page's URL.
-4. **The CIK a filing's files are fetched under.** Proposed default: the
-   CIK of the first entry read for the filing, as its `link` gives it
-   (SRC-27). FILE-1 already takes the CIK of the list that led to a fetch.
-   The findings don't show whether each party's directory holds the
-   filing. The alternative is the issuer's or the subject's CIK, when an
-   entry names one.
+4. **The CIK a filing's files are fetched under.** The owner decided it:
+   its issuer's ([what the owner decided](#what-the-owner-decided)).
 5. **Which files of every filer's filings are fetched.** Proposed default:
    the header, the index page, and the instance, as FILE-1 to FILE-3 say
    now. The estimates put every filer's fetches at 0.07 to 0.15 a second
@@ -214,6 +232,35 @@ decides each one by keeping its default or choosing another.
    discoverer, as T44's did
    ([0013](0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md)),
    so the discoverer is built once.
+9. **The CIK of a filing whose entries name a `Subject` and no
+   `Issuer`,** as a Form 144's and a Schedule 13D's, 13D/A's, or 13G's do
+   (SRC-27). Proposed default: the subject's, as its `Subject` entry's
+   `link` gives it. The subject is the company the filing concerns, as a
+   Form 4's issuer is, so the three companies' Forms 144 and Schedules
+   would be fetched under the directories the scope covers. The
+   alternative is the first entry's CIK, a reporting owner's or a filer's
+   for each Form 144 and half the Schedules in the stored version; the
+   findings don't show which party's directory holds these filings.
+10. **The CIK of a filing whose entries read name neither an `Issuer` nor
+    a `Subject`.** That's a filing with a single filer, whose role no
+    stored entry shows, since the stored version's 50 filings are all
+    ownership forms and Schedules (SRC-28); or a Form 4 whose issuer's
+    entry a poll's 100 entries cut off, as the stored version's last entry
+    was (SRC-27). Proposed default: the CIK of its first entry read, as
+    its `link` gives it, which for a single filer is the filer's own. The
+    alternative leaves such a filing to that night's check against the
+    master index, as detail 3 leaves a gap's filings, but finds a single
+    filer's filings a day late.
+11. **The CIK of a filing only the master index lists.** The index lists a
+    filing on a line for each CIK it names (SRC-28), and no finding shows
+    that it gives each one's role. Proposed default: the CIK of the first
+    line that lists it. If one of the three companies' `submissions`
+    Sources showed the filing before the index is read, its fetches are
+    queued under the company's CIK already, and FILE-1 keeps the URL of a
+    file's first job. The
+    alternative is the CIK of a line that a `submissions` Source polls,
+    when one does, which keeps the three companies' filings in the scope's
+    directories even when no Source showed them.
 
 ## Consequences
 
@@ -281,8 +328,8 @@ decides each one by keeping its default or choosing another.
 
 ## Sources
 
-- The findings SRC-1, SRC-4, SRC-5, SRC-18, SRC-21, SRC-23, and SRC-26 to
-  SRC-28 in [`investigation/edgar.md`](../../investigation/edgar.md#findings).
+- The findings SRC-1, SRC-4, SRC-5, SRC-18, SRC-19, SRC-21, SRC-23, and
+  SRC-26 to SRC-28 in [`investigation/edgar.md`](../../investigation/edgar.md#findings).
 - The feed's stored version, of 56,306 bytes, kept as the object
   `36a5016d80ce782d8f2aed1d77fa2b31dbeb0fa6e63edfcdd7fb2dbc352416d6`, of
   4,035 bytes.
