@@ -886,24 +886,27 @@ a `200`, `36a5016d80ce` at 10:22:42.614Z.
 - **SRC-29** (Q1, Q2) `submissions` gives a company's filings as a table
   of columns, in which an accession number names each filing, and lists
   its further files in `filings.files`. Its `filings` holds two members,
-  `recent` and `files`. `recent`, and each further file (SRC-12), is a
-  JSON object of the same 16 columns, `accessionNumber` first and
-  `acceptanceDateTime` among them, each a list as long as the others. The
-  entries at one position in the columns are one filing's: for each of
+  `recent` and `files`. `recent`, and each of the four stored further files
+  (SRC-12), is a JSON object of the same 16 columns, `accessionNumber` first
+  and `acceptanceDateTime` among them, each a list as long as the others.
+  The entries at one position in the columns are one filing's: for each of
   the 216 accession numbers in `companyfacts`, the `form` and the
   `filingDate` at its position in `accessionNumber` are its values' `form`
-  and `filed` (SRC-9, SRC-12). In all 14 `submissions` records, 19,387
-  entries in all, `accessionNumber` and `acceptanceDateTime` are lists of
-  strings. Every accession number is 10 digits, 2, and 6, joined by
-  dashes, as `0000320193-25-000079`, and none is given twice in a list.
-  `filings.files` is a list of objects, each with a `name`, such as
+  and `filed` (SRC-9, SRC-12), and for each of the eight filings whose
+  headers are stored, the `acceptanceDateTime` at its position is its
+  header's time (SRC-1), moved later as SRC-2 found in the records of
+  October 7 and SRC-25 in those of October 16. In all 14 `submissions`
+  records, 19,387 entries in all, `accessionNumber` and `acceptanceDateTime`
+  are lists of strings. Every accession number is 10 digits, 2, and 6,
+  joined by dashes, as `0000320193-25-000079`, and none is given twice in a
+  list. `filings.files` is a list of objects, each with a `name`, such as
   `CIK0000320193-submissions-001.json` (SRC-21); a `filingCount`, an
-  integer; and a `filingFrom` and a `filingTo`, dates written
-  `YYYY-MM-DD`. Each of the three companies has one or two further files,
-  so the stored versions don't show what `filings.files` is for a company
-  with none.
+  integer; and a `filingFrom` and a `filingTo`, dates written `YYYY-MM-DD`.
+  Each of the three companies has one or two further files, so the stored
+  versions don't show what `filings.files` is for a company with none.
   Shown by the three companies' `submissions` and the four further files,
-  in their records of October 7, 10, and 16 in the records cited.
+  in their records of October 7, 10, and 16, and the eight headers, in the
+  records cited.
 - **SRC-30** (Q1) `companyfacts` gives each value under its taxonomy, its
   concept, and its unit. It is a JSON object of the company's `cik`, an
   integer, its `entityName`, and its `facts`. `facts` holds an object for
