@@ -922,9 +922,11 @@ a `200`, `36a5016d80ce` at 10:22:42.614Z.
   77,351 are written as integers and 5,640 with a fraction, none with an
   exponent. Each `end`, `filed`, and `start` is a date written
   `YYYY-MM-DD`, and each `accn` an accession number in `submissions`' form
-  (SRC-29). Each `fy` is an integer and each `fp` a string, except in the
-  1,828 values that SRC-6 found with both null. 15 of the 1,564 concepts
-  give a null `label` and `description`.
+  (SRC-29). Each `form` is a string, such as `10-K` or `8-K`, and each
+  `frame`, in the 32,784 values that have one, a string (SRC-8). Each `fy`
+  is an integer and each `fp` a string, except in the 1,828 values that
+  SRC-6 found with both null. 15 of the 1,564 concepts give a null `label`
+  and `description`.
   Shown by the three `companyfacts` records of October 7 in the records
   cited; those of October 16 have the same bodies.
 - **SRC-31** (Q2) A filing's header gives its `ACCEPTANCE-DATETIME` twice,
