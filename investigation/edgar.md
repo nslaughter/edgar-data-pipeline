@@ -930,16 +930,21 @@ a `200`, `36a5016d80ce` at 10:22:42.614Z.
   stored headers is HTML in ASCII, with lines that end in a line feed. Its
   first line is `<HTML><HEAD><TITLE>SEC EDGAR Submission `, the accession
   number, and `</TITLE>`, and its second is `<!--`, which opens its only
-  comment. The comment holds the SGML header, one tag and its value to a
-  line, from `<SEC-HEADER>` to `</SEC-HEADER>`. The line after
-  `<SEC-HEADER>`, the page's fourth, is `<ACCEPTANCE-DATETIME>` followed by
-  the 14 digits and nothing else, and `<ACCESSION-NUMBER>` gives the
-  filing's accession number. After the comment and `</HEAD><BODY>`, the
-  `<PRE>` begins with `&lt;SEC-DOCUMENT&gt;`, and its next line begins with
+  comment. The comment holds the SGML header, from `<SEC-HEADER>` to
+  `</SEC-HEADER>`, one tag to a line, followed by its value where it has
+  one: in each header, 11 to 15 of those lines, such as `<FILER>` and
+  `</FILER>`, hold a tag alone. The line after `<SEC-HEADER>`, the page's
+  fourth, is `<ACCEPTANCE-DATETIME>` followed by the 14 digits and nothing
+  else, and `<ACCESSION-NUMBER>` gives the filing's accession number. After
+  the comment and `</HEAD><BODY>`, the `<PRE>` begins with
+  `&lt;SEC-DOCUMENT&gt;`, and its next line begins with
   `&lt;SEC-HEADER&gt;`. The line after that is `&lt;ACCEPTANCE-DATETIME&gt;`
-  followed by the same 14 digits and nothing else. The rest of the
-  `<PRE>` gives the header's fields by label, such as `ACCESSION NUMBER:`
-  and `FILED AS OF DATE:` (SRC-1). Eight filings of three companies,
-  accepted from October 31, 2025 to September 1, 2026, don't show whether
-  other headers are laid out the same.
+  followed by the same 14 digits and nothing else. The lines after it, to
+  `&lt;/SEC-HEADER&gt;`, give the header's fields by label, such as
+  `ACCESSION NUMBER:` and `FILED AS OF DATE:` (SRC-1). The rest of the
+  `<PRE>`, to `&lt;/SEC-DOCUMENT&gt;`, lists 12 to 130 of the filing's files
+  (SRC-20). Each runs from `&lt;DOCUMENT&gt;` to `&lt;/DOCUMENT&gt;`, with
+  the file's `TYPE`, `SEQUENCE`, and `FILENAME` as escaped tags and a link
+  to it. Eight filings of three companies, filed from October 31, 2025 to
+  September 1, 2026, don't show whether other headers are laid out the same.
   Shown by the eight headers in the records cited.
