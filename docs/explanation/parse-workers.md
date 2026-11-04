@@ -297,8 +297,8 @@ the facts specification's, task T17
 | [NATS-5], [NATS-6] | Their durable consumer of filing notices, made before the first is published. |
 
 The status page names their decision records, 0006, 0009, and 0014;
-tasks T17 and T32, which specify them; T25, which builds them; and T10
-and T12, which decide them ([status page][status]).
+tasks T17, T32, and T51, which specify them; T25, which builds them; and
+T10 and T12, which decide them ([status page][status]).
 
 [0003]: ../decisions/0003-queue-work-in-nats-jetstream.md
 [0004]: ../decisions/0004-keep-the-record-in-postgresql-18.md
