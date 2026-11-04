@@ -630,9 +630,9 @@ version of the telemetry for them ([T32]). One decision record: which
 XBRL parser reads the instances, a narrow parser on lxml or Arelle
 ([T12]). A version of the deployment specification that states how the
 parse workers scale, as [0014] decides ([T10]): the owner decided that a
-task of its own specifies it, and the plan doesn't have that task yet. And
-one revisit: whether to keep each company's `submissions` as the notice source
-([T11]). And a version of the snapshot store's specification that states
+task of its own specifies it, [T51], after the facts and before the
+parse workers are built. And one revisit: whether to keep each company's
+`submissions` as the notice source ([T11]). And a version of the snapshot store's specification that states
 what the fetcher does while a write can't be made, as the owner decided
 with [T23]: it holds the fetch and tries the write again, sending nothing
 else meanwhile. The owner decided that the same version states that a
@@ -809,6 +809,7 @@ consequence that fetching continues while PostgreSQL fails over.
 [T36]: ../plan.md#observing-filings
 [T38]: ../plan.md#observing-filings
 [T48]: ../plan.md#observing-filings
+[T51]: ../plan.md#facts
 [agents-rules]: ../../AGENTS.md#rules
 [agents-where]: ../../AGENTS.md#where-documents-go
 [inv-questions]: ../../investigation/edgar.md#questions

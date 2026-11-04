@@ -129,14 +129,14 @@ and every service already apply to them.
 
 | What's open | The task that settles it | It waits on |
 | --- | --- | --- |
-| Their deployment: KEDA in the operators' chart, their Deployment, and the `ScaledObject` that scales it | A version of the deployment specification, before T25 ([0014]) | A task the plan doesn't yet have, which the owner decided on |
+| Their deployment: KEDA in the operators' chart, their Deployment, and the `ScaledObject` that scales it | [T51], a version of the deployment specification, before T25 ([0014]) | [T17], and T10 and T50, both done |
 | The XBRL parser: a narrow parser on lxml, or Arelle, an open-source XBRL processor whose plugins include the SEC's EDGAR Renderer ([0006]) | T12, a decision record; `edgar-asof` reads XBRL instances with the same parser | T1 and T2, both done |
 | How facts are stored, and their times: the fact table, citing a version of `edgar-asof`'s specification for the fact model and what "as of T" returns | T17, `spec/facts.md` | T12, T16, and an `edgar-asof` release that specifies the fact model |
 | What the parse workers do with a filing notice, and how they find the complete filings whose notices they didn't read | T17 ([§12 of the notices][notices-left]) | As above |
 | Where an import in the cluster keeps its manifest | T17 ([§13 of the store][snapshots-left]) | As above |
 | What an import's output is, and how a rerun is compared with the original | T18, the export ([open question 3 of the store][snapshots-open]) | T17 |
 | Their metrics and traces, and the view of each filing's times from acceptance to facts available | T32, a minor version of the telemetry specification ([§11 of telemetry][telemetry-left]) | T17, T18, T19 |
-| Building them | T25 | T17, T24, and an `edgar-asof` release that reads XBRL instances |
+| Building them | T25 | T17, T24, T51, and an `edgar-asof` release that reads XBRL instances |
 
 The tasks are in the plan's facts section ([plan][plan-facts]). The design
 lists the XBRL parser as a decision still to come, T12, and how workers
@@ -297,8 +297,8 @@ the facts specification's, task T17
 | [NATS-5], [NATS-6] | Their durable consumer of filing notices, made before the first is published. |
 
 The status page names their decision records, 0006, 0009, and 0014;
-tasks T17 and T32, which specify them; T25, which builds them; and T10
-and T12, which decide them ([status page][status]).
+tasks T17, T32, and T51, which specify them; T25, which builds them; and
+T10 and T12, which decide them ([status page][status]).
 
 [0003]: ../decisions/0003-queue-work-in-nats-jetstream.md
 [0004]: ../decisions/0004-keep-the-record-in-postgresql-18.md
@@ -342,6 +342,7 @@ and T12, which decide them ([status page][status]).
 [notices-messages]: ../../spec/notices.md#9-messages-and-processing
 [notices-left]: ../../spec/notices.md#left-to-other-specifications
 [T17]: ../plan.md#facts
+[T51]: ../plan.md#facts
 [TABLE-3]: ../../spec/notices.md#4-the-record-of-notices
 [FILE-5]: ../../spec/notices.md#7-a-filings-files
 [MSG-2]: ../../spec/notices.md#streams
