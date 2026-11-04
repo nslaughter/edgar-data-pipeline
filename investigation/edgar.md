@@ -1,7 +1,7 @@
 # Source investigation: EDGAR
 
 **Status:** Started October 7, 2026. The baseline was fetched October 7;
-twenty-eight findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
+thirty-one findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
 and SRC-14 to SRC-17, on restated and repeated values, were read from it
 on October 10. SRC-12 and SRC-13, on `submissions`' further files and its
 acceptance times, were read from them and the baseline once they were
@@ -16,7 +16,9 @@ were read from the first refetch, on October 16, with the further files
 refetched beside it; SRC-24 and SRC-25 superseded SRC-2 and SRC-13, as the
 owner decided that day. SRC-26 to SRC-28 were read from the latest-filings
 feed, fetched once on October 18, once the owner had confirmed its URL.
-Since October 10, how soon each feed shows a new filing (Q4) is measured
+SRC-29 to SRC-31, on how `submissions`, `companyfacts`, and the headers
+lay out what `edgar-asof` reads, were read from the stored versions on
+November 2, 2026, when the owner asked for them. Since October 10, how soon each feed shows a new filing (Q4) is measured
 from the pipeline's record. Data here comes from the U.S. Securities and
 Exchange Commission's EDGAR system.
 
@@ -881,3 +883,73 @@ a `200`, `36a5016d80ce` at 10:22:42.614Z.
   pipeline's record to show.
   Shown by the `latest-filings` record, and the master indexes of October
   1 to 15, in the records cited.
+- **SRC-29** (Q1, Q2) `submissions` gives a company's filings as a table
+  of columns, in which an accession number names each filing, and lists
+  its further files in `filings.files`. Its `filings` holds two members,
+  `recent` and `files`. `recent`, and each of the four stored further files
+  (SRC-12), is a JSON object of the same 16 columns, `accessionNumber` first
+  and `acceptanceDateTime` among them, each a list as long as the others.
+  The entries at one position in the columns are one filing's: for each of
+  the 216 accession numbers in `companyfacts`, the `form` and the
+  `filingDate` at its position in `accessionNumber` are its values' `form`
+  and `filed` (SRC-9, SRC-12), and for each of the eight filings whose
+  headers are stored, the `acceptanceDateTime` at its position is its
+  header's time (SRC-1), moved later as SRC-2 found in the records of
+  October 7 and SRC-25 in those of October 16. In all 14 `submissions`
+  records, 19,387 entries in all, `accessionNumber` and `acceptanceDateTime`
+  are lists of strings. Every accession number is 10 digits, 2, and 6,
+  joined by dashes, as `0000320193-25-000079`, and none is given twice in a
+  list. `filings.files` is a list of objects, each with a `name`, such as
+  `CIK0000320193-submissions-001.json` (SRC-21); a `filingCount`, an
+  integer; and a `filingFrom` and a `filingTo`, dates written `YYYY-MM-DD`.
+  Each of the three companies has one or two further files, so the stored
+  versions don't show what `filings.files` is for a company with none.
+  Shown by the three companies' `submissions` and the four further files,
+  in their records of October 7, 10, and 16, and the eight headers, in the
+  records cited.
+- **SRC-30** (Q1) `companyfacts` gives each value under its taxonomy, its
+  concept, and its unit. It is a JSON object of the company's `cik`, an
+  integer, its `entityName`, and its `facts`. `facts` holds an object for
+  each taxonomy: `dei` and `us-gaap` for each company, and `invest`,
+  `ecd`, and `ffd` for Walmart too. Each holds an object for each of the
+  taxonomy's concepts, named without the taxonomy, such as `Revenues`: no
+  name has a colon. Each concept has a `label`, a `description`, and its
+  `units`, an object that holds, for each unit, such as `USD`, `shares`,
+  or `USD/shares`, the list of the concept's values in that unit. Each of
+  the 82,991 values has an `accn`, an `end`, a `filed`, a `form`, a `fy`,
+  an `fp`, and a `val`, and some have a `start` and a `frame` (SRC-8,
+  SRC-11), which are never null where given. Each `val` is a JSON number:
+  77,351 are written as integers and 5,640 with a fraction, none with an
+  exponent. Each `end`, `filed`, and `start` is a date written
+  `YYYY-MM-DD`, and each `accn` an accession number in `submissions`' form
+  (SRC-29). Each `form` is a string, such as `10-K` or `8-K`, and each
+  `frame`, in the 32,784 values that have one, a string (SRC-8). Each `fy`
+  is an integer and each `fp` a string, except in the 1,828 values that
+  SRC-6 found with both null. 15 of the 1,564 concepts give a null `label`
+  and `description`.
+  Shown by the three `companyfacts` records of October 7 in the records
+  cited; those of October 16 have the same bodies.
+- **SRC-31** (Q2) A filing's header gives its `ACCEPTANCE-DATETIME` twice,
+  as the same 14 digits (SRC-1): in the SGML header that an HTML comment
+  holds, and again, escaped, in the page's `<PRE>`. Each of the eight
+  stored headers is HTML in ASCII, with lines that end in a line feed. Its
+  first line is `<HTML><HEAD><TITLE>SEC EDGAR Submission `, the accession
+  number, and `</TITLE>`, and its second is `<!--`, which opens its only
+  comment. The comment holds the SGML header, from `<SEC-HEADER>` to
+  `</SEC-HEADER>`, one tag to a line, followed by its value where it has
+  one: in each header, 11 to 15 of those lines, such as `<FILER>` and
+  `</FILER>`, hold a tag alone. The line after `<SEC-HEADER>`, the page's
+  fourth, is `<ACCEPTANCE-DATETIME>` followed by the 14 digits and nothing
+  else, and `<ACCESSION-NUMBER>` gives the filing's accession number. After
+  the comment and `</HEAD><BODY>`, the `<PRE>` begins with
+  `&lt;SEC-DOCUMENT&gt;`, and its next line begins with
+  `&lt;SEC-HEADER&gt;`. The line after that is `&lt;ACCEPTANCE-DATETIME&gt;`
+  followed by the same 14 digits and nothing else. The lines after it, to
+  `&lt;/SEC-HEADER&gt;`, give the header's fields by label, such as
+  `ACCESSION NUMBER:` and `FILED AS OF DATE:` (SRC-1). The rest of the
+  `<PRE>`, to `&lt;/SEC-DOCUMENT&gt;`, lists 12 to 130 of the filing's files
+  (SRC-20). Each runs from `&lt;DOCUMENT&gt;` to `&lt;/DOCUMENT&gt;`, with
+  the file's `TYPE`, `SEQUENCE`, and `FILENAME` as escaped tags and a link
+  to it. Eight filings of three companies, filed from October 31, 2025 to
+  September 1, 2026, don't show whether other headers are laid out the same.
+  Shown by the eight headers in the records cited.
