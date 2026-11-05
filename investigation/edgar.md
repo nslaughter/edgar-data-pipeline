@@ -1,7 +1,7 @@
 # Source investigation: EDGAR
 
 **Status:** Started October 7, 2026. The baseline was fetched October 7;
-thirty-one findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
+thirty-two findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
 and SRC-14 to SRC-17, on restated and repeated values, were read from it
 on October 10. SRC-12 and SRC-13, on `submissions`' further files and its
 acceptance times, were read from them and the baseline once they were
@@ -18,7 +18,10 @@ owner decided that day. SRC-26 to SRC-28 were read from the latest-filings
 feed, fetched once on October 18, once the owner had confirmed its URL.
 SRC-29 to SRC-31, on how `submissions`, `companyfacts`, and the headers
 lay out what `edgar-asof` reads, were read from the stored versions on
-November 2, 2026, when the owner asked for them. Since October 10, how soon each feed shows a new filing (Q4) is measured
+November 2, 2026, when the owner asked for them. SRC-32, on how the XBRL
+instances lay out their facts, was read from the stored instances and
+headers on November 5, 2026, for the XBRL parser's decision record, task
+T12. Since October 10, how soon each feed shows a new filing (Q4) is measured
 from the pipeline's record. Data here comes from the U.S. Securities and
 Exchange Commission's EDGAR system.
 
@@ -953,3 +956,52 @@ a `200`, `36a5016d80ce` at 10:22:42.614Z.
   to it. Eight filings of three companies, filed from October 31, 2025 to
   September 1, 2026, don't show whether other headers are laid out the same.
   Shown by the eight headers in the records cited.
+- **SRC-32** (Q1) Each stored XBRL instance holds every context and unit
+  its facts name, and names as its schema a file of its own filing that
+  the store doesn't hold. Each of the eight is ASCII, with an XML
+  declaration of UTF-8, and its root is `xbrli:xbrl`. The root's children
+  are one `link:schemaRef`, its contexts, its units, its facts, and, in
+  Microsoft's two, one `link:footnoteLink`, of 8 and 3 footnotes. The
+  `schemaRef` is a relative link to the file that the filing's header
+  lists as `EX-101.SCH`, such as `aapl-20250927.xsd`. The headers list it
+  with up to four linkbases, `EX-101.CAL`, `EX-101.DEF`, `EX-101.LAB`, and
+  `EX-101.PRE`, and Microsoft's with none. None of these files is stored.
+
+  - **Contexts.** Each of the 1,791 gives one entity, whose identifier is
+    the company's CIK in ten digits, under the scheme
+    `http://www.sec.gov/CIK`, in Apple's 8-K/A too (SRC-2). Each gives a
+    period of a `startDate` and an `endDate`, or of an `instant`; none is
+    `forever`. 1,708 have a `segment` of dimensions: 2,445 explicit members
+    in all, and 12 typed members, in Apple's and Microsoft's 10-Ks and
+    10-Qs. None has a `scenario`. 34 durations start and end on the same
+    day (SRC-11), among them all 19 of the two 8-K/As' contexts.
+  - **Units.** The 53 units are all in the six 10-Ks and 10-Qs. Each is
+    one measure, except one in each instance, which divides
+    `iso4217:USD` by `shares`.
+  - **Facts.** Each of the 7,854 facts is a child of the root, with a
+    `contextRef` and an `id`, and none has a child element, so none is a
+    tuple or a fraction. Their names' namespaces are the company's own and
+    those of taxonomies named with a year, such as
+    `http://fasb.org/us-gaap/2025` and `http://xbrl.sec.gov/dei/2025`,
+    which the instances declare with the prefixes `us-gaap` and `dei` that
+    `companyfacts` names its taxonomies by (SRC-30).
+    Walmart's 10-Q for the quarter ending 2026-07-31 uses the 2026
+    taxonomies, and the other seven instances the 2025 ones.
+  - **Numbers.** The 6,734 facts with a `unitRef` are all in the 10-Ks and
+    10-Qs. Each has a `decimals`, from -11 to 5 or `INF`, except the 13
+    that are nil, which have none, and none has a `precision`. Each value
+    is an integer or a decimal fraction, with no exponent.
+  - **Text.** The 1,120 facts without a `unitRef`, all 89 of the two
+    8-K/As' among them, are text, the longest 1,164,644 characters. In
+    each 10-K and 10-Q, some are HTML, written with its markup escaped,
+    the longest of each among them. None has an `xml:lang`, and none is
+    nil.
+  - **Facts given twice.** In 492 groups, facts share a name, a context,
+    and a unit. In 26 of them, their values differ: the 23 keys that
+    SRC-14 found given to `decimals` -6 and -8, and three of Microsoft's
+    earnings per share in its 10-K for the year ending 2026-06-30, each
+    written two ways to `decimals` 2: `18.00` and `18`, `13.70` and
+    `13.7`, and `11.80` and `11.8`.
+
+  Shown by the eight XBRL instances and the eight headers in the records
+  cited.
