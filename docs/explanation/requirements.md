@@ -185,7 +185,7 @@ kube-prometheus-stack is estimated at 1 GB ([0008]). Each component's
 requests and limits are measured on kind before they're set
 ([§9 of deployment][deployment-later]). Until then, the
 [estimates](estimates.md#cpu-memory-and-storage) put the whole pipeline at
-4.2 to 16.7 GB of memory, and [scale and limits](scale-and-limits.md#memory)
+4.2 to 11.4 GB of memory, and [scale and limits](scale-and-limits.md#memory)
 says what that asks of the machine kind runs on.
 
 ## The limits the SEC sets

@@ -9,11 +9,11 @@
 - **Planned:** The drills.
 <!-- end status -->
 
-For each decision record, 0001 to 0014: what it chose, the alternatives it
-weighed and why they lost, what the choice costs, and what would change it.
-Where a record says what would change it, this page cites it. Where it
-doesn't, what follows is analysis, set apart as such. The records
-themselves hold the full context and their sources; the
+For each decision record, 0001 to 0014, and 0016: what it chose, the
+alternatives it weighed and why they lost, what the choice costs, and what
+would change it. Where a record says what would change it, this page cites
+it. Where it doesn't, what follows is analysis, set apart as such. The
+records themselves hold the full context and their sources; the
 [index](../decisions/README.md) gives each one's status.
 
 ## Summary
@@ -34,10 +34,11 @@ themselves hold the full context and their sources; the
 | [0012] | Zensical, from the documents where they are, served by GitHub Pages | GitHub's own rendering; MkDocs with Material; Sphinx with MyST; generators outside Python; another static host | Not stated for the generator; the site's one version is revisited when the pipeline has releases ([§9 of the site][site-questions]) |
 | [0013] | A bounded study of `submissions`' lag, with a record of every poll; then only the lists' changes and coverage | Keeping [0010] as it is; keeping only changes at once; building nightly from the daily index | The study's lags: if no use needs filings within the day, a later record can replace the polls with the nightly index |
 | [0014] | KEDA, in the operators' chart, scaling the parse workers from zero to three by their consumer's backlog | A HorizontalPodAutoscaler on an external metric from Prometheus; the scheduler scaling them; a HorizontalPodAutoscaler on CPU; a fixed number of replicas | The parser [T12] chooses and the workers' measurements, for the ceiling; the lag from acceptance to facts available ([T32]), for the floor |
+| [0016] | A narrow parser on lxml, in `edgar-asof`, that reads each XBRL instance alone, as stored | The same parser on the standard library's ElementTree; Arelle; py-xbrl or edgartools | A need for labels or validation, which takes a record of its own; older instances that use parts of XBRL it doesn't read |
 
-One decision is still to come: which XBRL parser reads the instances
-([T12]) ([decisions][design-decisions]). One is to be revisited: the notice source
-and its cadence, from the lags the record shows ([T11]).
+No decision is still to come ([decisions][design-decisions]). One is to
+be revisited: the notice source and its cadence, from the lags the record
+shows ([T11]).
 
 ## 0001: Deploy on Kubernetes with Helm, on kind
 
@@ -703,6 +704,68 @@ acceptance to facts available ([T32]) may move the floor to one, if
 starting from zero delays facts more than a running worker is worth
 ([0014]).
 
+## 0016: Read XBRL instances with a narrow parser on lxml, in `edgar-asof`
+
+**Accepted.** Task T12 proposed this record on November 5, 2026, and the
+owner accepted it, with each of its details, the same day; the
+[index](../decisions/README.md) gives its status ([0016]).
+
+**The choice.** `edgar-asof` reads each filing's XBRL instance alone, as
+stored, with a narrow parser on lxml, and the parse workers call it
+through a pinned release ([0009], [T25]). The parser gives each fact as
+the instance gives it: its name, its context's entity, period, and
+dimensions, its unit, its value as written, and its `decimals`. It merges
+and drops nothing, and refuses a whole instance that uses a part of XBRL
+it doesn't read, rather than give part of its facts. It fetches nothing,
+and reads none of the instance's taxonomy, so it gives no labels or types
+and checks no instance's validity ([0016]).
+
+**Why.** The pipeline stores each filing's header, index page, and
+instance ([FILE-1]), and an import reads only what's stored ([IMP-3]).
+Each stored instance holds every context and unit its facts name, so a
+reader of it alone tells numbers from text by their units, as XBRL 2.1
+has every number name one ([SRC-32], [0016]). Read that way, the six
+stored 10-Ks' and 10-Qs' instances give each key `companyfacts` keeps of
+them, and each value but Microsoft's two `EntityListingParValuePerShare`
+([SRC-14]), and more: facts with dimensions, of companies' own concepts,
+nil facts, text, and each number's precision ([SRC-15]).
+
+**Alternatives weighed.**
+
+- **The same parser on the standard library's ElementTree:** it would keep
+  `edgar-asof` free of dependencies, but gives no element the prefix its
+  document declares, and sets no limit on a text's length ([0016]).
+- **Arelle:** a full XBRL processor, which validates, reads inline XBRL,
+  and gives labels and types. But it reads an instance through its
+  taxonomy: the filing's schema and linkbases, and the taxonomies they
+  import, none of which the store holds ([SRC-32]). They'd be fetched
+  through the fetcher, stored, and given to it offline, for every year of
+  filings back to 2009 ([SRC-10]). It also brings numpy, Pillow,
+  openpyxl, and a web framework among its dependencies ([0016]).
+- **py-xbrl:** under the GPLv3, where `edgar-asof` is under MIT ([0009]),
+  and it too loads the taxonomy first ([0016]).
+- **edgartools:** it reads an instance alone, but brings 22 dependencies,
+  pyarrow among them, whose version the exporter pins ([0006]), and keeps
+  facts by rules of its own ([0016]).
+
+**What it costs.** The parser is code for `edgar-asof` to write, test, and
+keep, and lxml becomes its first dependency. Nothing checks that an
+instance is valid XBRL, or that its calculations add up. The stored
+instances are of filings from October 2025 to September 2026 ([SRC-31]),
+so an older
+instance that a Backfill brings may use a part of XBRL that none of them
+shows; it's refused, not read wrongly. Facts given twice, to different
+`decimals` or as one number written two ways, reach the fact model, whose
+specification says which a fact takes ([SRC-14], [SRC-32]). A taxonomy's
+namespace names its year, so how a concept is written across years is
+for that specification too ([0016]).
+
+**What would change it.** A need for labels or validation, such as a
+dashboard that names concepts, takes a record of its own, with the
+taxonomies fetched and stored. Older instances aren't stored, and storing
+them to check what the parser reads is a widening of the scope and a run,
+which the owner asks for ([0016]).
+
 [0001]: ../decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
 [0002]: ../decisions/0002-store-bodies-in-garage.md
 [0003]: ../decisions/0003-queue-work-in-nats-jetstream.md
@@ -717,6 +780,7 @@ starting from zero delays facts more than a running worker is worth
 [0012]: ../decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md
 [0013]: ../decisions/0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md
 [0014]: ../decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
+[0016]: ../decisions/0016-read-xbrl-instances-with-a-narrow-parser-on-lxml.md
 [design-decisions]: ../design.md#decisions
 [notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [notices-lags]: ../../spec/notices.md#10-times-and-lags
@@ -756,6 +820,13 @@ starting from zero delays facts more than a running worker is worth
 [SRC-26]: ../../investigation/edgar.md#findings-so-far
 [SRC-27]: ../../investigation/edgar.md#findings-so-far
 [SRC-28]: ../../investigation/edgar.md#findings-so-far
+[SRC-10]: ../../investigation/edgar.md#findings-so-far
+[SRC-14]: ../../investigation/edgar.md#findings-so-far
+[SRC-15]: ../../investigation/edgar.md#findings-so-far
+[SRC-31]: ../../investigation/edgar.md#findings-so-far
+[SRC-32]: ../../investigation/edgar.md#findings-so-far
+[FILE-1]: ../../spec/notices.md#7-a-filings-files
+[IMP-3]: ../../spec/snapshots.md#11-imports
 [OBJ-1]: ../../spec/snapshots.md#5-objects
 [REC-3]: ../../spec/snapshots.md#6-records
 [LOG-3]: ../../spec/snapshots.md#8-history
