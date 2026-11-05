@@ -5,8 +5,8 @@
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
 - **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs.
-- **Planned:** Parse workers (decided in part); `edgar-asof` (decided in part); The drills.
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Planned:** The drills.
 <!-- end status -->
 
 For each decision record, 0001 to 0014, and 0016: what it chose, the
@@ -34,11 +34,10 @@ records themselves hold the full context and their sources; the
 | [0012] | Zensical, from the documents where they are, served by GitHub Pages | GitHub's own rendering; MkDocs with Material; Sphinx with MyST; generators outside Python; another static host | Not stated for the generator; the site's one version is revisited when the pipeline has releases ([§9 of the site][site-questions]) |
 | [0013] | A bounded study of `submissions`' lag, with a record of every poll; then only the lists' changes and coverage | Keeping [0010] as it is; keeping only changes at once; building nightly from the daily index | The study's lags: if no use needs filings within the day, a later record can replace the polls with the nightly index |
 | [0014] | KEDA, in the operators' chart, scaling the parse workers from zero to three by their consumer's backlog | A HorizontalPodAutoscaler on an external metric from Prometheus; the scheduler scaling them; a HorizontalPodAutoscaler on CPU; a fixed number of replicas | The parser [T12] chooses and the workers' measurements, for the ceiling; the lag from acceptance to facts available ([T32]), for the floor |
-| [0016], Proposed | A narrow parser on lxml, in `edgar-asof`, that reads each XBRL instance alone, as stored | The same parser on the standard library's ElementTree; Arelle; py-xbrl or edgartools | A need for labels or validation, which takes a record of its own; older instances that use parts of XBRL it doesn't read |
+| [0016] | A narrow parser on lxml, in `edgar-asof`, that reads each XBRL instance alone, as stored | The same parser on the standard library's ElementTree; Arelle; py-xbrl or edgartools | A need for labels or validation, which takes a record of its own; older instances that use parts of XBRL it doesn't read |
 
-One record is still Proposed, [0016], the XBRL parser, until the owner
-accepts it ([decisions][design-decisions]). One decision is to be
-revisited: the notice source and its cadence, from the lags the record
+No decision is still to come ([decisions][design-decisions]). One is to
+be revisited: the notice source and its cadence, from the lags the record
 shows ([T11]).
 
 ## 0001: Deploy on Kubernetes with Helm, on kind
@@ -707,9 +706,9 @@ starting from zero delays facts more than a running worker is worth
 
 ## 0016: Read XBRL instances with a narrow parser on lxml, in `edgar-asof`
 
-**Proposed.** Task T12 proposed this record on November 5, 2026, and the
-owner hasn't decided it yet; the [index](../decisions/README.md) gives its
-status ([0016]).
+**Accepted.** Task T12 proposed this record on November 5, 2026, and the
+owner accepted it, with each of its details, the same day; the
+[index](../decisions/README.md) gives its status ([0016]).
 
 **The choice.** `edgar-asof` reads each filing's XBRL instance alone, as
 stored, with a narrow parser on lxml, and the parse workers call it

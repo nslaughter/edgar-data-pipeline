@@ -1,7 +1,7 @@
 # The parse workers
 
 <!-- status: Parse workers -->
-**Status** ([status page](../status.md)): Parse workers: Planned; decided in part.
+**Status** ([status page](../status.md)): Parse workers: Decided.
 <!-- end status -->
 
 The parse workers turn each filing's stored XBRL instance into facts, each
@@ -87,7 +87,7 @@ acceptance time from `submissions`, and its header's beside it when the
 caller asks for headers ([FACT-10], [FACT-11]).
 
 Reading XBRL instances is the library's later task T11, with the narrow
-parser on lxml that [0016], Proposed, gives it, ending in a release that
+parser on lxml that [0016] gives it, ending in a release that
 the pipeline's T25 waits on ([edgar-asof's plan][asof-plan-later], [plan][plan-facts]). Facts read
 from instances may need dimensions in their keys, which no `companyfacts`
 value has ([what edgar-asof's facts leave to later versions][asof-facts-left],
@@ -130,7 +130,6 @@ and every service already apply to them.
 | What's open | The task that settles it | It waits on |
 | --- | --- | --- |
 | Their deployment: KEDA in the operators' chart, their Deployment, and the `ScaledObject` that scales it | [T51], a version of the deployment specification, before T25 ([0014]) | [T17], and T10 and T50, both done |
-| The XBRL parser: a narrow parser on lxml, in `edgar-asof`, that reads each instance alone, as [0016] proposes, rather than Arelle, an open-source XBRL processor ([0006]) | The owner's acceptance of [0016], which T12 wrote; `edgar-asof` reads XBRL instances with that parser, in its task T11 | T1 and T2, both done |
 | How facts are stored, and their times: the fact table, citing a version of `edgar-asof`'s specification for the fact model and what "as of T" returns | T17, `spec/facts.md` | T12, T16, and an `edgar-asof` release that specifies the fact model |
 | What the parse workers do with a filing notice, and how they find the complete filings whose notices they didn't read | T17 ([§12 of the notices][notices-left]) | As above |
 | Where an import in the cluster keeps its manifest | T17 ([§13 of the store][snapshots-left]) | As above |
@@ -139,7 +138,7 @@ and every service already apply to them.
 | Building them | T25 | T17, T24, T51, and an `edgar-asof` release that reads XBRL instances |
 
 The tasks are in the plan's facts section ([plan][plan-facts]). The design
-cites [0016], Proposed, for the XBRL parser, and [0014] for how workers
+cites [0016] for the XBRL parser, and [0014] for how workers
 scale by queue depth ([decisions][design-decisions]).
 
 ## State, replicas, and scaling
@@ -183,9 +182,8 @@ notice, whether or not it has an instance ([FILE-5]).
 The six stored XBRL instances of 10-Ks and 10-Qs are from 0.9 MB to
 10.9 MB each ([SRC-18]). The
 [estimates](estimates.md#cpu-memory-and-storage) assume 150 to 250 MB of
-memory a worker with lxml, the parser [0016] proposes, or 0.5 to 2 GB
-with Arelle, and 0.5 to 2 seconds an instance with lxml, until the
-workers are measured. Under [0014], three workers parse 1.5 to 6
+memory a worker with lxml, the parser [0016] chooses, and 0.5 to 2
+seconds an instance, until the workers are measured. Under [0014], three workers parse 1.5 to 6
 instances a second at that rate. Notices with an instance can come
 faster. The fetcher's limit of 5 requests a second ([FETCH-6]) holds them
 to about 1.7 a second on average, at three requests each: the header, the
@@ -244,7 +242,7 @@ the facts specification's, task T17
 - **KEDA,** which scales them by their consumer's backlog, reading it from
   NATS's monitoring port, as [0014] decides.
 - **`edgar-asof`,** at a pinned release that reads XBRL instances, with
-  the narrow parser on lxml that [0016] proposes ([plan][plan-facts]).
+  the narrow parser on lxml that [0016] chooses ([plan][plan-facts]).
 - **Their libraries:** nats-py, psycopg, boto3, and, through `edgar-asof`,
   lxml ([0006], [0016]).
 
@@ -264,7 +262,7 @@ the facts specification's, task T17
   would stop whenever the database failed over or was down, and the
   database would carry the polling load. In NATS JetStream, their work
   waits through a failover.
-- **The parser** ([0006], [0016], Proposed). A narrow parser on lxml, in
+- **The parser** ([0006], [0016]). A narrow parser on lxml, in
   `edgar-asof`, reads each instance alone, as stored, and fetches nothing.
   Arelle reads an instance through its taxonomy: the filing's schema and
   linkbases, and the taxonomies they import, which the store doesn't hold
@@ -294,7 +292,7 @@ the facts specification's, task T17
 | --- | --- |
 | [The design's components][design-components] | Their role, their language, and a Deployment scaled by queue depth. |
 | [0006] | Python, and the parser's two candidates. |
-| [0016] | Proposed: their parser, a narrow parser on lxml in `edgar-asof`, which reads each instance alone. |
+| [0016] | Their parser, a narrow parser on lxml in `edgar-asof`, which reads each instance alone. |
 | [0009] | Facts built through a pinned `edgar-asof`, whose specification defines the fact model. |
 | [0003], [0004] | Their queue, which they're scaled by, and the database their facts are kept in. |
 | [0014] | How they scale: KEDA, from zero to three, by their consumer's backlog. |

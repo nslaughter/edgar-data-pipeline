@@ -301,8 +301,8 @@ The normative parts become specifications, one per component or boundary:
 See [`docs/decisions/`](decisions/) for each record and its status. How
 the parse workers scale by queue depth is decided in
 [0014](decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md).
-[0016](decisions/0016-read-xbrl-instances-with-a-narrow-parser-on-lxml.md),
-Proposed, has `edgar-asof` read each XBRL instance alone, as stored, with
+[0016](decisions/0016-read-xbrl-instances-with-a-narrow-parser-on-lxml.md)
+has `edgar-asof` read each XBRL instance alone, as stored, with
 a narrow parser on lxml, rather than with Arelle and its taxonomies.
 How the documents are published as a site is decided in
 [0012](decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md).

@@ -1,6 +1,8 @@
 # 16. Read XBRL instances with a narrow parser on lxml, in `edgar-asof`
 
-**Status:** Proposed, November 5, 2026. Task T12 proposed it.
+**Status:** Accepted, November 5, 2026. Task T12 proposed it on November
+5, 2026, and the owner accepted it, with each of its details, the same
+day.
 
 ## Context
 

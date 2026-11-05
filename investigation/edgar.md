@@ -21,7 +21,7 @@ lay out what `edgar-asof` reads, were read from the stored versions on
 November 2, 2026, when the owner asked for them. SRC-32, on how the XBRL
 instances lay out their facts, was read from the stored instances and
 headers on November 5, 2026, for the XBRL parser's decision record, task
-T12. Since October 10, how soon each feed shows a new filing (Q4) is measured
+T12, and the owner confirmed it the same day. Since October 10, how soon each feed shows a new filing (Q4) is measured
 from the pipeline's record. Data here comes from the U.S. Securities and
 Exchange Commission's EDGAR system.
 

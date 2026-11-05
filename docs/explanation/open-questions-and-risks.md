@@ -5,8 +5,8 @@
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
 - **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs.
-- **Planned:** Parse workers (decided in part); `edgar-asof` (decided in part); The drills.
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Planned:** The drills.
 <!-- end status -->
 
 What the design still waits on, and what could undo it: the investigation's
@@ -626,10 +626,8 @@ T3][asof-first-release]).
 ### What isn't written yet
 
 Two specifications: the facts ([T17]) and the export ([T18]), with a minor
-version of the telemetry for them ([T32]). One decision record awaits the
-owner: [0016], Proposed by [T12], which has `edgar-asof` read each XBRL
-instance alone, with a narrow parser on lxml, rather than with Arelle. A
-version of the deployment specification that states how the
+version of the telemetry for them ([T32]). A version of the deployment
+specification that states how the
 parse workers scale, as [0014] decides ([T10]): the owner decided that a
 task of its own specifies it, [T51], after the facts and before the
 parse workers are built. And one revisit: whether to keep each company's
@@ -749,7 +747,7 @@ consequence that fetching continues while PostgreSQL fails over.
 - **The stored XBRL instances are all recent.** They're of filings from
   October 2025 to September 2026 ([SRC-31]), and a Backfill brings filings
   from 2009 ([SRC-10]). An older instance that uses a part of XBRL the
-  parser [0016] proposes doesn't read is refused, not read wrongly.
+  parser [0016] chooses doesn't read is refused, not read wrongly.
   Storing older instances to check them is a widening of the scope and a
   run, which the owner asks for ([0016]).
 

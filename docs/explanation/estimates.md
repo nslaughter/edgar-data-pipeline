@@ -5,8 +5,8 @@
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
 - **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs.
-- **Planned:** Parse workers (decided in part); `edgar-asof` (decided in part); The drills.
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Planned:** The drills.
 <!-- end status -->
 
 This page estimates what the pipeline asks of the SEC and of the machine it
@@ -369,7 +369,7 @@ of its kind take, which that measurement replaces.
 | Scheduler | 2, one active ([design][design-components]) | 30 to 100 MB: a Go controller | A job a poll: a few millicores at the default | None |
 | Fetcher | 2, one active ([0005]) | 50 to 150 MB: a Go service that holds a body of up to 10.9 MB ([SRC-18]) | A request, a hash, and a gzip a poll: under 10 millicores at the default | None |
 | Discoverer | 1 or 2: a Deployment ([design][design-components]) | 100 to 250 MB: a Python service that reads a list of up to 314 KB ([SRC-18]) | Reading each poll's list, and reading `gaps` every 10 seconds ([GAP-3], [METRIC-5]), which grows with the polls ([scale and limits](scale-and-limits.md#reading-the-gaps)) | None |
-| Parse workers | 0 to 3, by their consumer's backlog: one for each 10 notices, and none 5 minutes after the backlog last held one ([0014]) | 150 to 250 MB with lxml, the parser [0016] proposes, or 0.5 to 2 GB with Arelle, its alternative | 0.5 to 2 seconds an instance with lxml: 28 a year at the default, 12 of them reports. A Backfill of the three companies' listed history brings 9,689 filings, 484 of them with an instance ([BACKFILL-1], [SRC-19], [SRC-20]): 4 to 16 minutes for one worker, 1.3 to 5.4 minutes for three ([0014]) | None |
+| Parse workers | 0 to 3, by their consumer's backlog: one for each 10 notices, and none 5 minutes after the backlog last held one ([0014]) | 150 to 250 MB with lxml, the parser [0016] chooses | 0.5 to 2 seconds an instance with lxml: 28 a year at the default, 12 of them reports. A Backfill of the three companies' listed history brings 9,689 filings, 484 of them with an instance ([BACKFILL-1], [SRC-19], [SRC-20]): 4 to 16 minutes for one worker, 1.3 to 5.4 minutes for three ([0014]) | None |
 | Exporter | 1, while it runs: a CronJob | 100 to 500 MB | A run a day | Its files, in Garage |
 | Query API | 1 or 2: a stateless Deployment | 30 to 100 MB | Each query's | None |
 | NATS JetStream | 3 ([NATS-1]) | 30 to 150 MB | Little | Its streams ([above](#the-queues-streams)) |
@@ -382,17 +382,17 @@ of its kind take, which that measurement replaces.
 | kind's control plane, and each node's agents | 1 control-plane node; agents on all 4 nodes ([KIND-1]) | 1 to 2 GB in all | 0.5 to 1.5 cores in all, with Prometheus's scrapes | Its own |
 
 Memory adds up to 3.7 to 9.0 GB for what observing filings needs, and 4.2
-to 16.7 GB with the parse workers, the query API, the exporter, Tempo, and
+to 11.4 GB with the parse workers, the query API, the exporter, Tempo, and
 Loki. Both count KEDA's three pods, 3 × 100 MiB = 0.31 GB: the operators'
 release installs KEDA whether or not a parse worker runs ([0014]), so its
 pods hold their memory from the first install, as cert-manager's do. In
 the low case no parse worker runs, as between filings, and in the high
-case three do, with Arelle: 3 × 2 GB = 6 GB ([0014]). That high case
-stays until the owner decides [0016], Proposed, which chooses lxml.
+case three do, with lxml, the parser [0016] chooses: 3 × 250 MB = 0.75 GB
+([0014]).
 
 NATS, Garage, and the database each place one replica on each of the three
 worker nodes ([PLACE-1]), 0.3 to 1.35 GB on each. With everything, and
-the rest spread evenly, each worker node holds 1.1 to 4.9 GB, and the
+the rest spread evenly, each worker node holds 1.1 to 3.1 GB, and the
 control-plane node kind's own 1 to 2 GB. Every node's volumes are on the
 host's one disk ([KIND-2]).
 

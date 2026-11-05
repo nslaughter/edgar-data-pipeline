@@ -5,8 +5,8 @@
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
 - **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs.
-- **Planned:** Parse workers (decided in part); `edgar-asof` (decided in part); The drills.
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Planned:** The drills.
 <!-- end status -->
 
 This page covers what the pipeline must do, the qualities it must have, and
@@ -185,7 +185,7 @@ kube-prometheus-stack is estimated at 1 GB ([0008]). Each component's
 requests and limits are measured on kind before they're set
 ([§9 of deployment][deployment-later]). Until then, the
 [estimates](estimates.md#cpu-memory-and-storage) put the whole pipeline at
-4.2 to 16.7 GB of memory, and [scale and limits](scale-and-limits.md#memory)
+4.2 to 11.4 GB of memory, and [scale and limits](scale-and-limits.md#memory)
 says what that asks of the machine kind runs on.
 
 ## The limits the SEC sets

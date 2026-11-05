@@ -1,7 +1,7 @@
 # `edgar-asof`
 
 <!-- status: `edgar-asof` -->
-**Status** ([status page](../status.md)): `edgar-asof`: Planned; decided in part.
+**Status** ([status page](../status.md)): `edgar-asof`: Decided.
 <!-- end status -->
 
 `edgar-asof` is the public library that the pipeline's Python services read
@@ -367,7 +367,7 @@ with what it holds, as the two plans give them:
 | --- | --- | --- | --- |
 | 0.1.0, the first | Reads `companyfacts` and joins each value to the acceptance time of the filing that reported it, through `submissions`, from its cache or from bodies the caller gives; its specifications of facts, fetching, and times, with their interfaces; the client, the cache, the interpreters, and facts; on PyPI, with the library's documentation site ([the first release][asof-plan-first]) | T1 to T9, and T13 | [T24], which reads `submissions` and headers through it. [T17] waits on a release that specifies the fact model, and the library's plan puts its facts specification, T1, and facts, T8, in this release. |
 | Published cases for "as of T" | Cases with their inputs and answers ([later tasks][asof-plan-later]) | T10, split when it's next | [T26], by the library's plan |
-| XBRL instances | Every fact a filing reports, read from its XBRL instance with the parser that this repository's T12 chooses ([later tasks][asof-plan-later]): a narrow parser on lxml, which reads each instance alone, as [0016], Proposed, gives it | T11, split when it's next | [T25], which waits on a release that reads XBRL instances |
+| XBRL instances | Every fact a filing reports, read from its XBRL instance with the parser that this repository's T12 chooses ([later tasks][asof-plan-later]): a narrow parser on lxml, which reads each instance alone, as [0016] gives it | T11, split when it's next | [T25], which waits on a release that reads XBRL instances |
 
 The first release's facts rest on this repository's investigation: decision
 0009 made the release depend on whether each `companyfacts` value joins to

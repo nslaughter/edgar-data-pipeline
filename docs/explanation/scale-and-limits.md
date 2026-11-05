@@ -5,8 +5,8 @@
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
 - **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs.
-- **Planned:** Parse workers (decided in part); `edgar-asof` (decided in part); The drills.
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Planned:** The drills.
 <!-- end status -->
 
 This page reads from the [estimates](estimates.md) which resource limits
@@ -214,7 +214,7 @@ each day, if they slow.
 
 kind runs every node as a container on one machine, so memory is the
 scarce resource ([0001]). The estimates put the pipeline at 3.7 to 9.0 GB
-for observing filings, and 4.2 to 16.7 GB with everything
+for observing filings, and 4.2 to 11.4 GB with everything
 ([estimates](estimates.md#cpu-memory-and-storage)). Nearly all of it is
 spent before the first poll: the database's three instances, Prometheus,
 kind's control plane, and the three replicas each of NATS and Garage. The
@@ -223,7 +223,7 @@ scope adds little to it: each Source adds 18 to 23 series to Prometheus
 the scope.
 
 So memory doesn't limit the scope; it limits which machine can run the
-pipeline at all. At the high end, kind alone needs 16.7 GB. Each figure
+pipeline at all. At the high end, kind alone needs 11.4 GB. Each figure
 but those of the decision records is an assumption, until each
 component's memory is measured on kind
 ([§9 of the deployment][deployment-later]).
@@ -294,7 +294,7 @@ each part would stop:
   the export, 500 GB of disk is full after 37 to 279 days.
 - **Parsing fits.** 155 to 310 instances a day, 67 to 133 of them
   reports, at an assumed 0.5 to 2 seconds each with lxml, are 1.3 to 10.3
-  minutes of a core a day. [0016], Proposed, chooses a narrow parser on
+  minutes of a core a day. [0016] chooses a narrow parser on
   lxml ([plan][plan-facts]).
 
 > **Analysis.** No task, decision record, or specification covers this.
