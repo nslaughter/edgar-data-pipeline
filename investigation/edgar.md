@@ -959,7 +959,11 @@ a `200`, `36a5016d80ce` at 10:22:42.614Z.
 - **SRC-32** (Q1) Each stored XBRL instance holds every context and unit
   its facts name, and names as its schema a file of its own filing that
   the store doesn't hold. Each of the eight is ASCII, with an XML
-  declaration of UTF-8, and its root is `xbrli:xbrl`. The root's children
+  declaration of UTF-8. Its root is `xbrl` in XBRL 2.1's namespace for
+  instances, `http://www.xbrl.org/2003/instance`, which each declares as
+  its default namespace, so its root, contexts, and units have no prefix.
+  Five of the roots, of Apple's 10-K and 10-Q and of Walmart's three, give
+  `xml:lang` as `en-US`, and the other three give none. The root's children
   are one `link:schemaRef`, its contexts, its units, its facts, and, in
   Microsoft's two, one `link:footnoteLink`, of 8 and 3 footnotes. The
   `schemaRef` is a relative link to the file that the filing's header
@@ -971,9 +975,10 @@ a `200`, `36a5016d80ce` at 10:22:42.614Z.
     the company's CIK in ten digits, under the scheme
     `http://www.sec.gov/CIK`, in Apple's 8-K/A too (SRC-2). Each gives a
     period of a `startDate` and an `endDate`, or of an `instant`; none is
-    `forever`. 1,708 have a `segment` of dimensions: 2,445 explicit members
-    in all, and 12 typed members, in Apple's and Microsoft's 10-Ks and
-    10-Qs. None has a `scenario`. 34 durations start and end on the same
+    `forever`. 1,708 have a `segment`, which holds only dimensions'
+    members: 2,445 explicit members in all, and 12 typed members, in
+    Apple's and Microsoft's 10-Ks and 10-Qs, each of which holds one
+    element whose text is a date. None has a `scenario`. 34 durations start and end on the same
     day (SRC-11), among them all 19 of the two 8-K/As' contexts.
   - **Units.** The 53 units are all in the six 10-Ks and 10-Qs. Each is
     one measure, except one in each instance, which divides
@@ -994,8 +999,9 @@ a `200`, `36a5016d80ce` at 10:22:42.614Z.
   - **Text.** The 1,120 facts without a `unitRef`, all 89 of the two
     8-K/As' among them, are text, the longest 1,164,644 characters. In
     each 10-K and 10-Q, some are HTML, written with its markup escaped,
-    the longest of each among them. None has an `xml:lang`, and none is
-    nil.
+    the longest of each among them. None is nil, and none has an
+    `xml:lang` of its own, so each has its root's: `en-US` in the five
+    instances whose root gives one, and none in the other three.
   - **Facts given twice.** In 492 groups, facts share a name, a context,
     and a unit. In 26 of them, their values differ: the 23 keys that
     SRC-14 found given to `decimals` -6 and -8, and three of Microsoft's
