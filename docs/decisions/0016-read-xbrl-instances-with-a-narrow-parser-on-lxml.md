@@ -157,13 +157,24 @@ A narrow parser on lxml, in `edgar-asof`:
    twice, in the instance's order (SRC-14, SRC-32). Which of them a fact
    or an answer takes is for `edgar-asof`'s specification to say, and the
    pipeline's facts specification ([T17](../plan.md#facts)) after it.
-5. **What it refuses.** An instance whose root isn't `xbrli:xbrl`; one
-   with a document type declaration; a fact with a child element, which a
-   tuple or a fraction has and no stored fact does; a fact whose context or
-   unit the instance doesn't hold; and a number with neither `decimals`
-   nor `precision` that isn't nil. It refuses the whole instance, with the
-   reason, rather than give part of its facts. What a worker does with an
-   instance refused is the facts specification's to say.
+5. **What it refuses.** An instance with any of these, none of which a
+   stored instance has (SRC-32): a root other than `xbrl` in XBRL 2.1's
+   namespace for instances, `http://www.xbrl.org/2003/instance`, whatever
+   prefix the instance declares for it, if any; a document type
+   declaration; a child of the root in that namespace, or in XBRL 2.1's
+   namespace for linkbases, other than a `schemaRef`, a context, a unit,
+   or a `footnoteLink`, such as a `linkbaseRef` or a `roleRef` (section
+   4.1); a period of `forever` (section 4.7.2); a context with a
+   `scenario` (section 4.7.4); a child of a `segment` other than an
+   explicit or a typed member (section 4.7.3.2), or a typed member whose
+   value has a child element; a fact with a child element, which a tuple
+   or a fraction has; a fact whose context or unit the instance doesn't
+   hold; and a number with neither `decimals` nor `precision` that isn't
+   nil. It refuses the whole instance, with the reason, rather than give
+   part of its facts. So what it neither reads nor leaves out never comes
+   out as a fact read wrongly, such as a fact whose dimensions are in a
+   `scenario` given as one with none. What a worker does with an instance
+   refused is the facts specification's to say.
 6. **What it leaves out.** The instance's footnotes, the files its
    `schemaRef` names, and so each concept's labels, type, and
    relationships, and any check of validity.
@@ -199,8 +210,9 @@ A narrow parser on lxml, in `edgar-asof`:
 - **Older instances aren't stored yet.** The stored instances are of
   eight filings from October 31, 2025 to September 1, 2026 (SRC-31), and
   a Backfill brings filings from each company's first in XBRL, in 2009
-  (SRC-10, SRC-20). An instance that uses parts of XBRL the parser doesn't
-  read is refused, so it shows as a refusal, not as wrong facts. Storing
+  (SRC-10, SRC-20). An instance that uses a part of XBRL the parser
+  neither reads nor leaves out, such as a `scenario` or a tuple, is
+  refused, so it shows as a refusal, not as wrong facts. Storing
   older instances to check them is a widening of the scope and a run,
   which the owner asks for.
 - **A taxonomy's namespace changes each year.** One instance names
@@ -222,9 +234,11 @@ A narrow parser on lxml, in `edgar-asof`:
 ## Sources
 
 - [XBRL 2.1](https://www.xbrl.org/Specification/XBRL-2.1/REC-2003-12-31/XBRL-2.1-REC-2003-12-31+corrected-errata-2013-02-20.html),
-  sections 3.2, for the rules that discover an instance's taxonomy; 4.6.2,
-  for the unit that every numeric item names and no other item does; and
-  4.6.3, for `decimals` and `precision`.
+  sections 3.2, for the rules that discover an instance's taxonomy; 4.1,
+  for the root's children; 4.6.2, for the unit that every numeric item
+  names and no other item does; 4.6.3, for `decimals` and `precision`; and
+  4.7.2, 4.7.3.2, and 4.7.4, for a context's period, `segment`, and
+  `scenario`.
 - [lxml 6.1.3](https://pypi.org/project/lxml/6.1.3/), its metadata, and
   [its parser's options](https://lxml.de/parsing.html#parser-options).
 - [Arelle](https://github.com/Arelle/Arelle),
