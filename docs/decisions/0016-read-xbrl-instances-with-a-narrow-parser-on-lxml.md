@@ -87,7 +87,7 @@ was loaded.
   `EntityListingParValuePerShare` (SRC-14). lxml 6.1.3 read each in 5 to
   30 milliseconds, and the process, with its Python, peaked at 30 to 75 MB.
   lxml is under BSD-3-Clause, with no dependencies of its own, and its
-  metadata names Python 3.10 to 3.15, where CI runs 3.12 to 3.14. Arelle
+  metadata names Python 3.8 to 3.15, where CI runs 3.12 to 3.14. Arelle
   and edgartools are built on it. It's code to write, test, and keep: it
   checks nothing it doesn't read, so it doesn't validate an instance, and
   gives no labels or types. Another company's instance, or an older one,
