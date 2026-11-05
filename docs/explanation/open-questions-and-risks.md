@@ -749,8 +749,9 @@ consequence that fetching continues while PostgreSQL fails over.
 - **The stored XBRL instances are all recent.** They're of filings from
   October 2025 to September 2026 ([SRC-31]), and a Backfill brings filings
   from 2009 ([SRC-10]). An older instance that uses a part of XBRL the
-  parser [0016] proposes doesn't read is refused, not read wrongly, until
-  `edgar-asof`'s specification widens what it reads.
+  parser [0016] proposes doesn't read is refused, not read wrongly.
+  Storing older instances to check them is a widening of the scope and a
+  run, which the owner asks for ([0016]).
 
 ### To the project
 

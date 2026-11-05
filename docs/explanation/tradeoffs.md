@@ -9,11 +9,11 @@
 - **Planned:** Parse workers (decided in part); `edgar-asof` (decided in part); The drills.
 <!-- end status -->
 
-For each decision record, 0001 to 0014: what it chose, the alternatives it
-weighed and why they lost, what the choice costs, and what would change it.
-Where a record says what would change it, this page cites it. Where it
-doesn't, what follows is analysis, set apart as such. The records
-themselves hold the full context and their sources; the
+For each decision record, 0001 to 0014, and 0016: what it chose, the
+alternatives it weighed and why they lost, what the choice costs, and what
+would change it. Where a record says what would change it, this page cites
+it. Where it doesn't, what follows is analysis, set apart as such. The
+records themselves hold the full context and their sources; the
 [index](../decisions/README.md) gives each one's status.
 
 ## Summary
@@ -726,9 +726,10 @@ instance ([FILE-1]), and an import reads only what's stored ([IMP-3]).
 Each stored instance holds every context and unit its facts name, so a
 reader of it alone tells numbers from text by their units, as XBRL 2.1
 has every number name one ([SRC-32], [0016]). Read that way, the six
-stored 10-Ks' and 10-Qs' instances give each value `companyfacts` keeps of
-them ([SRC-14]), and more: facts with dimensions, of companies' own
-concepts, nil facts, text, and each number's precision ([SRC-15]).
+stored 10-Ks' and 10-Qs' instances give each key `companyfacts` keeps of
+them, and each value but Microsoft's two `EntityListingParValuePerShare`
+([SRC-14]), and more: facts with dimensions, of companies' own concepts,
+nil facts, text, and each number's precision ([SRC-15]).
 
 **Alternatives weighed.**
 
@@ -762,8 +763,9 @@ for that specification too ([0016]).
 
 **What would change it.** A need for labels or validation, such as a
 dashboard that names concepts, takes a record of its own, with the
-taxonomies fetched and stored. Older instances that the parser refuses
-would widen what it reads, in `edgar-asof`'s specification ([0016]).
+taxonomies fetched and stored. Older instances aren't stored, and storing
+them to check what the parser reads is a widening of the scope and a run,
+which the owner asks for ([0016]).
 
 [0001]: ../decisions/0001-deploy-on-kubernetes-with-helm-on-kind.md
 [0002]: ../decisions/0002-store-bodies-in-garage.md
