@@ -959,12 +959,13 @@ a `200`, `36a5016d80ce` at 10:22:42.614Z.
 - **SRC-32** (Q1) Each stored XBRL instance holds every context and unit
   its facts name, and names as its schema a file of its own filing that
   the store doesn't hold. Each of the eight is ASCII, with an XML
-  declaration of UTF-8. Its root is `xbrl` in XBRL 2.1's namespace for
-  instances, `http://www.xbrl.org/2003/instance`, which each declares as
-  its default namespace, so its root, contexts, and units have no prefix.
-  Five of the roots, of Apple's 10-K and 10-Q and of Walmart's three, give
-  `xml:lang` as `en-US`, and the other three give none. The root's children
-  are one `link:schemaRef`, its contexts, its units, its facts, and, in
+  declaration of UTF-8 and no document type declaration. Its root is
+  `xbrl` in XBRL 2.1's namespace for instances,
+  `http://www.xbrl.org/2003/instance`, which each declares as its default
+  namespace, so its root, contexts, and units have no prefix. Five of the
+  roots, of Apple's 10-K and 10-Q and of Walmart's three, give `xml:lang`
+  as `en-US`, and the other three give none. The root's children are one
+  `link:schemaRef`, its contexts, its units, its facts, and, in
   Microsoft's two, one `link:footnoteLink`, of 8 and 3 footnotes. The
   `schemaRef` is a relative link to the file that the filing's header
   lists as `EX-101.SCH`, such as `aapl-20250927.xsd`. The headers list it
