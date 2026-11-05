@@ -5,8 +5,8 @@
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
 - **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
-- **Planned:** The drills.
+- **Decided:** Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs.
+- **Planned:** Parse workers (decided in part); `edgar-asof` (decided in part); The drills.
 <!-- end status -->
 
 This page reads from the [estimates](estimates.md) which resource limits
@@ -294,8 +294,8 @@ each part would stop:
   the export, 500 GB of disk is full after 37 to 279 days.
 - **Parsing fits.** 155 to 310 instances a day, 67 to 133 of them
   reports, at an assumed 0.5 to 2 seconds each with lxml, are 1.3 to 10.3
-  minutes of a core a day. The parser is still to be chosen, task T12
-  ([plan][plan-facts]).
+  minutes of a core a day. [0016], Proposed, chooses a narrow parser on
+  lxml ([plan][plan-facts]).
 
 > **Analysis.** No task, decision record, or specification covers this.
 > To observe every filer, the pipeline could take its notices from a feed
@@ -308,6 +308,7 @@ each part would stop:
 [0002]: ../decisions/0002-store-bodies-in-garage.md
 [0005]: ../decisions/0005-send-sec-requests-through-one-active-fetcher.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
+[0016]: ../decisions/0016-read-xbrl-instances-with-a-narrow-parser-on-lxml.md
 [barman-compression]: https://github.com/cloudnative-pg/plugin-barman-cloud/blob/72440855ce8c33ae71d0f3d8aca6634d2f3b8c7c/web/docs/compression.md
 [barman-retention]: https://github.com/cloudnative-pg/plugin-barman-cloud/blob/72440855ce8c33ae71d0f3d8aca6634d2f3b8c7c/web/docs/retention.md
 [controls-source]: ../../spec/controls.md#6-source

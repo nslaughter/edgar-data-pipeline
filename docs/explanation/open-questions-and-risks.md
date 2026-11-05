@@ -5,8 +5,8 @@
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
 - **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
-- **Planned:** The drills.
+- **Decided:** Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs.
+- **Planned:** Parse workers (decided in part); `edgar-asof` (decided in part); The drills.
 <!-- end status -->
 
 What the design still waits on, and what could undo it: the investigation's
@@ -626,9 +626,10 @@ T3][asof-first-release]).
 ### What isn't written yet
 
 Two specifications: the facts ([T17]) and the export ([T18]), with a minor
-version of the telemetry for them ([T32]). One decision record: which
-XBRL parser reads the instances, a narrow parser on lxml or Arelle
-([T12]). A version of the deployment specification that states how the
+version of the telemetry for them ([T32]). One decision record awaits the
+owner: [0016], Proposed by [T12], which has `edgar-asof` read each XBRL
+instance alone, with a narrow parser on lxml, rather than with Arelle. A
+version of the deployment specification that states how the
 parse workers scale, as [0014] decides ([T10]): the owner decided that a
 task of its own specifies it, [T51], after the facts and before the
 parse workers are built. And one revisit: whether to keep each company's
@@ -745,6 +746,11 @@ consequence that fetching continues while PostgreSQL fails over.
   dispute over NATS's license, settled with NATS in the CNCF under Apache
   2.0 ([0003]), Promtail's end of life ([0008]), and Material for MkDocs's
   maintenance mode ([0012]).
+- **The stored XBRL instances are all recent.** They're of filings from
+  October 2025 to September 2026 ([SRC-31]), and a Backfill brings filings
+  from 2009 ([SRC-10]). An older instance that uses a part of XBRL the
+  parser [0016] proposes doesn't read is refused, not read wrongly, until
+  `edgar-asof`'s specification widens what it reads.
 
 ### To the project
 
@@ -771,6 +777,7 @@ consequence that fetching continues while PostgreSQL fails over.
 [0002]: ../decisions/0002-store-bodies-in-garage.md
 [0003]: ../decisions/0003-queue-work-in-nats-jetstream.md
 [0014]: ../decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
+[0016]: ../decisions/0016-read-xbrl-instances-with-a-narrow-parser-on-lxml.md
 [0004]: ../decisions/0004-keep-the-record-in-postgresql-18.md
 [0005]: ../decisions/0005-send-sec-requests-through-one-active-fetcher.md
 [0006]: ../decisions/0006-write-the-services-in-go-and-python.md
@@ -858,7 +865,9 @@ consequence that fetching continues while PostgreSQL fails over.
 [SRC-6]: ../../investigation/edgar.md#findings-so-far
 [SRC-12]: ../../investigation/edgar.md#findings-so-far
 [SRC-13]: ../../investigation/edgar.md#findings-so-far
+[SRC-10]: ../../investigation/edgar.md#findings-so-far
 [SRC-14]: ../../investigation/edgar.md#findings-so-far
+[SRC-31]: ../../investigation/edgar.md#findings-so-far
 [SRC-15]: ../../investigation/edgar.md#findings-so-far
 [SRC-16]: ../../investigation/edgar.md#findings-so-far
 [SRC-17]: ../../investigation/edgar.md#findings-so-far

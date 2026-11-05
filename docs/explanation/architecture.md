@@ -1,7 +1,7 @@
 # The architecture
 
 <!-- status: Scheduler; Fetcher; Discoverer; Parse workers; Exporter; Query API; NATS JetStream; Garage; PostgreSQL 18; The controls; `edgar-asof`; The snapshot store in the cluster -->
-**Status** ([status page](../status.md)): Scheduler: Specified; built in part. Fetcher: Built. Discoverer: Specified. Parse workers: Decided. Exporter: Decided. Query API: Decided. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified; built in part. `edgar-asof`: Decided. The snapshot store in the cluster: Built.
+**Status** ([status page](../status.md)): Scheduler: Specified; built in part. Fetcher: Built. Discoverer: Specified. Parse workers: Planned; decided in part. Exporter: Decided. Query API: Decided. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified; built in part. `edgar-asof`: Planned; decided in part. The snapshot store in the cluster: Built.
 <!-- end status -->
 
 This page covers the pipeline's components and the boundaries between
@@ -21,7 +21,7 @@ kind ([components][design-components], [0001]).
 | Scheduler | A controller: queues each Source's polls at its cadence, hands each Backfill to the discoverer ([ORDER-1], [LIST-1]), and keeps Sources' and Backfills' status ([0007]) | Go, with controller-runtime | A Deployment of two, one active through leader election | Nothing of its own: status, in the API server. It never fetches and never writes the record ([0007]). |
 | Fetcher | Sends every request to the SEC, stores each body, adds each record, and announces it ([0005]) | Go, with client-go's leader election, `golang.org/x/time/rate`, nats.go, the AWS SDK for Go v2, and pgx | A Deployment of two, one active through the Lease `fetcher` | Objects in Garage, rows of `records`, and the `SecAccess` status |
 | Discoverer | Reads each version of a company's `submissions`, records each filing and when each Source first showed it, queues the fetches of its files, lists each Backfill's filings, and publishes notices ([`notices.md`][notices]) | Python, with nats-py, psycopg, boto3, and `edgar-asof` | A Deployment | The notices' tables |
-| Parse workers | Read a stored XBRL instance and write its facts, with the filing's acceptance time, under an import manifest | Python, with an XBRL parser still to choose | A Deployment, scaled by queue depth | The facts |
+| Parse workers | Read a stored XBRL instance and write its facts, with the filing's acceptance time, under an import manifest | Python, with `edgar-asof`, whose narrow parser on lxml reads the instance ([0016], Proposed) | A Deployment, scaled by queue depth | The facts |
 | Exporter | Writes the facts to Parquet in Garage, deterministically, with each file's SHA-256 | Python, with pyarrow | A CronJob | Parquet files |
 | Query API | Answers "as of T" | Go, with `net/http` and pgx | A stateless Deployment | Nothing |
 | NATS JetStream | Durable queues and events ([0003]) | — | A StatefulSet of three | The streams |
@@ -31,9 +31,9 @@ kind ([components][design-components], [0001]).
 
 The languages and libraries are decision 0006's ([0006]), and the
 discoverer's use of `edgar-asof` is task T24's ([plan][plan-observing]).
-The parse workers' parser is a decision still to come, task T12, and how
-they scale by queue depth is decided in [0014]
-([decision records][decisions]). The
+The parse workers' parser is proposed in [0016]: a narrow parser on lxml,
+in `edgar-asof`, that reads each instance alone, as stored. How they scale
+by queue depth is decided in [0014] ([decision records][decisions]). The
 facts, and where the parse workers keep their manifests, are for the facts
 specification, task T17, which isn't written; the query API is built after
 it, in task T26 ([plan][plan-facts]). The pages on the
@@ -382,6 +382,7 @@ library publishes, so both answer "as of T" the same way ([0009]).
 [0002]: ../decisions/0002-store-bodies-in-garage.md
 [0003]: ../decisions/0003-queue-work-in-nats-jetstream.md
 [0014]: ../decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
+[0016]: ../decisions/0016-read-xbrl-instances-with-a-narrow-parser-on-lxml.md
 [0004]: ../decisions/0004-keep-the-record-in-postgresql-18.md
 [0005]: ../decisions/0005-send-sec-requests-through-one-active-fetcher.md
 [0006]: ../decisions/0006-write-the-services-in-go-and-python.md

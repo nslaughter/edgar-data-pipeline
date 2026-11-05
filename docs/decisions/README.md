@@ -24,5 +24,6 @@ A record's status is **Proposed** until the owner accepts it, then
 | [0012](0012-publish-the-documents-as-a-site-built-with-zensical.md) | Publish the documents as a site built with Zensical, served by GitHub Pages | Accepted |
 | [0013](0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md) | Measure each feed's lag in a bounded study, then keep only the lists' changes and coverage | Accepted |
 | [0014](0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md) | Scale the parse workers with KEDA, from zero to three, by their consumer's backlog | Accepted |
+| [0016](0016-read-xbrl-instances-with-a-narrow-parser-on-lxml.md) | Read XBRL instances with a narrow parser on lxml, in `edgar-asof` | Proposed |
 
-Decisions still to come: the XBRL parser.
+Decisions still to come: none.

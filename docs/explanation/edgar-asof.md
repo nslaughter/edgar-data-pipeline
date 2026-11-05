@@ -1,7 +1,7 @@
 # `edgar-asof`
 
 <!-- status: `edgar-asof` -->
-**Status** ([status page](../status.md)): `edgar-asof`: Decided.
+**Status** ([status page](../status.md)): `edgar-asof`: Planned; decided in part.
 <!-- end status -->
 
 `edgar-asof` is the public library that the pipeline's Python services read
@@ -367,7 +367,7 @@ with what it holds, as the two plans give them:
 | --- | --- | --- | --- |
 | 0.1.0, the first | Reads `companyfacts` and joins each value to the acceptance time of the filing that reported it, through `submissions`, from its cache or from bodies the caller gives; its specifications of facts, fetching, and times, with their interfaces; the client, the cache, the interpreters, and facts; on PyPI, with the library's documentation site ([the first release][asof-plan-first]) | T1 to T9, and T13 | [T24], which reads `submissions` and headers through it. [T17] waits on a release that specifies the fact model, and the library's plan puts its facts specification, T1, and facts, T8, in this release. |
 | Published cases for "as of T" | Cases with their inputs and answers ([later tasks][asof-plan-later]) | T10, split when it's next | [T26], by the library's plan |
-| XBRL instances | Every fact a filing reports, read from its XBRL instance with the parser that this repository's T12 chooses ([later tasks][asof-plan-later]) | T11, split when it's next | [T25], which waits on a release that reads XBRL instances |
+| XBRL instances | Every fact a filing reports, read from its XBRL instance with the parser that this repository's T12 chooses ([later tasks][asof-plan-later]): a narrow parser on lxml, which reads each instance alone, as [0016], Proposed, gives it | T11, split when it's next | [T25], which waits on a release that reads XBRL instances |
 
 The first release's facts rest on this repository's investigation: decision
 0009 made the release depend on whether each `companyfacts` value joins to
@@ -449,6 +449,7 @@ Its state, as its plan and specifications gave it on October 14, 2026:
 [0006]: ../decisions/0006-write-the-services-in-go-and-python.md
 [0009]: ../decisions/0009-read-edgar-through-a-public-point-in-time-library.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
+[0016]: ../decisions/0016-read-xbrl-instances-with-a-narrow-parser-on-lxml.md
 [the design's times]: ../design.md#times
 [the design's testing on kind]: ../design.md#testing-on-kind
 [plan-works]: ../plan.md#how-the-plan-works
