@@ -82,6 +82,7 @@ nav = [
       "docs/decisions/0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md",
       "docs/decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md",
       "docs/decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md",
+      "docs/decisions/0016-read-xbrl-instances-with-a-narrow-parser-on-lxml.md",
     ] },
   ] },
   { "Reference" = [

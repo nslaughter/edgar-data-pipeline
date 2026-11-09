@@ -143,7 +143,9 @@ send back, as a conditional request, to receive the body only if it changed
 ### XBRL instance
 
 The file in which a filing gives, in XBRL, the facts it reports
-([0009], [SRC-14]). Its filing's index page names it ([SRC-20]). The parse
+([0009], [SRC-14]). Its filing's index page names it ([SRC-20]). It holds
+every context and unit its facts name, and names as its schema a file of
+its own filing, which the pipeline doesn't fetch ([SRC-32]). The parse
 workers read facts from it ([components][design-components]). In the
 baseline, a 10-K's or a 10-Q's is 0.9 MB to 10.9 MB ([SRC-18]).
 
@@ -817,6 +819,7 @@ open. A statement checked by `operator` is the owner's to keep
 [SRC-21]: ../investigation/edgar.md#findings-so-far
 [SRC-24]: ../investigation/edgar.md#findings-so-far
 [SRC-25]: ../investigation/edgar.md#findings-so-far
+[SRC-32]: ../investigation/edgar.md#findings-so-far
 [OBJ-1]: ../spec/snapshots.md#5-objects
 [VER-1]: ../spec/snapshots.md#7-versions
 [XFER-1]: ../spec/snapshots.md#records-the-cluster-made

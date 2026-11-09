@@ -626,19 +626,18 @@ T3][asof-first-release]).
 ### What isn't written yet
 
 Two specifications: the facts ([T17]) and the export ([T18]), with a minor
-version of the telemetry for them ([T32]). One decision record: which XBRL
-parser reads the instances, a narrow parser on lxml or Arelle ([T12]). A
-version of the deployment specification that states how the parse workers
-scale, as [0014] decides ([T10]): the owner decided that a task of its own
-specifies it, and the plan doesn't have that task yet. And the versions of
-four specifications that [0015] calls for, the notices', the controls',
-the deployment's, and the telemetry's, of which the plan holds the
-notices' ([T52]). And a version of the snapshot store's specification that
-states what the fetcher does while a write can't be made, as the owner
-decided with [T23]: it holds the fetch and tries the write again, sending
-nothing else meanwhile. The owner decided that the same version states
-that a fetch between attempts waits while requests aren't allowed, and
-that a fetch in progress when its replica stops is abandoned without a
+version of the telemetry for them ([T32]). A version of the deployment
+specification that states how the parse workers scale, as [0014] decides
+([T10]): the owner decided that a task of its own specifies it, [T51],
+after the facts and before the parse workers are built. And the versions
+of four specifications that [0015] calls for, the notices', the
+controls', the deployment's, and the telemetry's, of which the plan holds
+the notices' ([T52]). And a version of the snapshot store's specification
+that states what the fetcher does while a write can't be made, as the
+owner decided with [T23]: it holds the fetch and tries the write again,
+sending nothing else meanwhile. The owner decided that the same version
+states that a fetch between attempts waits while requests aren't allowed,
+and that a fetch in progress when its replica stops is abandoned without a
 record, and that a decision record proposed with it supersedes [0003]'s
 consequence that fetching continues while PostgreSQL fails over.
 
@@ -746,6 +745,12 @@ consequence that fetching continues while PostgreSQL fails over.
   dispute over NATS's license, settled with NATS in the CNCF under Apache
   2.0 ([0003]), Promtail's end of life ([0008]), and Material for MkDocs's
   maintenance mode ([0012]).
+- **The stored XBRL instances are all recent.** They're of filings from
+  October 2025 to September 2026 ([SRC-31]), and a Backfill brings filings
+  from 2009 ([SRC-10]). An older instance that uses a part of XBRL the
+  parser [0016] chooses doesn't read is refused, not read wrongly.
+  Storing older instances to check them is a widening of the scope and a
+  run, which the owner asks for ([0016]).
 
 ### To the project
 
@@ -772,6 +777,7 @@ consequence that fetching continues while PostgreSQL fails over.
 [0002]: ../decisions/0002-store-bodies-in-garage.md
 [0003]: ../decisions/0003-queue-work-in-nats-jetstream.md
 [0014]: ../decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
+[0016]: ../decisions/0016-read-xbrl-instances-with-a-narrow-parser-on-lxml.md
 [0004]: ../decisions/0004-keep-the-record-in-postgresql-18.md
 [0005]: ../decisions/0005-send-sec-requests-through-one-active-fetcher.md
 [0006]: ../decisions/0006-write-the-services-in-go-and-python.md
@@ -811,6 +817,7 @@ consequence that fetching continues while PostgreSQL fails over.
 [T36]: ../plan.md#observing-filings
 [T38]: ../plan.md#observing-filings
 [T48]: ../plan.md#observing-filings
+[T51]: ../plan.md#facts
 [agents-rules]: ../../AGENTS.md#rules
 [agents-where]: ../../AGENTS.md#where-documents-go
 [inv-questions]: ../../investigation/edgar.md#questions
@@ -859,7 +866,9 @@ consequence that fetching continues while PostgreSQL fails over.
 [SRC-6]: ../../investigation/edgar.md#findings-so-far
 [SRC-12]: ../../investigation/edgar.md#findings-so-far
 [SRC-13]: ../../investigation/edgar.md#findings-so-far
+[SRC-10]: ../../investigation/edgar.md#findings-so-far
 [SRC-14]: ../../investigation/edgar.md#findings-so-far
+[SRC-31]: ../../investigation/edgar.md#findings-so-far
 [SRC-15]: ../../investigation/edgar.md#findings-so-far
 [SRC-16]: ../../investigation/edgar.md#findings-so-far
 [SRC-17]: ../../investigation/edgar.md#findings-so-far

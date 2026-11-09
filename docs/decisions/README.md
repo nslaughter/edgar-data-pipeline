@@ -25,5 +25,6 @@ A record's status is **Proposed** until the owner accepts it, then
 | [0013](0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md) | Measure each feed's lag in a bounded study, then keep only the lists' changes and coverage | Accepted; superseded in part by 0015 |
 | [0014](0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md) | Scale the parse workers with KEDA, from zero to three, by their consumer's backlog | Accepted |
 | [0015](0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md) | Poll the latest-filings feed for every filer's filings, and reconcile each day with the daily index | Accepted |
+| [0016](0016-read-xbrl-instances-with-a-narrow-parser-on-lxml.md) | Read XBRL instances with a narrow parser on lxml, in `edgar-asof` | Accepted |
 
-Decisions still to come: the XBRL parser.
+Decisions still to come: none.

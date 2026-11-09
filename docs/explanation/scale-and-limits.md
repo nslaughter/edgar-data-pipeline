@@ -215,7 +215,7 @@ each day, if they slow.
 
 kind runs every node as a container on one machine, so memory is the
 scarce resource ([0001]). The estimates put the pipeline at 3.7 to 9.0 GB
-for observing filings, and 4.2 to 16.7 GB with everything
+for observing filings, and 4.2 to 11.4 GB with everything
 ([estimates](estimates.md#cpu-memory-and-storage)). Nearly all of it is
 spent before the first poll: the database's three instances, Prometheus,
 kind's control plane, and the three replicas each of NATS and Garage. The
@@ -224,7 +224,7 @@ scope adds little to it: each Source adds 18 to 23 series to Prometheus
 the scope.
 
 So memory doesn't limit the scope; it limits which machine can run the
-pipeline at all. At the high end, kind alone needs 16.7 GB. Each figure
+pipeline at all. At the high end, kind alone needs 11.4 GB. Each figure
 but those of the decision records is an assumption, until each
 component's memory is measured on kind
 ([§9 of the deployment][deployment-later]).
@@ -295,8 +295,8 @@ each part would stop:
   the export, 500 GB of disk is full after 37 to 279 days.
 - **Parsing fits.** 155 to 310 instances a day, 67 to 133 of them
   reports, at an assumed 0.5 to 2 seconds each with lxml, are 1.3 to 10.3
-  minutes of a core a day. The parser is still to be chosen, task T12
-  ([plan][plan-facts]).
+  minutes of a core a day. [0016] chooses a narrow parser on
+  lxml ([plan][plan-facts]).
 
 > **Analysis.** No task, decision record, or specification covers this.
 > To observe every filer, the pipeline could take its notices from a feed
@@ -310,6 +310,7 @@ each part would stop:
 [0005]: ../decisions/0005-send-sec-requests-through-one-active-fetcher.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
 [0015]: ../decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md
+[0016]: ../decisions/0016-read-xbrl-instances-with-a-narrow-parser-on-lxml.md
 [barman-compression]: https://github.com/cloudnative-pg/plugin-barman-cloud/blob/72440855ce8c33ae71d0f3d8aca6634d2f3b8c7c/web/docs/compression.md
 [barman-retention]: https://github.com/cloudnative-pg/plugin-barman-cloud/blob/72440855ce8c33ae71d0f3d8aca6634d2f3b8c7c/web/docs/retention.md
 [controls-source]: ../../spec/controls.md#6-source

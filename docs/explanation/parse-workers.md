@@ -86,9 +86,9 @@ filing's value for its key ([FACT-6]). Each fact's filing keeps its raw
 acceptance time from `submissions`, and its header's beside it when the
 caller asks for headers ([FACT-10], [FACT-11]).
 
-Reading XBRL instances is the library's later task T11, with the parser the
-pipeline's T12 chooses, ending in a release that the pipeline's T25 waits
-on ([edgar-asof's plan][asof-plan-later], [plan][plan-facts]). Facts read
+Reading XBRL instances is the library's later task T11, with the narrow
+parser on lxml that [0016] gives it, ending in a release that
+the pipeline's T25 waits on ([edgar-asof's plan][asof-plan-later], [plan][plan-facts]). Facts read
 from instances may need dimensions in their keys, which no `companyfacts`
 value has ([what edgar-asof's facts leave to later versions][asof-facts-left],
 [SRC-14]). Facts
@@ -129,19 +129,17 @@ and every service already apply to them.
 
 | What's open | The task that settles it | It waits on |
 | --- | --- | --- |
-| Their deployment: KEDA in the operators' chart, their Deployment, and the `ScaledObject` that scales it | A version of the deployment specification, before T25 ([0014]) | A task the plan doesn't yet have, which the owner decided on |
-| The XBRL parser: a narrow parser on lxml, or Arelle, an open-source XBRL processor whose plugins include the SEC's EDGAR Renderer ([0006]) | T12, a decision record; `edgar-asof` reads XBRL instances with the same parser | T1 and T2, both done |
+| Their deployment: KEDA in the operators' chart, their Deployment, and the `ScaledObject` that scales it | [T51], a version of the deployment specification, before T25 ([0014]) | [T17], and T10 and T50, both done |
 | How facts are stored, and their times: the fact table, citing a version of `edgar-asof`'s specification for the fact model and what "as of T" returns | T17, `spec/facts.md` | T12, T16, and an `edgar-asof` release that specifies the fact model |
 | What the parse workers do with a filing notice, and how they find the complete filings whose notices they didn't read | T17 ([§12 of the notices][notices-left]) | As above |
 | Where an import in the cluster keeps its manifest | T17 ([§13 of the store][snapshots-left]) | As above |
 | What an import's output is, and how a rerun is compared with the original | T18, the export ([open question 3 of the store][snapshots-open]) | T17 |
 | Their metrics and traces, and the view of each filing's times from acceptance to facts available | T32, a minor version of the telemetry specification ([§11 of telemetry][telemetry-left]) | T17, T18, T19 |
-| Building them | T25 | T17, T24, and an `edgar-asof` release that reads XBRL instances |
+| Building them | T25 | T17, T24, T51, and an `edgar-asof` release that reads XBRL instances |
 
 The tasks are in the plan's facts section ([plan][plan-facts]). The design
-lists the XBRL parser as a decision still to come, T12, and how workers
-scale by queue depth as decided in [0014]
-([decisions][design-decisions]).
+cites [0016] for the XBRL parser, and [0014] for how workers
+scale by queue depth ([decisions][design-decisions]).
 
 ## State, replicas, and scaling
 
@@ -184,9 +182,8 @@ notice, whether or not it has an instance ([FILE-5]).
 The six stored XBRL instances of 10-Ks and 10-Qs are from 0.9 MB to
 10.9 MB each ([SRC-18]). The
 [estimates](estimates.md#cpu-memory-and-storage) assume 150 to 250 MB of
-memory a worker with lxml, or 0.5 to 2 GB with Arelle, and 0.5 to 2
-seconds an instance with lxml, until the parser is chosen, task T12, and
-the workers are measured. Under [0014], three workers parse 1.5 to 6
+memory a worker with lxml, the parser [0016] chooses, and 0.5 to 2
+seconds an instance, until the workers are measured. Under [0014], three workers parse 1.5 to 6
 instances a second at that rate. Notices with an instance can come
 faster. The fetcher's limit of 5 requests a second ([FETCH-6]) holds them
 to about 1.7 a second on average, at three requests each: the header, the
@@ -244,9 +241,10 @@ the facts specification's, task T17
 - **PostgreSQL 18,** for the facts ([0004]).
 - **KEDA,** which scales them by their consumer's backlog, reading it from
   NATS's monitoring port, as [0014] decides.
-- **`edgar-asof`,** at a pinned release that reads XBRL instances, and the
-  XBRL parser that task T12 chooses ([plan][plan-facts]).
-- **Their libraries:** nats-py, psycopg, boto3, and the parser ([0006]).
+- **`edgar-asof`,** at a pinned release that reads XBRL instances, with
+  the narrow parser on lxml that [0016] chooses ([plan][plan-facts]).
+- **Their libraries:** nats-py, psycopg, boto3, and, through `edgar-asof`,
+  lxml ([0006], [0016]).
 
 ## The alternatives weighed
 
@@ -264,8 +262,15 @@ the facts specification's, task T17
   would stop whenever the database failed over or was down, and the
   database would carry the polling load. In NATS JetStream, their work
   waits through a failover.
-- **The parser** ([0006]): a narrow parser on lxml, or Arelle; task T12
-  decides.
+- **The parser** ([0006], [0016]). A narrow parser on lxml, in
+  `edgar-asof`, reads each instance alone, as stored, and fetches nothing.
+  Arelle reads an instance through its taxonomy: the filing's schema and
+  linkbases, and the taxonomies they import, which the store doesn't hold
+  ([SRC-32]), so they'd be fetched, stored, and given to it offline for
+  every year of filings. The same narrow parser on the standard library's
+  ElementTree would keep `edgar-asof` free of dependencies. py-xbrl is
+  under the GPLv3, and edgartools brings 22 dependencies, pyarrow among
+  them, whose version the exporter pins.
 - **How they scale** ([0014]). A HorizontalPodAutoscaler on an
   external metric served from Prometheus, through prometheus-adapter,
   needs no new definitions, but stops scaling while Prometheus is down,
@@ -287,6 +292,7 @@ the facts specification's, task T17
 | --- | --- |
 | [The design's components][design-components] | Their role, their language, and a Deployment scaled by queue depth. |
 | [0006] | Python, and the parser's two candidates. |
+| [0016] | Their parser, a narrow parser on lxml in `edgar-asof`, which reads each instance alone. |
 | [0009] | Facts built through a pinned `edgar-asof`, whose specification defines the fact model. |
 | [0003], [0004] | Their queue, which they're scaled by, and the database their facts are kept in. |
 | [0014] | How they scale: KEDA, from zero to three, by their consumer's backlog. |
@@ -296,9 +302,9 @@ the facts specification's, task T17
 | [MSG-2] | How they treat a notice. |
 | [NATS-5], [NATS-6] | Their durable consumer of filing notices, made before the first is published. |
 
-The status page names their decision records, 0006, 0009, and 0014;
-tasks T17 and T32, which specify them; T25, which builds them; and T10
-and T12, which decide them ([status page][status]).
+The status page names their decision records, 0006, 0009, 0014, and 0016;
+tasks T17, T32, and T51, which specify them; T25, which builds them; and
+T10 and T12, which decide them ([status page][status]).
 
 [0003]: ../decisions/0003-queue-work-in-nats-jetstream.md
 [0004]: ../decisions/0004-keep-the-record-in-postgresql-18.md
@@ -306,6 +312,7 @@ and T12, which decide them ([status page][status]).
 [0009]: ../decisions/0009-read-edgar-through-a-public-point-in-time-library.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
 [0014]: ../decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
+[0016]: ../decisions/0016-read-xbrl-instances-with-a-narrow-parser-on-lxml.md
 [BACKFILL-1]: ../../spec/controls.md#7-backfill
 [FETCH-6]: ../../spec/snapshots.md#10-fetching
 [FILE-1]: ../../spec/notices.md#7-a-filings-files
@@ -329,6 +336,7 @@ and T12, which decide them ([status page][status]).
 [SRC-18]: ../../investigation/edgar.md#findings-so-far
 [SRC-19]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far
+[SRC-32]: ../../investigation/edgar.md#findings-so-far
 [notice.schema.json]: ../../spec/schemas/notice.schema.json
 [snapshots-imports]: ../../spec/snapshots.md#11-imports
 [snapshots-open]: ../../spec/snapshots.md#13-open-questions
@@ -342,6 +350,7 @@ and T12, which decide them ([status page][status]).
 [notices-messages]: ../../spec/notices.md#9-messages-and-processing
 [notices-left]: ../../spec/notices.md#left-to-other-specifications
 [T17]: ../plan.md#facts
+[T51]: ../plan.md#facts
 [TABLE-3]: ../../spec/notices.md#4-the-record-of-notices
 [FILE-5]: ../../spec/notices.md#7-a-filings-files
 [MSG-2]: ../../spec/notices.md#streams
