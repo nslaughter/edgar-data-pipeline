@@ -178,8 +178,9 @@ listing shows by the listing's version and the day; a filing a master
 index lists by the index's version and the filing; a job by its `id`; and
 a Backfill by its `uid` ([the record of notices],
 [`notices.sql`][notices-sql]). A day's master index is queued again only
-while no job of it waits and none has fetched a version, so a listing's
-event delivered again queues nothing twice ([DAY-2]).
+while no job of it waits, none has fetched a version, and none has the
+listing's poll as its cause, so a listing's event delivered again queues
+nothing twice, even after the fetch it queued failed ([DAY-2]).
 
 So a consumer downstream can see the same message twice ([0003]): an event,
 with the same `id` ([JOB-6]); a job, with the same `id`, which the fetcher

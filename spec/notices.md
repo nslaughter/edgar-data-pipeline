@@ -514,13 +514,15 @@ The view `listings` has these columns:
   version is read, for each day it shows from the first day checked on,
   the discoverer queues the fetch of that day's master index: the
   listing's URL with `index.json` replaced by `master.YYYYMMDD.idx`
-  ([SRC-34]). It doesn't if `jobs` holds a job of that URL whose fetch
-  either isn't in the table `records` yet or recorded a version. The job is
-  of kind `filing` ([JOB-3]), with the feed `daily-index`, which the store
-  records the daily indexes under, and the discoverer adds it to `jobs`, of
-  the file `master`. So a day whose fetch ended without a version is
-  queued again by the next poll of the listing that shows it, and none is
-  queued before the feed has a poll whose version is read.
+  ([SRC-34]). It doesn't if `jobs` holds a job of that URL with this
+  event's record as its `cause`, or one whose fetch either isn't in the
+  table `records` yet or recorded a version. The job is of kind `filing`
+  ([JOB-3]), with the feed `daily-index`, which the store records the
+  daily indexes under, and the discoverer adds it to `jobs`, of the file
+  `master`. So a day whose fetch ended without a version is queued again
+  by the next poll of the listing that shows it, not by this poll's event
+  delivered again ([DISC-2]), and none is queued before the feed has a
+  poll whose version is read.
 - **DAY-3** (rule) For each event of a job in `jobs` of a master index,
   whose record names a version, the discoverer reads the version from the
   bucket as a master index, and adds its reading, of kind `master`, unless

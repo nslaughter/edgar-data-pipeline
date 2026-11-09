@@ -245,8 +245,9 @@ From it:
    first day checked, it queues the fetch of that day's master index, as a
    job of kind `filing`, of the file `master`, in the feed `daily-index`.
    It doesn't while a job of that URL is waiting or has fetched a version,
-   so a day whose fetch ended without one is queued again by the next poll
-   of the listing that shows it ([DAY-2]).
+   or was queued for this poll already, so a day whose fetch ended without
+   one is queued again by the next poll of the listing that shows it, and
+   not by this poll's event delivered again ([DAY-2]).
 3. **Its filings.** It reads each fetched master index, and adds each
    filing it lists to `index_filings`, with the CIK, form type, and date
    filed of the first line that lists it, and to `filings`, unless it's
