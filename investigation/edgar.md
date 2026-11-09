@@ -1,7 +1,7 @@
 # Source investigation: EDGAR
 
 **Status:** Started October 7, 2026. The baseline was fetched October 7;
-thirty-two findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
+thirty-five findings so far. SRC-6 to SRC-11, on fiscal periods and joins,
 and SRC-14 to SRC-17, on restated and repeated values, were read from it
 on October 10. SRC-12 and SRC-13, on `submissions`' further files and its
 acceptance times, were read from them and the baseline once they were
@@ -21,7 +21,11 @@ lay out what `edgar-asof` reads, were read from the stored versions on
 November 2, 2026, when the owner asked for them. SRC-32, on how the XBRL
 instances lay out their facts, was read from the stored instances and
 headers on November 5, 2026, for the XBRL parser's decision record, task
-T12, and the owner confirmed it the same day. Since October 10, how soon each feed shows a new filing (Q4) is measured
+T12, and the owner confirmed it the same day. SRC-33 to SRC-35, on how
+the latest-filings feed, the daily index listing, and the master indexes
+lay out what the notices read, were read from the stored versions on
+November 9, 2026, for the notices' version for the feed, task T52. Since
+October 10, how soon each feed shows a new filing (Q4) is measured
 from the pipeline's record. Data here comes from the U.S. Securities and
 Exchange Commission's EDGAR system.
 
@@ -1012,3 +1016,58 @@ a `200`, `36a5016d80ce` at 10:22:42.614Z.
 
   Shown by the eight XBRL instances and the eight headers in the records
   cited.
+- **SRC-33** (Q1) Each of the latest-filings feed's entries holds, in
+  order, a `title`, a `link`, a `summary`, an `updated`, a `category`, and
+  an `id`, in the Atom namespace, `http://www.w3.org/2005/Atom`, which the
+  root, `feed`, declares as its default; the root's other children are its
+  own `title`, two `link`s, an `id`, an `author`, and an `updated`
+  (SRC-26). An entry's `title` is the form, ` - `, the party's name, the
+  party's CIK in ten digits in parentheses, and its role in parentheses,
+  such as `4 - Ainscow Robert (0001951275) (Reporting)`; no name holds a
+  parenthesis. Its `link` has the `rel` `alternate`, the `type`
+  `text/html`, and the `href`
+  `https://www.sec.gov/Archives/edgar/data/CIK/NODASHES/ACCESSION-index.htm`
+  (SRC-27), with the title's CIK without its leading zeros. Its `summary`,
+  of `type` `html`, is escaped HTML that gives `Filed:` the filing date as
+  `YYYY-MM-DD`, `AccNo:` the accession number, and `Size:` a size such as
+  `5 KB`, each label in `<b>`. Its `updated` is a time to the second with
+  its offset, such as `2026-10-16T21:57:56-04:00`. Its `category` has the
+  `scheme` `https://www.sec.gov/`, the `label` `form type`, and the title's
+  form as its `term`. Its `id` is `urn:tag:sec.gov,2008:accession-number=`
+  followed by the accession number, which its `summary` and its `link`
+  give too. A filing's entries give one form, filing date, and `updated`,
+  and no filing's `updated` is later than the one before it. Of the 41
+  Forms 4 and 4/A, 35 list a reporting owner's entry first and 6 the
+  issuer's; of the 9 filings with a `Subject` entry, 3 list it first.
+  Shown by the `latest-filings` record in the records cited.
+- **SRC-34** (Q4) The quarter's daily index listing, `index.json`, is a
+  JSON object, in ASCII, whose `directory` gives the directory's `name`,
+  `daily-index/2026/QTR4/`, its `parent-dir`, `../`, and an `item` list of
+  the directory's files, sorted by name. Each item is an object with a
+  `name`; an `href`, the same as its name, relative to the listing; a
+  `type`, `file`; a `size`, such as `792 KB`; and a `last-modified`, such
+  as `10/01/2026 10:02:20 PM`, with no time zone, the US Eastern time that
+  SRC-5 found. Each day the listing shows has five files: `company.`,
+  `crawler.`, `form.`, and `master.`, each followed by the day as
+  `YYYYMMDD` and `.idx`, and `sitemap.` followed by the day and `.xml`. The
+  October 7 listing held 20 files, for four days, and the October 16 one 50,
+  for ten.
+  Shown by the two daily index listings in the records cited.
+- **SRC-35** (Q4) A day's master index lists the filings EDGAR
+  disseminated that day, some of them filed on earlier days, on a line for
+  each CIK a filing names (SRC-28). Each of the ten stored is ASCII, with
+  lines that end in a line feed, and none after its last line. Its first
+  seven lines are a header: `Description:`, `Last Data Received:` with the
+  day as `Oct 1, 2026`, `Comments:`, and `Anonymous FTP:`, each with its
+  value; a line of one space; the column names
+  `CIK|Company Name|Form Type|Date Filed|File Name`; and a line of 80
+  dashes. Each line after them gives five fields, separated by `|`, which
+  none of them holds: a CIK without leading zeros, a company name, a form
+  type, a date filed as `YYYYMMDD`, and a file name: `edgar/data/`, the
+  line's CIK, `/`, the filing's accession number, and `.txt`. The lines are
+  sorted as text, and a filing's lines all give one form type and one date
+  filed. Of each index's 2,179 to 4,413 filings, 19 to 132, 0.7% to 5.0%,
+  have a date filed before the index's day, as far back as January 29,
+  2021, and none has one after it. No filing is listed in two of the ten
+  indexes.
+  Shown by the master indexes of October 1 to 15 in the records cited.
