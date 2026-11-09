@@ -1,12 +1,13 @@
 # The data model and its times
 
 <!-- status: The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; Discoverer; Parse workers; Query API; `edgar-asof`; Monitoring: metrics, alerts, and dashboards -->
-**Status** ([status page](../status.md)): The snapshot store in git: Built. The snapshot store in the cluster: Built. The transfer from the cluster to git: Built. Discoverer: Decided; specified in part. Parse workers: Decided. Query API: Decided. `edgar-asof`: Decided. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part.
+**Status** ([status page](../status.md)): The snapshot store in git: Built. The snapshot store in the cluster: Built. The transfer from the cluster to git: Built. Discoverer: Specified. Parse workers: Decided. Query API: Decided. `edgar-asof`: Decided. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part.
 <!-- end status -->
 
 This page covers what the pipeline stores: the snapshot store's objects and
 records, in git and in the cluster; the notices' record of polls, filings,
-sightings, coverage, and gaps; and the facts, as far as they're specified.
+sightings, coverage, gaps, and each day's check against its master index;
+and the facts, as far as they're specified.
 It then covers the times each keeps, and what an "as of T" query returns.
 Facts about `edgar-asof` here were checked against its `main`, at commit
 `515bb0d`, on October 14, 2026.
@@ -96,15 +97,21 @@ whose rows are only added, and views over them
 | Table or view | One row for each | What it's for |
 | --- | --- | --- |
 | `polls` | Poll whose event the discoverer read | Coverage and gaps |
-| `readings` | Version read as a list, a header, or an index page | What the discoverer read from each version, once |
-| `filings` | Filing a list named | The filing, with the values of the list it was first read from |
+| `feed_polls` | Successful poll of the feed whose event the discoverer read | Whether it reaches back to the poll before it |
+| `readings` | Version read as a list, the feed, a listing, a master index, a header, or an index page | What the discoverer read from each version, once |
+| `filings` | Filing a list, a version of the feed, or a master index named | The filing, with the values of the version it was first read from |
 | `sightings` | Filing and Source whose polls showed it | When the Source first showed it |
-| `jobs` | Job the discoverer queued | Each fetch of a filing's file, or of a Backfill's list, and what caused it |
+| `entries` | Entry of a filing, in the first version of the feed that named it | Each party's name, CIK, and role, and its time, raw |
+| `listing_days` | Day a listing shows | Which days' master indexes to fetch |
+| `index_filings` | Filing a master index lists | The filings of each day checked, with the CIK of the first line that lists each |
+| `jobs` | Job the discoverer queued | Each fetch of a filing's file, of a day's master index, or of a Backfill's list, and what caused it |
 | `backfills`, `backfill_filings`, `backfill_listings`, `backfill_outcomes` | Backfill ordered; filing in its range; Backfill listed; filing fetched or failed | Each Backfill's progress |
 | `held_files` (view) | File of a filing the record holds | The first record of its URL that names a version |
 | `gaps` (view) | Gap in a Source's coverage, ended or open | Where the record wasn't looking |
 | `backfill_progress` (view) | Backfill | Its counts, as its status shows them |
 | `lags` (view) | Sighting | Its times, and the bounds of each lag |
+| `checks` (view) | Day checked | The filings only one of the feed and the master indexes showed |
+| `listings` (view) | Quarter's listing a Source's polls fetched | When it was read through |
 
 ```mermaid
 erDiagram
@@ -127,6 +134,11 @@ erDiagram
         timestamptz queued_at
         timestamptz expires_at
     }
+    feed_polls {
+        bigint record PK, FK
+        bigint previous FK
+        boolean reaches_back
+    }
     readings {
         text sha256 PK
         text kind
@@ -148,6 +160,29 @@ erDiagram
         text accession_number PK, FK
         bigint first_shown FK
         bigint last_not_shown FK
+    }
+    entries {
+        text accession_number PK, FK
+        integer position PK
+        bigint listed_by FK
+        text form
+        text party
+        text cik
+        text role
+        text link
+        text filed
+        text updated
+    }
+    listing_days {
+        text sha256 PK, FK
+        date day PK
+    }
+    index_filings {
+        text sha256 PK, FK
+        text accession_number PK, FK
+        text cik
+        text form
+        text date_filed
     }
     jobs {
         uuid id PK
@@ -182,11 +217,18 @@ erDiagram
         timestamptz at
     }
     records ||--o| polls : "is the record of"
+    polls ||--o| feed_polls : "is, of the feed"
+    polls |o--o{ feed_polls : "previous"
     records ||--o{ filings : "first listed"
     readings |o..o{ records : "reads the version of"
     polls ||--o{ sightings : "first_shown"
     polls |o--o{ sightings : "last_not_shown"
     filings ||--o{ sightings : "shown in"
+    filings ||--o{ entries : "has, in the feed"
+    polls ||--o{ entries : "listed_by"
+    readings ||--o{ listing_days : "shows"
+    readings ||--o{ index_filings : "lists"
+    filings ||--o{ index_filings : "listed in"
     filings |o--o{ jobs : "has files fetched by"
     records |o--o{ jobs : "caused"
     jobs |o..o| records : "fetched as"
@@ -203,9 +245,12 @@ reading to the records of its version, by `sha256`, and a job to the record
 of its fetch, by the record's `job`.
 
 A row records what the discoverer found when it found it. A `filings` row
-keeps the form, filing date, and `acceptanceDateTime` of the list it was
-first read from ([SEEN-2]), though a later list can give the filing another
-`acceptanceDateTime` ([SRC-24]), and a `readings` row keeps what the first
+keeps the form, filing date, and time of the version it was first read
+from: a list's `acceptanceDateTime`, the feed's `updated`, or, from a master
+index, which gives none, no time ([SEEN-2], [DAY-3]). A later list can give
+the filing another `acceptanceDateTime` ([SRC-24]). A filing's `entries`
+are those of the first version of the feed that named it ([FEED-2]), and
+a `readings` row keeps what the first
 discoverer to read that version read, with its commit in `tool`. How a later
 discoverer that would read a version differently records a correction is
 still open ([open questions of the notices][notices-open]).
@@ -222,12 +267,22 @@ URL, in the order of their records' `id`s:
 
 - A successful poll **follows** the one before it when its job was queued
   less than its own window after the earlier one's job expired.
-- **Coverage** runs from each successful poll's request to the next one's,
-  when the next follows it, and otherwise to when its job expired.
-- A **gap** runs from when the earlier one's job expired to the later one's
-  request, when the later one doesn't follow.
+- A successful poll of the feed **reaches back** when its version and the
+  one before's are both read as the feed, without an error, and name a
+  filing in common, as its row in `feed_polls` records ([GAP-4]).
+- A **gap** runs from the earlier one's request to the later one's, when
+  the later is of the feed and doesn't reach back, whether or not it
+  follows. Otherwise it runs from when the earlier one's job expired to the
+  later one's request, when the later one doesn't follow.
+- **Coverage** is the time no gap covers, from the Source's first
+  successful poll until its latest successful poll's job expired.
 - A gap is **open** once the latest successful poll's job has been expired
   for as long as its window, with no later successful poll.
+
+The feed lists only its latest entries, so it can show a filing between
+two polls that neither names when they come far enough apart, though both
+succeeded ([SRC-27], [SRC-28]). That's why a poll of it that doesn't reach
+back leaves a gap ([§5 of the notices][notices-gaps], [0015]).
 
 An example, with times made up for it, of a Source at 10 seconds whose
 second poll fails:
@@ -240,28 +295,61 @@ second poll fails:
 | 12:00:30 | 12:00:40 | Succeeds, sent at 12:00:30.100 | Yes: queued as the one before expired | Coverage from 12:00:20.300 on |
 
 If no poll succeeded after the last, a gap would open at 12:00:50, from
-12:00:40. Since `gaps` is a view, not a table, a record that arrives late
-changes what it gives, and nothing stored ([GAP-2]).
+12:00:40. Were the Source the feed's, and the third poll's version named
+none of the filings the first's did, the gap would run from 12:00:00.200
+instead, the first poll's request. Since `gaps` is a view, not a table, a
+record that arrives late changes what it gives, and nothing stored
+([GAP-2]).
 
 ### Sightings: when a Source first showed a filing
 
-For each filing a poll's list names, unless the Source has shown it before,
-the discoverer adds a sighting: the poll as `first_shown`, and as
-`last_not_shown` the Source's latest earlier poll whose list it read
-([SEEN-2]). The first names the filing and the second doesn't, so the Source
+For each filing a poll's list or version of the feed names, unless the
+Source has shown it before, the discoverer adds a sighting: the poll as
+`first_shown`, and as `last_not_shown` the Source's latest earlier poll
+whose version it read as the same kind ([SEEN-2]). The first names the
+filing and the second doesn't, so the Source
 first showed the filing after `last_not_shown`'s request was sent, and by
 the time `first_shown`'s response arrived ([SEEN-3]). These are the tightest
 bounds the record holds, unless an event reached the discoverer late, as
 after a fetcher's restart, when they still bound it, more loosely. A filing
-the Source shows at its first poll whose list is read has no
+the Source shows at its first poll whose version is read has no
 `last_not_shown`, since the record doesn't say how long it had shown it
-([§6 of the notices][notices-seen]).
+([§6 of the notices][notices-seen]). A filing the feed showed only between
+two of its polls that neither names has no sighting of the feed.
+
+### The feed's entries, and the daily check
+
+The feed gives an entry for each of a filing's parties, with the party's
+name, CIK, and role, the filing's directory under that CIK, its filing
+date, and a time to the second with its offset ([SRC-27], [SRC-33]). The
+discoverer keeps each filing's entries raw in `entries`, from the first
+version of the feed it read that names the filing, so `entries` holds each
+filing the feed showed, and only those ([FEED-2]).
+
+Each day is checked against its master index, which lists the filings
+EDGAR disseminated that day, on a line for each CIK a filing names
+([SRC-35], [0015]). From the first day checked, the day after the Eastern
+date of the feed's first poll whose version is read, each day the
+quarter's listing shows, in `listing_days`, has its master index fetched,
+and each filing it lists goes into `index_filings`, with the CIK, form
+type, and date filed of its first line, and into `filings`, with no time,
+unless it's there ([DAY-1] to [DAY-3]). A filing that only a master index
+lists gets its header and index page fetched, and has no sighting
+([DAY-4]). The view `checks` gives, for each day checked, the number of
+filings only one of the feed and the master indexes showed, matching them
+by accession number, and the feed's to a day by the filing date it gives;
+`listings` gives when each quarter's listing was read through
+([DAY-5], [DAY-6], [the daily check][notices-day]).
 
 ### A filing's files
 
 The jobs a filing's files are fetched by are kept in `jobs`, each with the
-record whose event caused it, so each fetch traces back to the poll, or the
-Backfill's order, that led to it ([§7 of the notices][notices-files]). A
+record whose event caused it, so each fetch traces back to the poll, the
+master index, or the Backfill's order, that led to it
+([§7 of the notices][notices-files]). Each file is fetched under the CIK of
+what led to it: a company's, for its `submissions` or a Backfill; the
+issuer's that the feed's entries give, or else the subject's, or else the
+first entry's; or a master index's first line's ([FILE-1]). A
 filing's file is **held** when one of its URL's records names a version, and
 the view `held_files` gives the first such record ([FILE-6]). A filing is
 complete when its header and index page are held, each read without an
@@ -304,8 +392,9 @@ T" returns, and add how the pipeline stores facts ([plan][plan-facts],
   ([one filing, end to end][design-filing]). Decision 0004 has one
   transaction record a filing, its parse, and its facts, so that they can't
   disagree ([0004]). The notices' specification records the filing apart
-  from its parse: the discoverer adds it to `filings` when a poll's list
-  names it, in that message's own transaction ([SEEN-2], [DISC-2]).
+  from its parse: the discoverer adds it to `filings` when a poll's list or
+  version of the feed, or a master index, names it, in that message's own
+  transaction ([SEEN-2], [DAY-3], [DISC-2]).
 - **Facts come from each filing's XBRL instance.** The SEC's summaries are
   kept as evidence of what it published, not as the facts' source
   ([what the pipeline keeps][design-keeps]).
@@ -350,9 +439,11 @@ record is as given there; one it adds itself is by its own clock
 | A fetch's request and response | `records.requested_at`, `received_at` | The fetcher's clock | Timestamps in UTC, to the millisecond |
 | The response's `Date` and `Last-Modified` | `records.date`, `last_modified` | The SEC's response | Strings, as received |
 | A poll's window | `polls.queued_at`, `expires_at` | Its job | Timestamps |
-| Acceptance, from `submissions` | `filings.acceptance_date_time` | The list the filing was first read from | The string given, RFC 3339 with a `Z` ([SRC-25]) |
+| Acceptance, as listed | `filings.acceptance_date_time` | The version the filing was first read from: `submissions`' `acceptanceDateTime`, or the feed's `updated`; null from a master index | The string given: RFC 3339 with a `Z` from `submissions` ([SRC-25]), or with its offset from the feed ([SRC-27]) |
 | Acceptance, from the header | `readings.acceptance_datetime` | The filing's header | 14 digits, with no time zone ([SRC-1]) |
-| Filing date | `filings.filing_date` | The list | The string given |
+| Filing date | `filings.filing_date` | That version | The string given: `YYYY-MM-DD`, or a master index's `YYYYMMDD` ([SRC-35]) |
+| Each entry's time and filing date | `entries.updated`, `filed` | The first version of the feed that named the filing | The strings given ([FEED-2]) |
+| A day checked | `listing_days.day` | The name of its master index in a listing | A date, as the daily indexes name it, in US Eastern time ([SRC-34]) |
 | First shown, and last not shown | `sightings.first_shown`, `last_not_shown` | Two polls' records | The polls' `requested_at` and `received_at` |
 | A Backfill's order, listing, and outcomes | `backfills.ordered_at`; `backfill_listings.listed_at`; `backfill_outcomes.at` | The scheduler's order; the discoverer's clock | Timestamps |
 | A Source's last poll and last successful poll | Its status | The polls' records' `requested_at` ([SOURCE-4]) | Timestamps |
@@ -361,15 +452,20 @@ record is as given there; one it adds itself is by its own clock
 
 ### Instants, read only in queries
 
-The view `lags` reads the two acceptance times as instants
+The view `lags` reads the acceptance times as instants
 ([§10 of the notices][notices-lags]):
 
 - **`submissions`' `acceptanceDateTime`** as the instant it states
   ([SRC-25]), as the list the filing was first added from gives it, since
   `submissions` can change a filing's time after listing it ([SRC-24]).
+- **The feed's `updated`** as the instant it states, with its offset
+  ([SRC-27]), which the stored version doesn't show to be when the filing
+  was accepted; its lags beside the header's show whether they agree
+  ([0015]).
 - **The header's digits** as US Eastern time, `America/New_York`.
 
-Read so, the two disagree for each of the three companies: `submissions`
+Read so, `submissions`' time and the header's disagree for each of the
+three companies: `submissions`
 gives a filing's time later than its header's by the Eastern offset on its
 date, 4 hours in daylight time and 5 in standard time. Moved earlier by
 that offset, nearly all of the companies' recent filings fall within
@@ -377,6 +473,13 @@ EDGAR's hours; read as the instants they state, most of Microsoft's and a
 third of Walmart's don't ([SRC-25]). So a filing's lags from `submissions`'
 time are shorter than those from its header by that offset, until a
 finding settles which is right ([0010]).
+
+A filing has one listed time, from whichever version first named it, so a
+filing of the three companies' that the feed showed first has the feed's
+`updated` in their `submissions` Sources' lags too. A filing first listed
+by a master index has none, and no lag until a Source's polls show it; a
+sighting it gets later has no lags from the listed time
+([§10 of the notices][notices-lags]).
 
 The lags can settle it themselves: a filing is public only once it's
 accepted, so a time from which a lag's high bound falls below zero isn't
@@ -401,7 +504,7 @@ arrived ([SEEN-3]). So each lag, from an acceptance time to the Source's
 first showing, is more than its low bound and at most its high bound
 ([LAG-1]):
 
-| Bound | From `submissions`' time | From the header's time |
+| Bound | From the listed time | From the header's time |
 | --- | --- | --- |
 | Low | `not_shown_requested_at` − `listed_acceptance` | `not_shown_requested_at` − `header_acceptance` |
 | High | `shown_received_at` − `listed_acceptance` | `shown_received_at` − `header_acceptance` |
@@ -474,6 +577,7 @@ recovery][design-outages]).
 [0004]: ../decisions/0004-keep-the-record-in-postgresql-18.md
 [0009]: ../decisions/0009-read-edgar-through-a-public-point-in-time-library.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
+[0015]: ../decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md
 [ACCESS-3]: ../../spec/controls.md#8-secaccess
 [ASOF-1]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#7-as-of-t
 [ASOF-2]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#7-as-of-t
@@ -484,6 +588,11 @@ recovery][design-outages]).
 [asof-facts-7]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#7-as-of-t
 [asof-facts-10]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#left-to-other-specifications
 [dashboards-sql]: ../../spec/schemas/dashboards.sql
+[DAY-1]: ../../spec/notices.md#the-daily-check
+[DAY-3]: ../../spec/notices.md#the-daily-check
+[DAY-4]: ../../spec/notices.md#the-daily-check
+[DAY-5]: ../../spec/notices.md#the-daily-check
+[DAY-6]: ../../spec/notices.md#the-daily-check
 [deployment-transfer]: ../../spec/deployment.md#the-transfer
 [design-filing]: ../design.md#one-filing-end-to-end
 [design-keeps]: ../design.md#what-the-pipeline-keeps
@@ -498,9 +607,12 @@ recovery][design-outages]).
 [FACT-9]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#5-facts
 [FACT-10]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#6-filings-and-their-acceptance-times
 [FACT-12]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#6-filings-and-their-acceptance-times
+[FEED-2]: ../../spec/notices.md#the-latest-filings-feed
+[FILE-1]: ../../spec/notices.md#7-a-filings-files
 [FILE-5]: ../../spec/notices.md#7-a-filings-files
 [FILE-6]: ../../spec/notices.md#7-a-filings-files
 [GAP-2]: ../../spec/notices.md#5-polls-coverage-and-gaps
+[GAP-4]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [ID-1]: ../../spec/snapshots.md#10-fetching
 [JOB-2]: ../../spec/snapshots.md#jobs-and-events
 [JOB-5]: ../../spec/snapshots.md#jobs-and-events
@@ -512,6 +624,7 @@ recovery][design-outages]).
 [LOG-5]: ../../spec/snapshots.md#8-history
 [NOTICE-2]: ../../spec/notices.md#8-backfills
 [notices-backfills]: ../../spec/notices.md#8-backfills
+[notices-day]: ../../spec/notices.md#the-daily-check
 [notices-files]: ../../spec/notices.md#7-a-filings-files
 [notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [notices-lags]: ../../spec/notices.md#10-times-and-lags
@@ -543,6 +656,11 @@ recovery][design-outages]).
 [SRC-17]: ../../investigation/edgar.md#findings-so-far
 [SRC-24]: ../../investigation/edgar.md#findings-so-far
 [SRC-25]: ../../investigation/edgar.md#findings-so-far
+[SRC-27]: ../../investigation/edgar.md#findings-so-far
+[SRC-28]: ../../investigation/edgar.md#findings-so-far
+[SRC-33]: ../../investigation/edgar.md#findings-so-far
+[SRC-34]: ../../investigation/edgar.md#findings-so-far
+[SRC-35]: ../../investigation/edgar.md#findings-so-far
 [STORE-1]: ../../spec/snapshots.md#the-cluster-store
 [STORE-2]: ../../spec/snapshots.md#the-cluster-store
 [STORE-3]: ../../spec/snapshots.md#the-cluster-store

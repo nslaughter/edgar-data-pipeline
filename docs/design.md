@@ -1,6 +1,6 @@
 # Design: the EDGAR data pipeline
 
-**Status:** Draft, November 5, 2026. This document explains the pipeline's
+**Status:** Draft, November 9, 2026. This document explains the pipeline's
 architecture and the reasons for it. It makes no rules: the specifications
 under [`spec/`](../spec/) govern, the records under
 [`docs/decisions/`](decisions/) record each significant choice, and
@@ -31,9 +31,12 @@ ways, and claims no more than these.
    the pipeline parses facts from each filing's XBRL instance.
 3. **Where it was looking, and where it wasn't.** Each poll is recorded.
    The time between successful polls is coverage; a missed poll or an
-   outage is a gap. A version the SEC served and replaced during a gap is
-   lost to everyone, and the record says the gap was there instead of
-   implying that nothing changed.
+   outage is a gap, and so is the time before a poll of the latest-filings
+   feed that names none of the filings the poll before it named, since the
+   feed lists only its latest entries (SRC-28,
+   [GAP-2](../spec/notices.md#5-polls-coverage-and-gaps)). A version the
+   SEC served and replaced during a gap is lost to everyone, and the record
+   says the gap was there instead of implying that nothing changed.
 
 The pipeline doesn't recover what it didn't observe, and it holds a small
 scope, not all of EDGAR. One assumption holds this record up and is still to
@@ -44,15 +47,15 @@ be shown: that a filing's archived files never change after acceptance
 
 | Time | Where it comes from | After an outage |
 | --- | --- | --- |
-| Acceptance | The filing's header, `ACCEPTANCE-DATETIME` (SRC-1), with `submissions`' `acceptanceDateTime` beside it, as the list the filing was first added from gives it (SRC-24, SRC-25); both kept as given, since which is right, and the header's time zone, are still to be established | Unaffected: it is read from the filing whenever the filing is fetched |
+| Acceptance | The filing's header, `ACCEPTANCE-DATETIME` (SRC-1), with the time the version the filing was first added from gives beside it: `submissions`' `acceptanceDateTime` (SRC-24, SRC-25), or the latest-filings feed's `updated` (SRC-27), and none from a master index; each kept as given, since which is right, and the header's time zone, are still to be established | Unaffected: it is read from the filing whenever the filing is fetched |
 | Public availability | Not stated by the SEC. It lies between acceptance and first seen, and the record measures the delay (Q4, [0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)) | Estimated from acceptance and the measured delay |
-| First seen | For each source, the pipeline's first poll that showed the filing, after the last that didn't | Bounded: after the last successful poll before the gap, and at or before the first poll after it; flagged as a gap |
+| First seen | For each source, the pipeline's first poll that showed the filing, after the last that didn't; none for a filing only a day's master index lists | Bounded: after the last successful poll before the gap, and at or before the first poll after it; flagged as a gap |
 
 The record keeps every time raw, as its source gives it, and interprets
 time zones in queries
 ([0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)):
 for each fetch, when it was sent and when the response arrived, with the
-response's `Date` and `Last-Modified`; for each filing, both acceptance
+response's `Date` and `Last-Modified`; for each filing, its acceptance
 times as given; and for each source, the polls that bound when it first
 showed the filing. Each lag, from acceptance to each source and on to the
 facts, is then a query, and its distribution a dashboard.
@@ -86,7 +89,7 @@ exporter: facts ──▶ Parquet in Garage      query API: "as of T" ──▶ 
 | --- | --- | --- | --- |
 | Scheduler | A controller: queues each `Source`'s polls at its cadence, hands each `Backfill` to the discoverer, and keeps their status ([0007](decisions/0007-control-the-pipeline-through-custom-resources.md), [`spec/notices.md`](../spec/notices.md#8-backfills)) | Go | A Deployment of two, one active through leader election |
 | Fetcher | The only component that talks to the SEC: the user agent, the rate limit, retries, and the stop on a `403`, kept in `SecAccess`; stores each body and appends each record | Go | A Deployment of two, one active through a Lease ([0005](decisions/0005-send-sec-requests-through-one-active-fetcher.md)); the only pod with the `SEC_USER_AGENT` Secret |
-| Discoverer | Compares each new version of a notice source with the last; records each new filing with its first-seen time and any gap's bounds, and queues fetches of its header, index, and XBRL instance; lists each `Backfill`'s filings and queues their fetches ([`spec/notices.md`](../spec/notices.md)) | Python | A Deployment |
+| Discoverer | Compares each new version of a notice source with the last; records each new filing with its first-seen time and any gap's bounds, and queues fetches of its header, index, and XBRL instance; checks each day against its master index; lists each `Backfill`'s filings and queues their fetches ([`spec/notices.md`](../spec/notices.md)) | Python | A Deployment |
 | Parse workers | Read a stored XBRL instance and write its facts with the filing's acceptance time, under an import manifest ([§11](../spec/snapshots.md#11-imports)) | Python | A Deployment, scaled by queue depth |
 | Exporter | Writes the facts to Parquet in Garage, deterministically, and records each file's SHA-256 | Python | A CronJob |
 | Query API | Answers "as of T" | Go | A stateless Deployment |
@@ -110,15 +113,21 @@ upgrades it with its chart.
 
 ## One filing, end to end
 
-1. The scheduler queues a fetch of each company's `submissions`, at its
-   `Source`'s cadence.
+1. The scheduler queues a fetch of each `Source`'s URL, at its cadence:
+   EDGAR's latest-filings feed, for every filer, and each company's
+   `submissions` ([0015](decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md)).
 2. The fetcher holding the Lease sends the request within the rate limit,
    stores the body in Garage if it is new, and appends the fetch's record.
 3. The discoverer finds a new accession number in the new version. It
    records the filing, with this poll as its first-seen time and the
    previous successful poll as the lower bound, flagging a gap if polls were
-   missed between them, and queues fetches of the filing's header and index
-   page.
+   missed between them, or if a poll of the feed named none of the filings
+   the one before it named, and queues fetches of the filing's header and
+   index page, under its issuer's CIK where the feed names one
+   ([FILE-1](../spec/notices.md#7-a-filings-files)). Each day's master
+   index, read once it's published, adds each filing the feed didn't name,
+   which goes on from here
+   ([the daily check](../spec/notices.md#the-daily-check)).
 4. The fetcher fetches them, and the discoverer reads the acceptance time
    from the header, and from the index page the XBRL instance, whose fetch
    it queues.
@@ -184,8 +193,11 @@ nothing is queued, and the time is recorded as a gap.
   again.
 - The sources are cumulative. Each `submissions` file in the baseline held
   about 1,000 recent filings, and published daily indexes stay in EDGAR's
-  archive, so after an outage the pipeline catches up from them. Each
-  filing first seen after the outage carries the gap's bounds.
+  archive, so after an outage the pipeline catches up from them: each day's
+  master index is read once the quarter's listing shows it, and a fetch of
+  one that fails is queued again
+  ([DAY-2](../spec/notices.md#the-daily-check)). Each filing first seen
+  after the outage carries the gap's bounds.
 - A fetcher handover is a short gap, and a stop after a `403` carries over
   to the standby through `SecAccess`. A database failover pauses parsing,
   whose work waits in its stream
@@ -268,7 +280,8 @@ The normative parts become specifications, one per component or boundary:
   the existing format, with their bodies.
 - **Notices:** the discoverer's messages; each filing's times, raw, with
   the polls that bound when each source first showed it; coverage; gaps;
-  and the queries that give each lag.
+  each day's check against its master index; and the queries that give
+  each lag.
 - **Facts:** the fact table, its times, and what "as of T" returns.
 - **The export:** its format, its determinism, and its hashes, answering the
   store's open question 3.
@@ -293,8 +306,14 @@ The normative parts become specifications, one per component or boundary:
   The owner chose the notice source without waiting for these lags:
   [0015](decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md)
   makes the feed the notice source for every filer, from the goal the
-  owner stated, and this design follows it with the notices' version for
-  the feed (T52).
+  owner stated, and the notices' version 1.0.0 follows it
+  ([`spec/notices.md`](../spec/notices.md)). The controls', the
+  deployment's, and the telemetry's versions for it are still to come.
+- Whether the feed's `updated` is a filing's acceptance time, and whether
+  the feed and the master indexes list the same filings (SRC-27, SRC-35),
+  which the record shows: each lag from the feed's time beside the
+  header's, and each day's count of the filings only one of them showed
+  ([open questions of the notices](../spec/notices.md#12-open-questions)).
 - How fiscal periods map to facts (Q2, SRC-3), and how restatements appear
   (Q3).
 - Whether archived files ever change (Q1).

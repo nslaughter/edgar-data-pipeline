@@ -1,7 +1,7 @@
 # Failures and recovery
 
 <!-- status: Scheduler; Fetcher; Discoverer; NATS JetStream; Garage; PostgreSQL 18; The controls; Monitoring: metrics, alerts, and dashboards; The drills -->
-**Status** ([status page](../status.md)): Scheduler: Specified; built in part. Fetcher: Built. Discoverer: Decided; specified in part. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified; built in part. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The drills: Planned.
+**Status** ([status page](../status.md)): Scheduler: Specified; built in part. Fetcher: Built. Discoverer: Specified. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified; built in part. Monitoring: metrics, alerts, and dashboards: Decided; specified in part; built in part. The drills: Planned.
 <!-- end status -->
 
 For each failure that the design and the specifications consider: what
@@ -21,12 +21,17 @@ does to coverage, and the record keeps coverage by one definition
 - **Coverage** runs from each successful poll of a Source to the next, when
   the next follows it: when its job was queued less than its own window
   after the earlier one's job expired. A poll's window is from its job's
-  queuing to its expiry, when the Source's next poll is due.
+  queuing to its expiry, when the Source's next poll is due. Of the
+  latest-filings feed, the next must also reach back: name a filing the
+  earlier one named ([GAP-4]). Coverage is the time no gap covers.
 - **A gap** runs from when the earlier poll's job expired to the later
   poll's request, when the later one doesn't follow. So a missed poll leaves
   a gap of about a cadence; a pause, a stop after a `403`, or a fetcher's
   handover that misses a poll leaves a gap until polling resumes; and a poll
-  sent late in its slot, after retries, leaves none.
+  sent late in its slot, after retries, leaves none. A poll of the feed that
+  doesn't reach back leaves a gap from the earlier poll's request to its
+  own, though both succeeded, since the feed lists only its latest entries
+  ([SRC-28]).
 - **A gap is open** once the latest successful poll's job has been expired
   for as long as its window, with no later successful poll, and it runs
   from when that job expired. The Source's status gives when it began
@@ -42,6 +47,15 @@ first shown by the poll after a gap gets a sighting whose bounds are the
 last poll before the gap and the first after it, and the view `lags` says a
 gap lies between them ([SEEN-2], [SEEN-3], [LAG-1]). Its files are then
 fetched like any new filing's ([FILE-2]).
+
+The feed isn't cumulative: its 100 entries spanned 2 hours and 48 minutes
+on a Sunday, and would span about 14 to 31 minutes of a business day
+([SRC-28]). A filing it showed only during an outage has no sighting of the
+feed. The daily check finds it: from the first day checked, each day the
+quarter's listing shows has its master index fetched, again by the next
+poll of the listing if a fetch failed, and each filing an index lists that
+the feed didn't name has its files fetched, within about a day
+([DAY-2], [DAY-4], [the daily check]).
 
 The times keep their meaning through an outage ([the design's times]). A
 filing's acceptance time is read from the filing whenever it's fetched, so
@@ -366,7 +380,10 @@ stated maximum of 10 ([FETCH-6], [0005]).
   ([the controls' terms]).
 - **How it recovers:** the next successful poll ends each Source's gap, and
   lists the filings accepted during it ([SRC-9],
-  [the design's outages and recovery]). A fetch of a filing's file that
+  [the design's outages and recovery]), as far back as the feed's latest
+  entries reach; the master indexes list the rest, and a master index whose
+  fetch failed is queued again by the listing's next poll that shows its
+  day ([DAY-2], [DAY-4]). A fetch of a filing's file that
   ended without a version isn't queued again by the discoverer. The record
   shows the failure, and a Backfill of the filing's date fetches it again
   ([FILE-4]); the discoverer counts such fetches
@@ -380,9 +397,9 @@ stated maximum of 10 ([FETCH-6], [0005]).
   ([ALERT-2], [the alerts]).
 
 Whether a filing's files are in EDGAR's archive as soon as its company's
-`submissions` lists it is still open. If new filings' fetches end without a
-version, a later version of the notices specification queues them again
-after a delay; until then, a Backfill fetches them
+`submissions` or the feed lists it is still open. If new filings' fetches
+end without a version, a later version of the notices specification queues
+them again after a delay; until then, a Backfill fetches them
 ([the notices' open questions]).
 
 ## A paused Source, or paused requests
@@ -433,11 +450,13 @@ git store remains the reproducible sample outside it ([0001]).
 
 Once the pipeline runs again, it catches up from EDGAR's lists, and each
 filing first seen after the outage carries the gap's bounds
-([the design's outages and recovery]). A Backfill, which the owner adds,
-fetches a company's filings over a range of filing dates, from its
-`submissions` and the further files that list older filings, except those
-the record already holds, so one interrupted by a restart continues where it
-stopped ([BACKFILL-1], [the notices' Backfills]).
+([the design's outages and recovery]). What the feed no longer shows, each
+day's master index lists, from the first day checked ([the daily check]).
+A Backfill, which the owner adds, fetches a company's filings over a range
+of filing dates, from its `submissions` and the further files that list
+older filings, except those the record already holds, so one interrupted by
+a restart continues where it stopped ([BACKFILL-1], [the notices'
+Backfills]).
 
 ## The drills
 
@@ -481,6 +500,7 @@ blocks the SEC with a NetworkPolicy ([the design's outages and recovery],
 [T31]: ../plan.md#traces-logs-and-drills
 [status page]: ../status.md
 [SRC-9]: ../../investigation/edgar.md#findings-so-far
+[SRC-28]: ../../investigation/edgar.md#findings-so-far
 [the store's jobs and events]: ../../spec/snapshots.md#jobs-and-events
 [STORE-3]: ../../spec/snapshots.md#the-cluster-store
 [OBJ-1]: ../../spec/snapshots.md#5-objects
@@ -542,9 +562,13 @@ blocks the SEC with a NetworkPolicy ([the design's outages and recovery],
 [coverage and gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [GAP-2]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [GAP-3]: ../../spec/notices.md#5-polls-coverage-and-gaps
+[GAP-4]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [SEEN-1]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [SEEN-2]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [SEEN-3]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
+[the daily check]: ../../spec/notices.md#the-daily-check
+[DAY-2]: ../../spec/notices.md#the-daily-check
+[DAY-4]: ../../spec/notices.md#the-daily-check
 [notices-files]: ../../spec/notices.md#7-a-filings-files
 [FILE-2]: ../../spec/notices.md#7-a-filings-files
 [FILE-3]: ../../spec/notices.md#7-a-filings-files

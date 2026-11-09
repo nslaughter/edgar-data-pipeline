@@ -4,8 +4,8 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
-- **Specified:** Scheduler (built in part); Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The drills.
 <!-- end status -->
 
@@ -178,10 +178,14 @@ keeps][design-keeps]). Each rests on statements of the specifications.
    itself.** When a Source's poll first shows a filing, the discoverer
    queues fetches of its header and index page, then of the XBRL instance
    the index page names ([FILE-2], [FILE-3]). It keeps the header's
-   `ACCEPTANCE-DATETIME` as its 14 digits, and `submissions`'
-   `acceptanceDateTime` beside it, each as given ([SEEN-2], [FILE-3]). A
-   filing a Source already lists at its first poll isn't fetched for that
-   poll; a Backfill of its dates fetches it ([FILE-2], [BACKFILL-1]).
+   `ACCEPTANCE-DATETIME` as its 14 digits, and beside it the time the
+   version that first named the filing gives, `submissions`'
+   `acceptanceDateTime` or the latest-filings feed's `updated`, each as
+   given ([SEEN-2], [FILE-3]). A filing a Source already lists at its first
+   poll isn't fetched for that poll; a Backfill of its dates fetches it
+   ([FILE-2], [BACKFILL-1]). From the day after the feed's first poll, each
+   day is checked against its master index, and each filing it lists that
+   the feed didn't name is fetched too ([DAY-4], [0015]).
 2. **Every version it observed, never overwritten.** Each fetch adds one
    record ([FETCH-14]). Each distinct body is stored once, named by its
    SHA-256 ([OBJ-1], [OBJ-4]), and a URL's versions are its distinct bodies,
@@ -191,7 +195,9 @@ keeps][design-keeps]). Each rests on statements of the specifications.
    ([what the pipeline keeps][design-keeps]).
 3. **Where it was looking, and where it wasn't.** Each poll is recorded
    ([GAP-1]), and coverage and gaps follow from the polls by one definition
-   ([GAP-2]). Each filing a Source shows keeps the two polls that bound when
+   ([GAP-2]). A poll of the feed that names none of the filings the one
+   before it named leaves a gap too, though both succeeded ([GAP-4]). Each
+   filing a Source shows keeps the two polls that bound when
    the Source first showed it, and whether a gap lies between them
    ([SEEN-3], [LAG-1]). Each Source's status shows its open gap
    ([SOURCE-5]).
@@ -203,6 +209,7 @@ keeps][design-keeps]). Each rests on statements of the specifications.
 | What did `submissions` say yesterday at 14:00? | The body served when it's read | Each version observed, by its SHA-256, and each poll's record ([VER-1]) |
 | What was known at T? | Each filing's values side by side, with a filing date ([SRC-14]) | An answer by acceptance time ([times][design-times]) |
 | Was anyone looking? | Nothing | Coverage and gaps, for each Source ([GAP-2]) |
+| Did the feed show every filing? | Nothing | Each day checked against its master index, with the filings only one of them showed ([DAY-5]) |
 
 ## What the pipeline doesn't claim
 
@@ -278,9 +285,12 @@ SEC's ([times][design-times]).
 
 [0009]: ../decisions/0009-read-edgar-through-a-public-point-in-time-library.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
+[0015]: ../decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md
 [asof-facts-7]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#7-as-of-t
 [BACKFILL-1]: ../../spec/controls.md#7-backfill
 [controls-values]: ../../spec/controls.md#5-the-charts-values
+[DAY-4]: ../../spec/notices.md#the-daily-check
+[DAY-5]: ../../spec/notices.md#the-daily-check
 [design-keeps]: ../design.md#what-the-pipeline-keeps
 [design-times]: ../design.md#times
 [design-waits]: ../design.md#what-waits-on-the-investigation
@@ -290,6 +300,7 @@ SEC's ([times][design-times]).
 [FILE-3]: ../../spec/notices.md#7-a-filings-files
 [GAP-1]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [GAP-2]: ../../spec/notices.md#5-polls-coverage-and-gaps
+[GAP-4]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [LAG-1]: ../../spec/notices.md#10-times-and-lags
 [LOG-3]: ../../spec/snapshots.md#8-history
 [LOG-4]: ../../spec/snapshots.md#8-history

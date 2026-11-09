@@ -36,8 +36,8 @@ TESTED_BY = {"verify", "tests", "kind"}
 # of spec/controls.md's, T24 the discoverer, and T28 the monitoring, after
 # which each ServiceAccount in RBAC-5's table has its grants on kind; of
 # spec/snapshots.md's, T24 the discoverer's jobs and its use of edgar-asof;
-# of spec/notices.md's, T24 the discoverer, with the scheduler's orders and
-# the status it sets from notices; and of spec/telemetry.md's, T28 the
+# of spec/notices.md's, T24 the discoverer, with the scheduler's orders, the
+# status it sets from notices, and the feed's daily check; and of spec/telemetry.md's, T28 the
 # monitoring of observing filings, with the services' metrics, and T29 the
 # traces. Strict, like xfail_strict: a statement listed here that has a test
 # fails too, and so does one whose task the plan marks done, or one checked
@@ -51,9 +51,18 @@ AWAITING = {
             "GAP-1",
             "GAP-2",
             "GAP-3",
+            "GAP-4",
             "SEEN-1",
             "SEEN-2",
             "SEEN-3",
+            "FEED-1",
+            "FEED-2",
+            "DAY-1",
+            "DAY-2",
+            "DAY-3",
+            "DAY-4",
+            "DAY-5",
+            "DAY-6",
             "FILE-1",
             "FILE-2",
             "FILE-3",

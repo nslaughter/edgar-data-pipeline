@@ -116,12 +116,22 @@ investigation's first refetch, task T4, to show ([SRC-4],
 request asked about, and a `304` to a request that sent no validators
 names nothing and records an error ([REC-5]).
 
-The URLs in the jobs are made from a company's CIK and each filing's
-accession number, as [SRC-21] shows them: a company's `submissions` at
+The URLs in the jobs are made from a CIK and each filing's accession
+number, as [SRC-21] shows them: a company's `submissions` at
 `https://data.sec.gov/submissions/CIK##########.json`, and a filing's
 header and index page in its directory under
-`https://www.sec.gov/Archives/edgar/data/` ([FILE-1], [LIST-1]). Each of
-these URLs returned a `200` in the investigation ([SRC-21]).
+`https://www.sec.gov/Archives/edgar/data/`, under the CIK of what led to the
+fetch: the company's, the one the latest-filings feed's entries give, or a
+master index's ([FILE-1], [LIST-1]). Each day's master index is fetched
+from the quarter's daily index directory ([DAY-2], [SRC-34]). In the
+investigation, the three companies' `submissions`, and the eight filings'
+headers and index pages under the CIK of the company whose `submissions`
+lists each filing, returned a `200` ([SRC-21]), as did ten days' master
+indexes ([SRC-35]). None of the filings in the feed's stored version has
+a file stored ([SRC-27]), so whether a filing's directory is there under
+the CIK its entries give, or a master index's, is for the record to show:
+a fetch that finds nothing records no version ([REC-6], [notices' open
+question 7][notices-questions]).
 `data/scope.json` limits what the git store holds, not what the cluster
 fetches, which is what the owner's values ask for through the controls
 ([the scope and the cluster][snapshots-scope-cluster]).
@@ -405,7 +415,7 @@ Time when no poll succeeded shows as a gap in each Source's coverage
 | The active replica is lost | Every request, for up to the Lease's duration, 15 seconds by default | A gap for each Source whose slot passed without a successful poll; no record of the polls whose jobs expired meanwhile ([JOB-5]) | The standby takes the Lease; unacknowledged jobs are delivered again, and those recorded are announced, not fetched ([JOB-6]) |
 | A `403` | Every request | The `403`'s record, the stop in the SecAccess, and gaps; `SecRequestsStopped` fires ([ALERT-1]) | The owner acknowledges the stop ([ACCESS-3]) |
 | No response, a `429`, `500`, `502`, `503`, or `504`, or a body cut short | That fetch, for up to 4 attempts ([FETCH-8]), between which the jobs of kinds before its own go, as the owner decided ([T23][plan-observing]) | One record, of the final attempt: its status, or none and an error | The next job |
-| Any other status, such as a `404` | Nothing ([FETCH-10]) | A record that names no version ([REC-6]) | The next job; the discoverer doesn't queue a failed file again ([FILE-4]) |
+| Any other status, such as a `404` | Nothing ([FETCH-10]) | A record that names no version ([REC-6]) | The next job; the discoverer doesn't queue a filing's failed file again ([FILE-4]), but queues a day's master index again ([DAY-2]) |
 | A poll's job expires before the fetcher takes it | That poll | No record, but `edgar_fetcher_jobs_expired_total` counts it, and its slot has no successful poll ([JOB-5]) | The next poll |
 | The database, Garage, the API server, or NATS can't take a fetch's write | Every request, until the write succeeds | Nothing new until then, and gaps for the Sources whose slots pass meanwhile | The fetcher tries the write again until it succeeds, then goes on, as the owner decided ([T23][plan-observing]) |
 | The active replica stops, or can't renew the Lease, in the middle of a fetch | Each fetch in progress, a fetch waiting between its attempts among them, and every request until another replica takes the Lease | No record of any of them | Each of their jobs is delivered again, and fetched again, as the owner decided ([T23][plan-observing], [JOB-6]) |
@@ -576,6 +586,9 @@ telemetry][telemetry-ids]).
 [SRC-18]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far
 [SRC-21]: ../../investigation/edgar.md#findings-so-far
+[SRC-27]: ../../investigation/edgar.md#findings-so-far
+[SRC-34]: ../../investigation/edgar.md#findings-so-far
+[SRC-35]: ../../investigation/edgar.md#findings-so-far
 [job.schema.json]: ../../spec/schemas/job.schema.json
 [event.schema.json]: ../../spec/schemas/event.schema.json
 [snapshots-guarantees]: ../../spec/snapshots.md#1-guarantees
@@ -637,6 +650,7 @@ telemetry][telemetry-ids]).
 [RBAC-2]: ../../spec/controls.md#9-who-may-change-what
 [notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [notices-files]: ../../spec/notices.md#7-a-filings-files
+[notices-questions]: ../../spec/notices.md#12-open-questions
 [FILE-1]: ../../spec/notices.md#7-a-filings-files
 [FILE-4]: ../../spec/notices.md#7-a-filings-files
 [LIST-1]: ../../spec/notices.md#8-backfills
@@ -688,3 +702,4 @@ telemetry][telemetry-ids]).
 [IMG-1]: ../../spec/deployment.md#the-pipelines-own-images
 [CLIENT-7]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/fetching.md#4-requests
 [CLIENT-9]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/fetching.md#4-requests
+[DAY-2]: ../../spec/notices.md#the-daily-check

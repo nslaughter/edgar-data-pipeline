@@ -28,15 +28,21 @@ header's digits read as US Eastern time, by the Eastern offset from UTC on
 the filing's date, for each of the three companies' filings; on October 7,
 only Apple's were ([SRC-2], [SRC-25]). `submissions` can change it for a
 filing it already lists ([SRC-24]), and the stored versions don't show
-which time is right ([SRC-25]). The pipeline keeps both as given, and reads
-time zones only in queries ([times][design-times], [0010]).
+which time is right ([SRC-25]). The latest-filings feed gives a filing a
+time too, its `updated`, which the stored version doesn't show to be when
+it was accepted ([SRC-27]). The pipeline keeps each as given, and reads
+time zones only in queries ([times][design-times], [0010],
+[§10 of the notices][notices-lags]).
 
 ### Accession number
 
 The identifier of one filing, written `##########-##-######` ([§2 of the
 notices][notices-terms]). Its first ten digits can be another filer's CIK:
 Apple's 8-K/A's begins with 0001140361 ([SRC-2]). A filing's files are at
-URLs made from its company's CIK and its accession number ([SRC-21]).
+URLs made from a CIK and its accession number ([SRC-21]), and the
+discoverer fetches them under the CIK of what led to the fetch: the
+company's, the issuer's that the latest-filings feed gives, or a master
+index's ([FILE-1]).
 
 ### Amendment
 
@@ -50,7 +56,9 @@ filing's values stay beside the amendment's ([SRC-16]).
 The number that names a filer, such as a company
 ([`facts.md`, §2][asof-facts-terms]). A filing's header gives it as the
 filer's `CENTRAL INDEX KEY`. A feed's URL gives it padded to ten digits,
-and EDGAR's archive without leading zeros ([SRC-21]).
+and EDGAR's archive without leading zeros ([SRC-21]). The latest-filings
+feed gives each party's in ten digits, and a master index without leading
+zeros ([SRC-33], [SRC-35]).
 
 ### `companyfacts`
 
@@ -70,15 +78,18 @@ Each business day's list of the filings accepted, under
 `https://www.sec.gov/Archives/edgar/daily-index/` ([feeds][inv-feeds]).
 Its files were last modified between 10:01 and 10:04 PM on their day, with
 no time zone given ([SRC-5]), so a filing first seen there is seen hours
-after its acceptance ([0010]).
+after its acceptance ([0010]). The quarter's listing, `index.json`, names
+each day's files, among them its [master index](#master-index), once
+they're published ([SRC-34]). The pipeline checks each day against its
+master index ([daily check](#daily-check)).
 
 ### Filing
 
 An event: one submission to the SEC, with its own accession number and its
 own files. What was known on a date follows from the filings accepted by
 then ([what the pipeline keeps][design-keeps]). To the discoverer, a filing
-is an accession number that a list names
-([§2 of the notices][notices-terms]).
+is an accession number that a list, a version of the latest-filings feed,
+or a master index names ([§2 of the notices][notices-terms]).
 
 ### Fiscal period
 
@@ -124,6 +135,26 @@ A filing's `ACCESSION-index.html`. It marks the filing's XBRL instance as
 filings stored, it gives the same acceptance time as the header
 ([SRC-20], [SRC-21]).
 
+### Latest-filings feed
+
+EDGAR's list of the latest filings of every filer and form, newest first,
+in an Atom document made for each request, which sends no validators
+([SRC-26]). It has an **entry** for each of a filing's parties, adjacent,
+each with the filing's form, the party's name, CIK, and role, such as
+`Reporting` or `Issuer`, the filing's directory under that CIK, its filing
+date, and a time to the second ([SRC-27], [SRC-33]). At the master
+indexes' average pace, its 100 entries would span about 14 to 31 minutes
+of a business day ([SRC-28]). It's the pipeline's
+notice source for every filer ([0015]).
+
+### Master index
+
+A day's list of the filings EDGAR disseminated that day, some of them filed
+on earlier days, on a line for each CIK a filing names, with its company
+name, form type, date filed, and file name ([SRC-35]). The quarter's daily
+index listing names each day's once it's published
+([daily index](#daily-index), [SRC-34]).
+
 ### `submissions`
 
 A company's filings, at `https://data.sec.gov/submissions/CIK##########.json`,
@@ -132,7 +163,9 @@ each with its accession number, form, dates, and acceptance time
 and its further files the older ones ([SRC-9], [SRC-12]). It sends no
 validators, so each request downloads the whole body ([SRC-4]). The
 pipeline polls each company's `submissions` to see its new filings
-([0010]).
+([0010]). The latest-filings feed is the notice source for every filer,
+and the three companies' `submissions` stay through the study of both
+feeds' lags ([0015]).
 
 ### Validators
 
@@ -180,11 +213,24 @@ differ only in cadence.
 
 ### Coverage
 
-The time a Source's successful polls covered: from each successful poll's
-request to the next one's, when the next follows it without a missed slot,
-and otherwise to when its job expired ([§5 of the notices][notices-gaps]).
+The time a Source's successful polls covered, which no gap covers: from
+each successful poll's request to the next one's, when the next follows it
+without a missed slot and, of the latest-filings feed,
+[reaches back](#reaches-back) to it ([§5 of the notices][notices-gaps]).
 Between them, coverage and gaps say where the pipeline was looking, and
 where it wasn't.
+
+### Daily check
+
+Each day's check of the latest-filings feed against that day's master
+index. From the **first day checked**, the day after the US Eastern date
+of the request of the feed's first poll whose version is read as the feed,
+the discoverer fetches and
+reads each day's master index, and fetches the files of each filing it
+lists that the feed didn't name. A **day checked** is one whose master
+index it has read. The view `checks` counts, for each day checked, the
+filings only one of the feed and the master indexes showed
+([the daily check][notices-day], [0015]).
 
 ### Drill
 
@@ -227,9 +273,12 @@ last that didn't. After a gap, it's bounded and flagged
 
 Time in which a Source's coverage lapsed: when a successful poll doesn't
 follow the one before it, the time from when the earlier poll's job expired
-to the later poll's request ([§5 of the notices][notices-gaps]). A missed
-poll leaves a gap of about a cadence; a pause, a stop after a `403`, or a
-fetcher's handover that misses a poll leaves one until polling resumes. The
+to the later poll's request; and when a successful poll of the
+latest-filings feed doesn't [reach back](#reaches-back), the time from the
+earlier poll's request to its own ([§5 of the notices][notices-gaps]). A
+missed poll leaves a gap of about a cadence; a pause, a stop after a `403`,
+or a fetcher's handover that misses a poll leaves one until polling
+resumes. The
 record says the gap was there rather than implying nothing changed
 ([what the pipeline keeps][design-keeps]).
 
@@ -248,15 +297,16 @@ same bytes ([IMP-1] to [IMP-3]).
 ### Job
 
 A message in the stream `JOBS` that asks the fetcher for one fetch. Its
-kind says what asked for it: a Source's poll, a filing the discoverer
-found, or a Backfill. The fetcher takes polls first
+kind says what asked for it: a Source's poll, a filing or a day's master
+index the discoverer found, or a Backfill. The fetcher takes polls first
 ([§2 of the store][store-terms], [jobs and events][store-jobs], [JOB-4]).
 
 ### Lag
 
 The time from a filing's acceptance to when a Source first showed it,
 bounded below and above by the two polls of its sighting, from each of the
-filing's two acceptance times ([§10 of the notices][notices-lags],
+filing's two acceptance times: its header's, and the time the version that
+first named it gives ([§10 of the notices][notices-lags],
 [LAG-1]). Each lag is a query over the record ([0010]).
 
 ### List
@@ -303,6 +353,13 @@ cadence. It succeeds when its record names a version
 ([§2 of the controls][controls-terms]). Its job expires when the next poll
 is due ([JOB-2]).
 
+### Reaches back
+
+A successful poll of the latest-filings feed reaches back when its version
+and the one before's are both read and name a filing in common. One that
+doesn't may have missed filings that neither showed, so it leaves a
+[gap](#gap) ([GAP-4], [§5 of the notices][notices-gaps]).
+
 ### Record
 
 One fetch: its URL, its times, its status, and the version it returned, as
@@ -335,8 +392,8 @@ until the owner acknowledges that stop
 ### Sighting
 
 A filing and a Source whose polls showed it, with the two polls that bound
-when the Source first showed it: the last whose list didn't name it, and
-the first that did ([§2 of the notices][notices-terms],
+when the Source first showed it: the last whose version didn't name it,
+and the first that did ([§2 of the notices][notices-terms],
 [§6 of the notices][notices-seen]).
 
 ### Snapshot store
@@ -739,6 +796,7 @@ open. A statement checked by `operator` is the owner's to keep
 [0010]: decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
 [0011]: decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md
 [0014]: decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
+[0015]: decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md
 [design-keeps]: design.md#what-the-pipeline-keeps
 [design-times]: design.md#times
 [design-components]: design.md#components
@@ -777,6 +835,7 @@ open. A statement checked by `operator` is the owner's to keep
 [notices-terms]: ../spec/notices.md#2-terms
 [notices-gaps]: ../spec/notices.md#5-polls-coverage-and-gaps
 [notices-seen]: ../spec/notices.md#6-when-each-source-first-showed-each-filing
+[notices-day]: ../spec/notices.md#the-daily-check
 [notices-backfills]: ../spec/notices.md#8-backfills
 [notices-streams]: ../spec/notices.md#streams
 [notices-lags]: ../spec/notices.md#10-times-and-lags
@@ -819,7 +878,13 @@ open. A statement checked by `operator` is the owner's to keep
 [SRC-21]: ../investigation/edgar.md#findings-so-far
 [SRC-24]: ../investigation/edgar.md#findings-so-far
 [SRC-25]: ../investigation/edgar.md#findings-so-far
+[SRC-26]: ../investigation/edgar.md#findings-so-far
+[SRC-27]: ../investigation/edgar.md#findings-so-far
+[SRC-28]: ../investigation/edgar.md#findings-so-far
 [SRC-32]: ../investigation/edgar.md#findings-so-far
+[SRC-33]: ../investigation/edgar.md#findings-so-far
+[SRC-34]: ../investigation/edgar.md#findings-so-far
+[SRC-35]: ../investigation/edgar.md#findings-so-far
 [OBJ-1]: ../spec/snapshots.md#5-objects
 [VER-1]: ../spec/snapshots.md#7-versions
 [XFER-1]: ../spec/snapshots.md#records-the-cluster-made
@@ -848,6 +913,8 @@ open. A statement checked by `operator` is the owner's to keep
 [TRANSFER-3]: ../spec/deployment.md#the-transfer
 [TRANSFER-4]: ../spec/deployment.md#the-transfer
 [TRANSFER-5]: ../spec/deployment.md#the-transfer
+[GAP-4]: ../spec/notices.md#5-polls-coverage-and-gaps
+[FILE-1]: ../spec/notices.md#7-a-filings-files
 [LAG-1]: ../spec/notices.md#10-times-and-lags
 [STATUS-1]: ../spec/site.md#6-status
 [STATUS-2]: ../spec/site.md#6-status

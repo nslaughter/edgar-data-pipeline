@@ -126,6 +126,16 @@ because a gap begins only after a successful poll ([GAP-2]): a Source whose
 URL fails from its first poll, or a cluster that can't reach the SEC, has
 no gap to report ([§7 of the telemetry][alerts]).
 
+The notices' version 1.0.0 has the discoverer read the latest-filings feed,
+the quarter's listing, and each day's master index, and queue each day's
+master index as a job ([FEED-1], [DAY-1] to [DAY-3]). The telemetry's
+version 0.1.0 counts readings only of the kinds `list`, `header`, and
+`index` ([METRIC-5]). The notices leave
+to a version of the telemetry the discoverer's metrics, each feed's lag,
+the counts of the filings only one of the feed and the master indexes
+showed, and whether a gap that a poll of the feed which doesn't reach back
+leaves is alerted on ([left to other specifications][notices-left]).
+
 ## The controls' metrics
 
 kube-state-metrics exports the state of the three resources from their
@@ -250,11 +260,15 @@ Source's first successful poll of a URL, or of the poll that ended a gap,
 and ends where the next gap began, or, with none after it, when the job of
 its latest successful poll expired ([VIEW-4]). A gap runs from when a
 successful poll's job expired to the request of the next successful poll,
-when that one doesn't follow it; an open gap's length runs to when the view
-is read ([VIEW-5]). Both follow one definition, the notices' ([GAP-2]): a
-missed poll leaves a gap of about a cadence, and a pause, a stop after a
-`403`, or a fetcher's handover that misses a poll leaves a gap until
-polling resumes ([§5 of the notices][notices-gaps]).
+when that one doesn't follow it, or, of the latest-filings feed, from a
+successful poll's request to the next one's, when that one doesn't reach
+back to it; an open gap's length runs to when the view is read ([VIEW-5],
+[GAP-4]). Both follow one definition, the notices' ([GAP-2]): a missed poll
+leaves a gap of about a cadence; a pause, a stop after a `403`, or a
+fetcher's handover that misses a poll leaves a gap until polling resumes;
+and a poll of the feed that names none of the filings the one before it
+named leaves one of about a cadence at least ([§5 of the
+notices][notices-gaps]).
 
 **Lags.** A Source first showed a filing after the request of its last poll
 that didn't show it was sent, and by the time the response of the first
@@ -270,8 +284,13 @@ its high bound ([§10 of the notices][notices-lags]):
 The view gives both bounds from each of the filing's two acceptance times
 ([VIEW-6]):
 
-- **From `submissions`' `acceptanceDateTime`,** read as the instant it
-  states ([SRC-25]): `listed_lag_low_seconds` and `listed_lag_high_seconds`.
+- **From its listed time,** `submissions`' `acceptanceDateTime` or the
+  feed's `updated`, as the version that first named the filing gives it,
+  read as the instant it states ([SRC-25], [SRC-27]):
+  `listed_lag_low_seconds` and `listed_lag_high_seconds`. The stored
+  version of the feed doesn't show its `updated` to be when a filing was
+  accepted, so its lags beside the header's show whether they agree
+  ([§10 of the notices][notices-lags]).
 - **From the header's `ACCEPTANCE-DATETIME`,** 14 digits that give no time
   zone ([SRC-1]), read as US Eastern time: `header_lag_low_seconds` and
   `header_lag_high_seconds`.
@@ -287,9 +306,11 @@ was accepted ([open question 2 of the notices][notices-open]).
 
 The view also says whether a gap lies between the two polls, which widens
 the bounds. It gives only the sightings with a last poll that didn't show
-the filing: a filing a Source shows at its first poll whose list is read
-has no low bound, since the record doesn't say how long the Source had
-shown it ([VIEW-6], [§6 of the notices][notices-sightings]).
+the filing: a filing a Source shows at its first poll whose version is
+read has no low bound, since the record doesn't say how long the Source had
+shown it ([VIEW-6], [§6 of the notices][notices-sightings]). A filing that
+only a master index lists has no sighting, and so no lag
+([§10 of the notices][notices-lags]).
 
 The dashboards over these views are task T28's ([plan][plan-observing]).
 
@@ -418,6 +439,7 @@ monitoring of observing filings ([§3 of the telemetry][ids];
 [plan-observing]: ../plan.md#observing-filings
 [SRC-1]: ../../investigation/edgar.md#findings-so-far
 [SRC-25]: ../../investigation/edgar.md#findings-so-far
+[SRC-27]: ../../investigation/edgar.md#findings-so-far
 [ACCESS-3]: ../../spec/controls.md#8-secaccess
 [BACKFILL-3]: ../../spec/controls.md#7-backfill
 [secaccess]: ../../spec/controls.md#8-secaccess
@@ -434,6 +456,7 @@ monitoring of observing filings ([§3 of the telemetry][ids];
 [FILE-4]: ../../spec/notices.md#7-a-filings-files
 [GAP-1]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [GAP-2]: ../../spec/notices.md#5-polls-coverage-and-gaps
+[GAP-4]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [LIST-2]: ../../spec/notices.md#8-backfills
 [LIST-3]: ../../spec/notices.md#8-backfills
 [MSG-2]: ../../spec/notices.md#streams
@@ -459,6 +482,9 @@ monitoring of observing filings ([§3 of the telemetry][ids];
 [ALERT-3]: ../../spec/telemetry.md#7-alerts
 [ALERT-4]: ../../spec/telemetry.md#7-alerts
 [alerts]: ../../spec/telemetry.md#7-alerts
+[DAY-1]: ../../spec/notices.md#the-daily-check
+[DAY-3]: ../../spec/notices.md#the-daily-check
+[FEED-1]: ../../spec/notices.md#the-latest-filings-feed
 [fetcher-metrics]: ../../spec/telemetry.md#the-fetcher
 [ids]: ../../spec/telemetry.md#3-statement-ids
 [METRIC-1]: ../../spec/telemetry.md#4-metrics
@@ -467,6 +493,7 @@ monitoring of observing filings ([§3 of the telemetry][ids];
 [METRIC-4]: ../../spec/telemetry.md#the-fetchers-clock
 [METRIC-5]: ../../spec/telemetry.md#the-discoverer
 [metrics]: ../../spec/telemetry.md#4-metrics
+[notices-left]: ../../spec/notices.md#left-to-other-specifications
 [questions]: ../../spec/telemetry.md#11-open-questions
 [SCRAPE-1]: ../../spec/telemetry.md#6-scraping
 [SCRAPE-2]: ../../spec/telemetry.md#6-scraping

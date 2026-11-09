@@ -4,8 +4,8 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
-- **Specified:** Scheduler (built in part); Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The drills.
 <!-- end status -->
 
@@ -71,7 +71,9 @@ which serves every company in one poll, as long as the polls come closer
 together than its latest 100 entries span ([SRC-28]). Each day is checked
 against its master index, which covers every company too, but appears
 hours after acceptance ([SRC-5], [0015]). The specifications follow it in
-versions of their own, the notices' first ([plan][plan-observing]).
+versions of their own: the notices' is version 1.0.0, and the controls',
+the deployment's, and the telemetry's are still to come
+([left to other specifications][notices-left], [plan][plan-observing]).
 
 > **Analysis.** No task, decision record, or specification covers this.
 > Besides the feed that [0015] chooses, the pipeline could go past the
@@ -174,8 +176,10 @@ the database's three instances survive the loss of a node, not of the disk
 Within 10 seconds of a change in a Source's open gap, the discoverer
 publishes it, and at least every 10 seconds it reads the open gaps from the
 view `gaps` ([GAP-3], [METRIC-5]). The view takes every successful poll of
-every Source, in order, to find where one doesn't follow the one before
-([GAP-2], [`notices.sql`][notices-sql]), so each read reads every poll the
+every Source, in order, to find where one doesn't follow the one before,
+or, of the latest-filings feed, doesn't reach back to it, as its row in
+`feed_polls` says ([GAP-2], [GAP-4], [`notices.sql`][notices-sql]), so each
+read reads every poll the
 record holds, and the polls only grow. Grafana's views `coverage` and
 `gaps` read every poll too, each time a dashboard refreshes
 ([open question 4 of the telemetry][telemetry-open]), though from the
@@ -323,12 +327,14 @@ each part would stop:
 [FETCH-6]: ../../spec/snapshots.md#10-fetching
 [GAP-2]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [GAP-3]: ../../spec/notices.md#5-polls-coverage-and-gaps
+[GAP-4]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [JOB-4]: ../../spec/snapshots.md#jobs-and-events
 [KIND-2]: ../../spec/deployment.md#the-kind-cluster
 [LOG-1]: ../../spec/snapshots.md#8-history
 [METRIC-2]: ../../spec/telemetry.md#4-metrics
 [METRIC-5]: ../../spec/telemetry.md#the-discoverer
 [MON-5]: ../../spec/deployment.md#monitoring
+[notices-left]: ../../spec/notices.md#left-to-other-specifications
 [notices-sql]: ../../spec/schemas/notices.sql
 [PAGE-6]: ../../spec/site.md#7-the-pages-written-for-the-site
 [PAGE-7]: ../../spec/site.md#7-the-pages-written-for-the-site

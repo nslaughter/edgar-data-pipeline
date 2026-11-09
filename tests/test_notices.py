@@ -328,6 +328,7 @@ def test_the_order_schema_refuses_a_malformed_order(message: dict[str, Any]) -> 
                 "index": {"feed": "filings", "url": FILE + "i.html", "sha256": SHA},
             },
         ),
+        notice("filing", listed_acceptance=None),
         notice("gap"),
         notice("gap", open_since=None),
         notice("backfill"),

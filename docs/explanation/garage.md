@@ -68,9 +68,10 @@ only by the bodies that differ.
 
 The investigation measured bodies of each kind the cluster fetches, as
 `snapshot.py` stored them in the git store ([SRC-18]). The cluster fetches
-each Source's URL, a Backfill's lists, and the files of each filing the
-discoverer finds: its header, its index page, and its XBRL instance ([scope
-and the cluster][scope-cluster], [FILE-1], [LIST-2]):
+each Source's URL, a Backfill's lists, each day's master index, and the
+files of each filing the discoverer finds: its header, its index page, and
+its XBRL instance ([scope and the cluster][scope-cluster], [FILE-1],
+[DAY-2], [LIST-2]):
 
 | Body | Bytes | Stored, gzip |
 | --- | --- | --- |
@@ -148,8 +149,9 @@ which the owner's transfer uses from outside the cluster, through a
 port-forward of the API server, since nothing exposes Garage's S3 API
 outside it ([GARAGE-5], [TRANSFER-2], [TRANSFER-5]).
 
-The discoverer reads each list, header, and index page from the bucket
-([SEEN-1], [FILE-3]). The parse workers will read each XBRL instance from
+The discoverer reads each list, version of the latest-filings feed,
+listing, master index, header, and index page from the bucket ([SEEN-1],
+[FEED-1], [DAY-1], [DAY-3], [FILE-3]). The parse workers will read each XBRL instance from
 it, as an import in the cluster reads its inputs: from the bucket, over
 Garage's S3 API, under a manifest written first, and never from the live
 source ([IMP-3]). The services that read EDGAR's content through
@@ -362,4 +364,8 @@ would use SeaweedFS, which also offers object lock ([0002]).
 [XFER-1]: ../../spec/snapshots.md#records-the-cluster-made
 [XFER-2]: ../../spec/snapshots.md#records-the-cluster-made
 [ALERT-3]: ../../spec/telemetry.md#7-alerts
+[DAY-1]: ../../spec/notices.md#the-daily-check
+[DAY-2]: ../../spec/notices.md#the-daily-check
+[DAY-3]: ../../spec/notices.md#the-daily-check
+[FEED-1]: ../../spec/notices.md#the-latest-filings-feed
 [telemetry-questions]: ../../spec/telemetry.md#11-open-questions

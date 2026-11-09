@@ -4,8 +4,8 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
-- **Specified:** Scheduler (built in part); Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The drills.
 <!-- end status -->
 
@@ -197,8 +197,9 @@ do ([0004]).
 **What it gains and costs.** Decision 0004 has one transaction record a
 filing, its parse, and its facts, so they can't disagree ([0004]). The
 notices' specification records the filing apart from its parse, in the
-discoverer's own transaction, when a poll's list names it ([SEEN-2],
-[DISC-2]), and leaves how facts are written to the facts specification
+discoverer's own transaction, when a poll's list or version of the feed,
+or a master index, names it ([SEEN-2], [DAY-3], [DISC-2]), and leaves how
+facts are written to the facts specification
 ([T17]). The pipeline's role can insert but not update or delete, so the
 database itself enforces the append-only record ([0004], [LOG-3]). The
 cost is memory: three always-on instances and the operator are the
@@ -770,7 +771,9 @@ didn't reach back. The listing's URL names its quarter, so its Source and
 the scope change each quarter. `edgar-asof` gains readers of the feed and
 of the master index, and the notices', the controls', the deployment's,
 and the telemetry's specifications each take a version of their own
-([0015]).
+([0015]). The notices' is version 1.0.0, a major version, since it changes
+what `gaps` gives and the CIK a filing's files are fetched under, and lets
+a filing's listed time be null ([§13 of the notices][notices-changes]).
 
 **What would change it.** The record doesn't say. It leaves to the record
 the pipeline keeps whether the feed and the master index list the same
@@ -931,6 +934,7 @@ which the owner asks for ([0016]).
 [CRD-3]: ../../spec/deployment.md#definitions
 [CRD-4]: ../../spec/deployment.md#definitions
 [CRD-5]: ../../spec/deployment.md#definitions
+[DAY-3]: ../../spec/notices.md#the-daily-check
 [PIN-1]: ../../spec/deployment.md#6-pins
 [PIN-3]: ../../spec/deployment.md#6-pins
 [PIN-7]: ../../spec/deployment.md#6-pins
@@ -943,6 +947,7 @@ which the owner asks for ([0016]).
 [MON-2]: ../../spec/deployment.md#monitoring
 [MON-3]: ../../spec/deployment.md#monitoring
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease
+[notices-changes]: ../../spec/notices.md#13-changes-to-this-document
 [SITE-1]: ../../spec/site.md#4-what-the-site-holds
 [SITE-3]: ../../spec/site.md#4-what-the-site-holds
 [SITE-4]: ../../spec/site.md#4-what-the-site-holds
