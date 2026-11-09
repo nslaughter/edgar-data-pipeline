@@ -24,7 +24,8 @@ headers on November 5, 2026, for the XBRL parser's decision record, task
 T12, and the owner confirmed it the same day. SRC-33 to SRC-35, on how
 the latest-filings feed, the daily index listing, and the master indexes
 lay out what the notices read, were read from the stored versions on
-November 9, 2026, for the notices' version for the feed, task T52. Since
+November 9, 2026, for the notices' version for the feed, task T52, and
+the owner confirmed them the same day. Since
 October 10, how soon each feed shows a new filing (Q4) is measured
 from the pipeline's record. Data here comes from the U.S. Securities and
 Exchange Commission's EDGAR system.
