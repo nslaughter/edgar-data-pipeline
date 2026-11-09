@@ -205,9 +205,11 @@ discoverer queues its fetch, of the same kind as the index page's job
 
 The discoverer queues each fetch whether or not requests are allowed.
 While they aren't, the fetcher sends none, and the jobs wait
-([§7 of the notices][notices-files], [ACCESS-1]). It doesn't queue a fetch
-again because it ended without a version: the record shows the failure,
-and a Backfill of the filing's date fetches the filing again ([FILE-4]).
+([§7 of the notices][notices-files], [ACCESS-1]). It doesn't queue the
+fetch of a filing's file again because it ended without a version: the
+record shows the failure, and a Backfill of the filing's date fetches the
+filing again ([FILE-4]). A day's master index it does queue again
+([the daily check](#the-daily-check)).
 
 A filing is complete when its header and index page are held, each read
 without an error, and the instance its index page names, if any, is held.

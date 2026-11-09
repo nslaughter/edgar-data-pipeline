@@ -637,9 +637,10 @@ The view `held_files` has these columns:
   its `cause`, the discoverer queues the instance's fetch, of the index
   page's job's kind, and its Backfill, if it has one, and adds it to
   `jobs`.
-- **FILE-4** (rule) The discoverer queues no fetch again because it ended
-  without a version. The record shows the failure, and a Backfill of the
-  filing's date fetches the filing again ([LIST-2]).
+- **FILE-4** (rule) The discoverer queues no fetch of a filing's file or
+  of a Backfill's list again because it ended without a version. The record
+  shows the failure, and a Backfill of the filing's date fetches the filing
+  again ([LIST-2]). A day's master index is queued again, as [DAY-2] says.
 - **FILE-5** (rule) When an event makes a filing complete, the discoverer
   publishes the filing's notice. A filing is complete when its header and
   its index page are held, each with a reading of its held version without
@@ -951,7 +952,7 @@ The view `lags` has these columns:
 | FILE-1 | rule | tests | A filing's files are fetched at the URLs SRC-21 gives, under the CIK of what led to them, each at one URL. |
 | FILE-2 | rule | tests | A filing a Source shows after its first poll gets its header and index page fetched. |
 | FILE-3 | rule | tests | Headers and index pages are read, and the instance an index page names is fetched. |
-| FILE-4 | rule | tests | A failed fetch isn't queued again by the discoverer. |
+| FILE-4 | rule | tests | A failed fetch of a filing's file or a Backfill's list isn't queued again by the discoverer. |
 | FILE-5 | rule | tests | A filing whose files are held and read gets a filing notice. |
 | FILE-6 | invariant | kind | `held_files` gives the first record that holds each of a filing's files. |
 | ORDER-1 | rule | tests | The scheduler orders each Backfill not yet started, while requests are allowed. |
@@ -1110,7 +1111,9 @@ specifies ([§12](#left-to-other-specifications)).
   didn't name ([DAY-4]); and the views `checks` and `listings` ([DAY-5],
   [DAY-6]), with the function `first_day_checked`.
 - **A filing's files:** the CIK each is fetched under ([FILE-1]), and a
-  master index's job, of the file `master` and kind `filing`.
+  master index's job, of the file `master` and kind `filing`. [FILE-4]
+  says it's of a filing's files and a Backfill's lists, since a day's
+  master index is queued again ([DAY-2]).
 - **Messages:** a filing notice's `listed_acceptance` is null for a filing
   first listed by a master index.
 - **Times and lags:** the feed's `updated` is read as the instant it
