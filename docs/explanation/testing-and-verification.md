@@ -72,7 +72,7 @@ without the behavior it covers ([doing the next item][agents-next], step
 | [`snapshots.md`][snapshots] 1.1.0 | Those `verify.py` checks, and `snapshot.py`'s rules, brought to this version by [T35], done October 13, 2026; the schemas': [STORE-1], [REC-13], [JOB-1]; the scheduler's jobs, [JOB-2], written by [T22]; and the fetcher's and the cluster store's, written by [T23] ([STORE-2], [STORE-3], [OBJ-4], [LOG-3], [LOG-4], [FETCH-16], [FETCH-17], [ID-2], [JOB-4] to [JOB-7]); and the transfer's, with its read-only role and key, written by [T36] ([XFER-1] to [XFER-3], [LOG-5]) | [T24], the discoverer's jobs and its use of `edgar-asof` ([FETCH-18]) |
 | [`deployment.md`][deployment] 2.0.0 | The charts', written by [T20]: their invariants, by rendering each chart, and their rules, on kind; and the pipeline's images' and the fake EDGAR's installation, written by [T21] ([IMG-1] to [IMG-3], [IMG-5], [FAKE-1] to [FAKE-5]); and the scheduler's Deployment, Lease, grants, and consumer, written by [T22] ([SCHED-1] to [SCHED-9]); and the fetcher's Lease, Deployment, grants, credentials, consumers, and trust of the fake EDGAR's authority, written by [T23] ([LEASE-1], [LEASE-2], [FETCHER-1] to [FETCHER-13]); and the transfer's role, key, and access to the cluster store, written by [T36] ([PG-15], [GARAGE-5], [TRANSFER-1] to [TRANSFER-6]) | None |
 | [`controls.md`][controls] 1.0.0 | [API-1]; and, written by [T22], the generated definitions and the API server's refusals ([API-2], [API-3]), the chart's controls ([VAL-1] to [VAL-4]), the scheduler's polls and Sources' status ([SOURCE-1] to [SOURCE-4], [ACCESS-2]), and its grants ([RBAC-1], [RBAC-4]), [SOURCE-4]'s ahead of [T23]; and, written by [T23], the fetcher's use of the SecAccess, its Backfills last, and its grants ([ACCESS-1], [ACCESS-3], [BACKFILL-2], [RBAC-2]) | [T24] and [T28] ([§3][controls-ids]) |
-| [`notices.md`][notices] 0.1.1 | [TABLE-1], [MSG-1] | [T24], the discoverer, with the scheduler's side of the Backfills ([§3][notices-ids]) |
+| [`notices.md`][notices] 1.0.0 | [TABLE-1], [MSG-1] | [T24], the discoverer, with the feed's readings and the daily check ([GAP-4], [FEED-1], [FEED-2], [DAY-1] to [DAY-6]), and the scheduler's side of the Backfills ([§3][notices-ids]) |
 | [`telemetry.md`][telemetry] 0.1.0 | [VIEW-1] | [T28], the monitoring of observing filings; [T29], the traces ([§3][telemetry-ids]) |
 | [`site.md`][site] 0.1.0 | The site's statements checked by `tests`, written by [T40], and [PAGE-4]'s, written by [T42] once every topic had its page | None |
 | [`fake-edgar.md`][fake-edgar] 0.1.0 | The schemas': [CUE-3], [REQ-3]; the fake EDGAR's, with the checks of `snapshot.py`'s requests to it, written by [T21]; and the checks of the fetcher's requests to it on kind, written by [T23] ([CHECK-3]) | None |
@@ -283,7 +283,7 @@ reads a range of CI's cluster store through its port-forwards but copies
 nothing, since the fake EDGAR is installed there, and shows none of its
 credentials ([TRANSFER-4] to [TRANSFER-6]); and that the
 notices' and dashboards' views give what their sections define ([GAP-2],
-[LAG-1], [VIEW-4]). The cluster store's own invariants, that every object
+[LAG-1], [DAY-5], [DAY-6], [VIEW-4]). The cluster store's own invariants, that every object
 hashes to its name and every record finds its object, are checked the same
 way ([STORE-3]).
 
@@ -626,11 +626,17 @@ clock check relies on, waits on a finding
 [CHECK-3]: ../../spec/fake-edgar.md#8-the-checks
 [TABLE-1]: ../../spec/notices.md#4-the-record-of-notices
 [GAP-2]: ../../spec/notices.md#5-polls-coverage-and-gaps
+[GAP-4]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [MSG-1]: ../../spec/notices.md#streams
 [LAG-1]: ../../spec/notices.md#10-times-and-lags
 [ALERT-1]: ../../spec/telemetry.md#7-alerts
 [ALERT-2]: ../../spec/telemetry.md#7-alerts
 [ALERT-3]: ../../spec/telemetry.md#7-alerts
+[DAY-1]: ../../spec/notices.md#the-daily-check
+[DAY-5]: ../../spec/notices.md#the-daily-check
+[DAY-6]: ../../spec/notices.md#the-daily-check
+[FEED-1]: ../../spec/notices.md#the-latest-filings-feed
+[FEED-2]: ../../spec/notices.md#the-latest-filings-feed
 [VIEW-1]: ../../spec/telemetry.md#8-the-views-grafana-reads
 [VIEW-4]: ../../spec/telemetry.md#8-the-views-grafana-reads
 [SITE-3]: ../../spec/site.md#4-what-the-site-holds

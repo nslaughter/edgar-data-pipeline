@@ -1,7 +1,7 @@
 # Delivery and consistency
 
 <!-- status: NATS JetStream; Scheduler; Fetcher; Discoverer; Parse workers; Garage; PostgreSQL 18; The snapshot store in the cluster; The snapshot store in git -->
-**Status** ([status page](../status.md)): NATS JetStream: Built. Scheduler: Specified; built in part. Fetcher: Built. Discoverer: Decided; specified in part. Parse workers: Decided. Garage: Built. PostgreSQL 18: Built. The snapshot store in the cluster: Built. The snapshot store in git: Built.
+**Status** ([status page](../status.md)): NATS JetStream: Built. Scheduler: Specified; built in part. Fetcher: Built. Discoverer: Specified. Parse workers: Decided. Garage: Built. PostgreSQL 18: Built. The snapshot store in the cluster: Built. The snapshot store in git: Built.
 <!-- end status -->
 
 How the pipeline's services hand each other work, what each stream
@@ -140,7 +140,11 @@ Order matters in two places:
   of when a Source first showed a filing tight. When an event does arrive
   after a later poll's of the same Source, as when the fetcher publishes an
   event again after a restart, the bounds still hold, more loosely
-  ([SEEN-3], [when each Source first showed each filing]).
+  ([SEEN-3], [when each Source first showed each filing]). The order also
+  decides whether a poll of the feed reaches back, since that's judged
+  against the poll before it that the discoverer had read ([GAP-4]): a
+  poll whose event arrives after a later poll's can leave a gap that the
+  polls didn't ([coverage and gaps][notices-gaps]).
 
 The events of the discoverer's jobs are handled one at a time too, though
 [DISC-1] asks for no order among them: their consumer, `discoverer-jobs`,
@@ -166,11 +170,16 @@ numbers ([one filing, end to end]). In each case:
 | An order | Its Backfill in `backfills` | The discoverer adds a Backfill and its first job only for an order whose `uid` it doesn't hold ([LIST-1]), and publishes that job again, with the same `id`, until it's fetched ([DISC-2]). The scheduler sends an order again, on purpose, each time it becomes the active replica or requests are allowed again, until the Backfill's status says it has started ([ORDER-1]). |
 | A notice | The status it set | The scheduler sets each Source's open gap and each Backfill's status from the latest notice, by its `at` ([NOTICE-1], [NOTICE-2]). |
 
-The discoverer's tables are keyed for this. A poll is kept by its record, a
-reading by the SHA-256 of the version read, a filing by its accession
-number, a sighting by its Source, URL, and filing, a job by its `id`, and a
-Backfill by its `uid` ([the record of notices],
-[`notices.sql`][notices-sql]).
+The discoverer's tables are keyed for this. A poll is kept by its record,
+and so is a poll of the feed's reach back; a reading by the SHA-256 of the
+version read; a filing by its accession number; a sighting by its Source,
+URL, and filing; an entry by its filing and its place in the feed; a day a
+listing shows by the listing's version and the day; a filing a master
+index lists by the index's version and the filing; a job by its `id`; and
+a Backfill by its `uid` ([the record of notices],
+[`notices.sql`][notices-sql]). A day's master index is queued again only
+while no job of it waits and none has fetched a version, so a listing's
+event delivered again queues nothing twice ([DAY-2]).
 
 So a consumer downstream can see the same message twice ([0003]): an event,
 with the same `id` ([JOB-6]); a job, with the same `id`, which the fetcher
@@ -243,8 +252,9 @@ never names an object that isn't in the bucket.
   ([one filing, end to end]). Decision 0004 has one transaction record a
   filing, its parse, and its facts, so they can't disagree ([0004]); the
   notices' specification records the filing apart from its parse, in the
-  discoverer's own transaction, when a poll's list names it ([SEEN-2],
-  [DISC-2]). The facts specification is still to say how facts are written
+  discoverer's own transaction, when a poll's list or version of the feed,
+  or a master index, names it ([SEEN-2], [DAY-3], [DISC-2]). The facts
+  specification is still to say how facts are written
   ([T17]).
 - **The store's table is created with its index in one transaction,** so the
   table never exists without its index ([PG-8]). So are the notices' tables
@@ -284,12 +294,17 @@ While the services write the record, a reader of it can rely on these:
   ([notices statement IDs][notices-ids]). Between a body and its record, the
   bucket can hold an object no record names, until a fetch of the same body
   names it ([OBJ-4]).
-- **What's derived is computed when it's read.** Gaps, coverage, and lags
-  are views, so a record that arrives late changes what they give, and
-  nothing stored ([notices guarantees][notices-guarantees]). An open gap
-  that a late poll closes, after retries, leaves no gap once that poll is
-  recorded: a reader can see a gap open that later reads as none
-  ([coverage and gaps][notices-gaps]).
+- **What's derived is computed when it's read.** Gaps, coverage, lags, and
+  each day's check are views, so a record that arrives late changes what
+  they give, and nothing stored ([notices guarantees][notices-guarantees]).
+  An open gap that a late poll closes, after retries, leaves no gap once
+  that poll is recorded: a reader can see a gap open that later reads as
+  none ([coverage and gaps][notices-gaps]). Whether a poll of the feed
+  reaches back is the one part kept as a row, in `feed_polls`, as the
+  discoverer judged it when it read the poll ([GAP-4]). A filing the feed
+  named with an earlier day's filing date counts in that day's `feed_only`
+  only until the master index that lists it is read ([DAY-5],
+  [the daily check]).
 - **A sighting's bounds hold** when events arrive out of order, more loosely
   ([SEEN-3], [when each Source first showed each filing]).
 - **Grafana reads only views made for it,** and can neither read nor change
@@ -373,6 +388,9 @@ the same `tool` commit reads the same bytes ([IMP-1], [IMP-2], [IMP-3]).
 [SOURCE-4]: ../../spec/controls.md#6-source
 [BACKFILL-2]: ../../spec/controls.md#7-backfill
 [ACCESS-3]: ../../spec/controls.md#8-secaccess
+[DAY-2]: ../../spec/notices.md#the-daily-check
+[DAY-3]: ../../spec/notices.md#the-daily-check
+[DAY-5]: ../../spec/notices.md#the-daily-check
 [notices-guarantees]: ../../spec/notices.md#1-guarantees
 [notices-ids]: ../../spec/notices.md#3-statement-ids
 [the record of notices]: ../../spec/notices.md#4-the-record-of-notices
@@ -380,10 +398,12 @@ the same `tool` commit reads the same bytes ([IMP-1], [IMP-2], [IMP-3]).
 [notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [notices-files]: ../../spec/notices.md#7-a-filings-files
 [when each Source first showed each filing]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
+[the daily check]: ../../spec/notices.md#the-daily-check
 [the notices, left to other specifications]: ../../spec/notices.md#left-to-other-specifications
 [the notices' streams]: ../../spec/notices.md#streams
 [TABLE-3]: ../../spec/notices.md#4-the-record-of-notices
 [GAP-3]: ../../spec/notices.md#5-polls-coverage-and-gaps
+[GAP-4]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [SEEN-3]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [FILE-5]: ../../spec/notices.md#7-a-filings-files
 [ORDER-1]: ../../spec/notices.md#8-backfills

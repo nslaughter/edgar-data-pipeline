@@ -1,7 +1,7 @@
 # The architecture
 
 <!-- status: Scheduler; Fetcher; Discoverer; Parse workers; Exporter; Query API; NATS JetStream; Garage; PostgreSQL 18; The controls; `edgar-asof`; The snapshot store in the cluster -->
-**Status** ([status page](../status.md)): Scheduler: Specified; built in part. Fetcher: Built. Discoverer: Decided; specified in part. Parse workers: Decided. Exporter: Decided. Query API: Decided. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified; built in part. `edgar-asof`: Decided. The snapshot store in the cluster: Built.
+**Status** ([status page](../status.md)): Scheduler: Specified; built in part. Fetcher: Built. Discoverer: Specified. Parse workers: Decided. Exporter: Decided. Query API: Decided. NATS JetStream: Built. Garage: Built. PostgreSQL 18: Built. The controls: Specified; built in part. `edgar-asof`: Decided. The snapshot store in the cluster: Built.
 <!-- end status -->
 
 This page covers the pipeline's components and the boundaries between
@@ -20,7 +20,7 @@ kind ([components][design-components], [0001]).
 | --- | --- | --- | --- | --- |
 | Scheduler | A controller: queues each Source's polls at its cadence, hands each Backfill to the discoverer ([ORDER-1], [LIST-1]), and keeps Sources' and Backfills' status ([0007]) | Go, with controller-runtime | A Deployment of two, one active through leader election | Nothing of its own: status, in the API server. It never fetches and never writes the record ([0007]). |
 | Fetcher | Sends every request to the SEC, stores each body, adds each record, and announces it ([0005]) | Go, with client-go's leader election, `golang.org/x/time/rate`, nats.go, the AWS SDK for Go v2, and pgx | A Deployment of two, one active through the Lease `fetcher` | Objects in Garage, rows of `records`, and the `SecAccess` status |
-| Discoverer | Reads each version of a company's `submissions`, records each filing and when each Source first showed it, queues the fetches of its files, lists each Backfill's filings, and publishes notices ([`notices.md`][notices]) | Python, with nats-py, psycopg, boto3, and `edgar-asof` | A Deployment | The notices' tables |
+| Discoverer | Reads each version of the latest-filings feed and of a company's `submissions`, records each filing and when each Source first showed it, checks each day against its master index, queues the fetches of its files, lists each Backfill's filings, and publishes notices ([`notices.md`][notices]) | Python, with nats-py, psycopg, boto3, and `edgar-asof` | A Deployment | The notices' tables |
 | Parse workers | Read a stored XBRL instance and write its facts, with the filing's acceptance time, under an import manifest | Python, with `edgar-asof`, whose narrow parser on lxml reads the instance ([0016]) | A Deployment, scaled by queue depth | The facts |
 | Exporter | Writes the facts to Parquet in Garage, deterministically, with each file's SHA-256 | Python, with pyarrow | A CronJob | Parquet files |
 | Query API | Answers "as of T" | Go, with `net/http` and pgx | A stateless Deployment | Nothing |
@@ -245,6 +245,18 @@ parse workers continue it to the facts, as the facts specification will say.
 it. Its files aren't fetched for that sighting; a Backfill of its dates
 fetches them ([FILE-2], [§6 of the notices][notices-seen]).
 
+**A filing the latest-filings feed shows** goes the same way, for every
+filer: one Source polls the feed, whose version lists the latest filings of
+every filer, with an entry for each of a filing's parties ([0015],
+[SRC-27]). The discoverer reads it as the feed, keeps each new filing's
+entries as given, and fetches its files under its issuer's CIK, as its
+entries give it ([FEED-1], [FEED-2], [FILE-1]). A poll that names none of
+the filings the one before it named leaves a gap, though both succeeded
+([GAP-2]). Each day from the first day checked, the discoverer reads that
+day's master index, found through the quarter's listing, and fetches the
+files of each filing it lists that the feed didn't name, within about a
+day ([DAY-1] to [DAY-4], [the daily check][notices-day]).
+
 ## Two modes, one pipeline
 
 A mode is a cadence on each Source, not a different deployment
@@ -390,11 +402,14 @@ library publishes, so both answer "as of T" the same way ([0009]).
 [0008]: ../decisions/0008-monitor-with-prometheus-and-grafana-then-tempo-and-loki.md
 [0009]: ../decisions/0009-read-edgar-through-a-public-point-in-time-library.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
+[0015]: ../decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md
 [ACCESS-1]: ../../spec/controls.md#8-secaccess
 [ACCESS-3]: ../../spec/controls.md#8-secaccess
 [BACKFILL-3]: ../../spec/controls.md#7-backfill
 [controls-source]: ../../spec/controls.md#6-source
 [dashboards-sql]: ../../spec/schemas/dashboards.sql
+[DAY-1]: ../../spec/notices.md#the-daily-check
+[DAY-4]: ../../spec/notices.md#the-daily-check
 [decisions]: ../decisions/README.md
 [deployment-lease]: ../../spec/deployment.md#the-fetchers-lease
 [design-components]: ../design.md#components
@@ -404,6 +419,8 @@ library publishes, so both answer "as of T" the same way ([0009]).
 [DISC-1]: ../../spec/notices.md#processing
 [DISC-2]: ../../spec/notices.md#processing
 [event-schema]: ../../spec/schemas/event.schema.json
+[FEED-1]: ../../spec/notices.md#the-latest-filings-feed
+[FEED-2]: ../../spec/notices.md#the-latest-filings-feed
 [FETCH-1]: ../../spec/snapshots.md#10-fetching
 [FETCH-14]: ../../spec/snapshots.md#10-fetching
 [FETCH-6]: ../../spec/snapshots.md#10-fetching
@@ -414,6 +431,7 @@ library publishes, so both answer "as of T" the same way ([0009]).
 [FILE-3]: ../../spec/notices.md#7-a-filings-files
 [FILE-5]: ../../spec/notices.md#7-a-filings-files
 [GAP-1]: ../../spec/notices.md#5-polls-coverage-and-gaps
+[GAP-2]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [GARAGE-4]: ../../spec/deployment.md#garage
 [IMP-3]: ../../spec/snapshots.md#11-imports
 [JOB-2]: ../../spec/snapshots.md#jobs-and-events
@@ -435,6 +453,7 @@ library publishes, so both answer "as of T" the same way ([0009]).
 [notice-schema]: ../../spec/schemas/notice.schema.json
 [notices]: ../../spec/notices.md
 [notices-backfills]: ../../spec/notices.md#8-backfills
+[notices-day]: ../../spec/notices.md#the-daily-check
 [notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [notices-messages]: ../../spec/notices.md#9-messages-and-processing
 [notices-open]: ../../spec/notices.md#12-open-questions
@@ -463,6 +482,7 @@ library publishes, so both answer "as of T" the same way ([0009]).
 [SRC-4]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far
 [SRC-21]: ../../investigation/edgar.md#findings-so-far
+[SRC-27]: ../../investigation/edgar.md#findings-so-far
 [store-imports]: ../../spec/snapshots.md#11-imports
 [store-readers]: ../../spec/snapshots.md#readers-outside-the-pipeline
 [TABLE-3]: ../../spec/notices.md#4-the-record-of-notices

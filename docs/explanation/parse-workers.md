@@ -65,6 +65,9 @@ notice once its header and index page are held and read, and the XBRL
 instance the index page names, if it names one, is held ([FILE-5]). The
 notice gives each file with its feed, its URL, and its SHA-256, which is
 what an import's manifest names an input by ([notice.schema.json], [IMP-2]).
+It gives the filing's acceptance times as given: its header's, and the
+time the version that first named it gives, which is null for a filing
+first listed by a master index ([§9 of the notices][notices-messages]).
 
 ### Through `edgar-asof`
 
@@ -148,8 +151,9 @@ records, filings, and coverage ([0004]), and read stored instances from
 Garage ([IMP-3]). Decision 0004 has one transaction record a filing, its
 parse, and its facts, so they can't disagree ([0004]). The notices'
 specification records the filing apart from its parse: the discoverer adds
-it to `filings` when a poll's list names it, in that message's own
-transaction, before any parse ([SEEN-2], [DISC-2]). How the facts are
+it to `filings` when a poll's list or version of the feed, or a master
+index, names it, in that message's own transaction, before any parse
+([SEEN-2], [DAY-3], [DISC-2]). How the facts are
 written is the facts specification's to say ([T17]).
 
 They run as a Deployment scaled by queue depth
@@ -173,7 +177,11 @@ workers for the 5 minutes before the autoscaler scales them down
 
 The work comes in two kinds. New filings arrive at the pace companies
 file: the three companies filed 126 times in the 13 weeks to October 7,
-2026, mostly Form 4s ([0010]). A Backfill brings many at once: every
+2026, mostly Form 4s ([0010]). With the latest-filings feed as the notice
+source, the discoverer fetches every filer's new filings, 6,355 to 12,710
+fetches a day by decision 0015's estimate, and publishes a notice of each
+once it's complete; which filers' facts the parse workers write is a
+decision still to come ([0015], [FILE-5]). A Backfill brings many at once: every
 filing its company's lists name in its range of dates, whatever its form
 ([BACKFILL-1]). Over the three companies' listed history, that's 9,689
 filings, of which 484 have an instance, and 208 of those are their XBRL
@@ -312,6 +320,7 @@ T10 and T12, which decide them ([status page][status]).
 [0009]: ../decisions/0009-read-edgar-through-a-public-point-in-time-library.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
 [0014]: ../decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
+[0015]: ../decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md
 [0016]: ../decisions/0016-read-xbrl-instances-with-a-narrow-parser-on-lxml.md
 [BACKFILL-1]: ../../spec/controls.md#7-backfill
 [FETCH-6]: ../../spec/snapshots.md#10-fetching
@@ -365,6 +374,7 @@ T10 and T12, which decide them ([status page][status]).
 [asof-facts]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md
 [asof-facts-left]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#left-to-other-specifications
 [asof-plan-later]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/docs/plan.md#later
+[DAY-3]: ../../spec/notices.md#the-daily-check
 [FACT-6]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#5-facts
 [FACT-7]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#5-facts
 [FACT-8]: https://github.com/nslaughter/edgar-asof/blob/515bb0dc7af1b76a269413f29ba3edc390193e46/spec/facts.md#5-facts

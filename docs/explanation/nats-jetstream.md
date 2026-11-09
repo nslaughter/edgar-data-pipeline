@@ -47,7 +47,8 @@ The scheduler queues each Source's polls ([JOB-2]) and hands each Backfill
 to the discoverer in an order ([ORDER-1]). The fetcher fetches what each
 job asks for and announces each record with an event ([JOB-6]). The
 discoverer reads every event and every order ([DISC-1]), queues the fetches
-of each filing's files and each Backfill's lists ([FILE-2], [LIST-1]), and
+of each filing's files, each day's master index, and each Backfill's lists
+([FILE-2], [DAY-2], [LIST-1]), and
 publishes notices of filings, gaps, and Backfills' progress ([FILE-5],
 [GAP-3], [LIST-5]). The scheduler reads the gap and backfill notices, and
 sets each Source's and Backfill's status from them ([NOTICE-1],
@@ -429,6 +430,7 @@ metrics workers scale by, and steps that are safe to repeat ([0003]).
 [VAL-3]: ../../spec/controls.md#5-the-charts-values
 [CHART-2]: ../../spec/deployment.md#5-dependencies
 [CHART-4]: ../../spec/deployment.md#5-dependencies
+[DAY-2]: ../../spec/notices.md#the-daily-check
 [dep-guarantees]: ../../spec/deployment.md#1-guarantees
 [durable consumers]: ../../spec/deployment.md#durable-consumers
 [GARAGE-4]: ../../spec/deployment.md#garage

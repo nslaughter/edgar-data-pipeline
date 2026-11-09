@@ -290,7 +290,9 @@ The scheduler writes nothing to the record, so no failure of it can change
 a record or an object. What a failure leaves is time in which no poll was
 queued. The record shows it as a gap in each Source's coverage: from when
 the last successful poll's job expired to the next successful poll's
-request ([§5 of the notices][notices-gaps], [GAP-2]). A filing first seen
+request, or, for the latest-filings feed, from the last successful poll's
+request, when the next names none of the filings it named
+([§5 of the notices][notices-gaps], [GAP-2]). A filing first seen
 across a gap has `gap` set in the view `lags`, so its first-seen time is
 known to be bounded more loosely ([LAG-1]).
 
@@ -372,7 +374,7 @@ EDGAR's content ([0006]).
 - **An order refused on a new install.** The streams are made only once
   the release's resources are ready, so on a new install whose values allow
   requests from the start, an order published before `ORDERS` exists is
-  refused. The notices' version 0.1.1 doesn't say that the scheduler
+  refused. The notices' version 1.0.0 doesn't say that the scheduler
   publishes it again, so its Backfill waits until the scheduler next becomes
   the active replica or requests are allowed again ([ORDER-1],
   [the scheduler's access to NATS][deployment-nats]). The chart's default

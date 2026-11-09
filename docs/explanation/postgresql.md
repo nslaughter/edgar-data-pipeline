@@ -31,8 +31,9 @@ Three properties come with that choice:
   rows each message calls for in one transaction ([DISC-2]). Decision 0004
   has a filing, its parse, and its facts recorded in one, so they can't
   disagree ([0004]); the notices' specification has the discoverer add the
-  filing in its own transaction, when a poll's list names it, before any
-  parse ([SEEN-2], [DISC-2]), and how facts are written waits on the facts
+  filing in its own transaction, when a poll's list or version of the
+  feed, or a master index, names it, before any parse ([SEEN-2], [DAY-3],
+  [DISC-2]), and how facts are written waits on the facts
   specification ([T17]).
 
 The times are the SEC's, not the database's. Every time is an explicit
@@ -154,9 +155,16 @@ erDiagram
   records ||--o{ filings : "listed_by"
   records |o--o{ jobs : "cause"
   records }o--o| readings : "by sha256, not a key"
+  polls ||--o| feed_polls : "record"
+  polls |o--o{ feed_polls : "previous"
   polls ||--o{ sightings : "first_shown"
   polls |o--o{ sightings : "last_not_shown"
   filings ||--o{ sightings : "accession_number"
+  filings ||--o{ entries : "accession_number"
+  polls ||--o{ entries : "listed_by"
+  readings ||--o{ listing_days : "sha256"
+  readings ||--o{ index_filings : "sha256"
+  filings ||--o{ index_filings : "accession_number"
   filings |o--o{ jobs : "accession_number"
   backfills |o--o{ jobs : "backfill"
   backfills ||--o{ backfill_filings : "backfill"
@@ -168,10 +176,14 @@ erDiagram
 | Table | One row for each |
 | --- | --- |
 | `polls` | Poll whose event the discoverer read ([GAP-1]) |
-| `readings` | Version it read as a list, a header, or an index page, once for each version ([SEEN-1], [FILE-3]) |
-| `filings` | Filing that a list names, with the values of its first listing, as given ([SEEN-2]) |
+| `feed_polls` | Successful poll of the feed, with the poll before it and whether it reaches back to it ([GAP-4]) |
+| `readings` | Version it read as a list, the feed, a listing, a master index, a header, or an index page, once for each version ([SEEN-1], [FEED-1], [DAY-1], [DAY-3], [FILE-3]) |
+| `filings` | Filing that a list, a version of the feed, or a master index names, with the values of its first listing, as given ([SEEN-2], [DAY-3]) |
 | `sightings` | Filing and Source whose polls showed it, with the two polls that bound when it first did ([SEEN-2]) |
-| `jobs` | Job the discoverer queued ([FILE-2], [LIST-1]) |
+| `entries` | Entry of a filing, in the first version of the feed that names it, as given ([FEED-2]) |
+| `listing_days` | Day a listing shows ([DAY-1]) |
+| `index_filings` | Filing a master index lists, with its first line's CIK, form type, and date filed ([DAY-3]) |
+| `jobs` | Job the discoverer queued ([FILE-2], [DAY-2], [DAY-4], [LIST-1]) |
 | `backfills`, `backfill_filings`, `backfill_listings`, `backfill_outcomes` | Backfill the scheduler ordered, the filings in its range, when its lists were all read, and each filing fetched or failed ([LIST-1] to [LIST-4]) |
 
 | View | One row for each |
@@ -180,6 +192,8 @@ erDiagram
 | `gaps` | Gap in a Source's coverage of a URL, ended or open ([GAP-2]) |
 | `backfill_progress` | Backfill, with its progress ([LIST-6]) |
 | `lags` | Sighting, with its times and the bounds of each lag ([LAG-1]) |
+| `checks` | Day checked, with the filings only one of the feed and the master indexes showed ([DAY-5]) |
+| `listings` | Quarter's listing a Source's polls fetched, and when it was read through ([DAY-6]) |
 
 Two choices in these tables matter for what the record can be trusted to
 say.
@@ -187,14 +201,18 @@ say.
 **Gaps are a view, not rows.** Each Source's gaps follow from its polls by
 one definition, computed when the view is read, so a record that arrives
 late changes what the view gives and nothing stored ([notices,
-§1][notices-guarantees], [GAP-2]).
+§1][notices-guarantees], [GAP-2]). Whether a poll of the feed reaches back
+to the one before is a row, `feed_polls`, written when the discoverer
+reads the poll, and `gaps` reads it ([GAP-4]).
 
 **Times are kept as given, and read as instants only in the views.** A
-filing's `acceptanceDateTime` from `submissions` is kept as text, and so
-are the 14 digits of its header's `ACCEPTANCE-DATETIME`, which give no time
-zone ([SRC-1], [SRC-25]). The view `lags` reads the first as the instant
-it states, and the header's digits as US Eastern time, and the two differ
-by the Eastern offset ([notices, §10][lags]). A finding that settles which
+filing's listed time, `submissions`' `acceptanceDateTime` or the feed's
+`updated`, is kept as text, null for a filing first listed by a master
+index, and so are the 14 digits of its header's `ACCEPTANCE-DATETIME`,
+which give no time zone ([SRC-1], [SRC-25], [SRC-27]). The view `lags`
+reads the listed time as the instant it states, and the header's digits as
+US Eastern time, and `submissions`' time and the header's differ by the
+Eastern offset ([notices, §10][lags]). A finding that settles which
 is right, and the header's zone, changes how `lags` reads that time, in
 `notices.sql`, in a new version of the notices' specification, and nothing
 stored: one function, or, since `submissions` can change how it gives a
@@ -217,7 +235,10 @@ discoverer's role can insert a row in each table and select it, every
 other service's can select it, every service's can select each view, and
 none can update, delete, or truncate a row ([PG-14]). Since the Job creates them only where there are none, a later
 version of `notices.sql` needs a migration, as `records.sql` does
-([deployment, §9][later]).
+([deployment, §9][later]). The notices' version 1.0.0 is one: a database
+that holds version 0.1.1's tables takes its tables through a migration,
+which the deployment's version specifies
+([notices, §12][notices-left]).
 
 ## The views Grafana reads
 
@@ -314,8 +335,11 @@ from Garage, which the drills are still to show.
 - **Rows grow with polls.** At the cadence each company's Source starts at,
   the three companies add 25,920 records a day ([0010]), about 9.5 million
   polls a year ([telemetry, open question 4][telemetry-questions]). Each
-  filing adds a few rows more: its row in `filings`, its sightings, and the
-  jobs, records, and readings of its files' fetches.
+  filing adds a few rows more: its row in `filings`, its sightings, its
+  entries if the feed named it, its row in `index_filings` once a master
+  index lists it, and the jobs, records, and readings of its files'
+  fetches. Each poll of the feed adds a row to `feed_polls`, and a reading,
+  since each of its bodies is new ([GAP-4], [FEED-1], [0015]).
 - **The views read every poll.** `coverage` and `gaps` grow with the
   record, so how fast the dashboards read them is measured on kind, and a
   later version adds what they need, such as an index or a stored summary
@@ -386,7 +410,7 @@ the other services read them, and Grafana reads the views made for it.
 | [STORE-1], [STORE-2] | `records.sql` defines the table, and the database holds it and refuses a malformed record. | tests, kind |
 | [LOG-3] | Only the fetcher adds records, and no one changes them. | kind |
 | [TABLE-1] to [TABLE-3] | `notices.sql` defines the notices' tables and views; the database holds them; only the discoverer adds rows. | tests, kind |
-| [GAP-2], [FILE-6], [LIST-6], [LAG-1] | What the notices' views give. | kind |
+| [GAP-2], [FILE-6], [LIST-6], [LAG-1], [DAY-5], [DAY-6] | What the notices' views give. | kind |
 | [VIEW-1] to [VIEW-3] | `dashboards.sql` defines Grafana's views; the database holds them; Grafana's role reads only them. | tests, kind |
 | [ALERT-3], [SCRAPE-1] | The alert on a stale backup, and the scraping of the instances' metrics. | tests |
 
@@ -410,6 +434,7 @@ DuckDB, pandas, or Polars without the cluster ([0004]).
 [0003]: ../decisions/0003-queue-work-in-nats-jetstream.md
 [0004]: ../decisions/0004-keep-the-record-in-postgresql-18.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
+[0015]: ../decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md
 [end-to-end]: ../design.md#one-filing-end-to-end
 [outages]: ../design.md#outages-and-recovery
 [plan-drills]: ../plan.md#traces-logs-and-drills
@@ -418,6 +443,7 @@ DuckDB, pandas, or Polars without the cluster ([0004]).
 [SRC-1]: ../../investigation/edgar.md#findings-so-far
 [SRC-24]: ../../investigation/edgar.md#findings-so-far
 [SRC-25]: ../../investigation/edgar.md#findings-so-far
+[SRC-27]: ../../investigation/edgar.md#findings-so-far
 [backups]: ../../spec/deployment.md#instances-and-backups
 [dep-guarantees]: ../../spec/deployment.md#1-guarantees
 [dependencies]: ../../spec/deployment.md#5-dependencies
@@ -456,6 +482,7 @@ DuckDB, pandas, or Polars without the cluster ([0004]).
 [FILE-6]: ../../spec/notices.md#7-a-filings-files
 [GAP-1]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [GAP-2]: ../../spec/notices.md#5-polls-coverage-and-gaps
+[GAP-4]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [LAG-1]: ../../spec/notices.md#10-times-and-lags
 [lags]: ../../spec/notices.md#10-times-and-lags
 [LIST-1]: ../../spec/notices.md#8-backfills
@@ -486,6 +513,15 @@ DuckDB, pandas, or Polars without the cluster ([0004]).
 [STORE-2]: ../../spec/snapshots.md#the-cluster-store
 [store-guarantees]: ../../spec/snapshots.md#1-guarantees
 [ALERT-3]: ../../spec/telemetry.md#7-alerts
+[DAY-1]: ../../spec/notices.md#the-daily-check
+[DAY-2]: ../../spec/notices.md#the-daily-check
+[DAY-3]: ../../spec/notices.md#the-daily-check
+[DAY-4]: ../../spec/notices.md#the-daily-check
+[DAY-5]: ../../spec/notices.md#the-daily-check
+[DAY-6]: ../../spec/notices.md#the-daily-check
+[FEED-1]: ../../spec/notices.md#the-latest-filings-feed
+[FEED-2]: ../../spec/notices.md#the-latest-filings-feed
+[notices-left]: ../../spec/notices.md#left-to-other-specifications
 [SCRAPE-1]: ../../spec/telemetry.md#6-scraping
 [telemetry-left]: ../../spec/telemetry.md#left-to-other-specifications
 [telemetry-questions]: ../../spec/telemetry.md#11-open-questions

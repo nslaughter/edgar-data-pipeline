@@ -1,7 +1,7 @@
 # The interfaces
 
 <!-- status: The controls; Scheduler; Fetcher; Discoverer; Parse workers; NATS JetStream; Query API; `edgar-asof` -->
-**Status** ([status page](../status.md)): The controls: Specified; built in part. Scheduler: Specified; built in part. Fetcher: Built. Discoverer: Decided; specified in part. Parse workers: Decided. NATS JetStream: Built. Query API: Decided. `edgar-asof`: Decided.
+**Status** ([status page](../status.md)): The controls: Specified; built in part. Scheduler: Specified; built in part. Fetcher: Built. Discoverer: Specified. Parse workers: Decided. NATS JetStream: Built. Query API: Decided. `edgar-asof`: Decided.
 <!-- end status -->
 
 This page covers the pipeline's three interfaces: the custom resources the
@@ -196,7 +196,9 @@ kind that has one waiting: `poll`, then `filing`, then `backfill` ([JOB-4]).
 It reads them through a consumer for each kind, `fetcher-polls`,
 `fetcher-filings`, and `fetcher-backfills`, which only its active replica
 reads, the polls' first ([FETCHER-9], [FETCHER-10]). It acknowledges an
-expired job without a request ([JOB-5]).
+expired job without a request ([JOB-5]). The discoverer's jobs of kind
+`filing` fetch each new filing's files, in the feed `filings`, and each
+day's master index, in the feed `daily-index` ([FILE-1], [DAY-2]).
 
 An **event** announces the record of a fetch: the record's `id` in the
 table, the `job` it was made for, and the `record` itself, with every field,
@@ -221,7 +223,7 @@ none of another kind's ([MSG-1]):
 
 | Kind | Fields | Published when |
 | --- | --- | --- |
-| `filing` | `accession_number`, `form`, `filing_date`; `listed_acceptance` and `header_acceptance`, each as given; and `files`, each file's `feed`, `url`, and `sha256`, as an import's manifest names an input | A filing is complete ([FILE-5]) |
+| `filing` | `accession_number`, `form`, `filing_date`; `listed_acceptance` and `header_acceptance`, each as given, `listed_acceptance` null for a filing first listed by a master index; and `files`, each file's `feed`, `url`, and `sha256`, as an import's manifest names an input | A filing is complete ([FILE-5]) |
 | `gap` | `source`, `url`, and `open_since`, null when the gap has ended | Within 10 seconds of a change in a Source's open gap, and for each open gap when the discoverer starts ([GAP-3]) |
 | `backfill` | `backfill`, `uid`, and its progress: `started_at`, `filings`, `fetched`, `failed`, and `completed_at` | After each change to the Backfill's rows ([LIST-5]) |
 
@@ -286,6 +288,9 @@ messages in a metric ([JOB-7], [MSG-2], [§4 of
 telemetry][telemetry-metrics]). Each schema is part of its specification,
 so changing one is a change to the specification, versioned as it says
 ([§14 of the store][store-changes], [§13 of the notices][notices-changes]).
+The notices' version 1.0.0 is a major version partly for that reason: its
+schema lets a filing notice's `listed_acceptance` be null
+([§13 of the notices][notices-changes]).
 
 ### Trace context
 
@@ -382,11 +387,13 @@ What the library's specification already fixes, for an answer of its own
 [controls-values]: ../../spec/controls.md#5-the-charts-values
 [CRD-2]: ../../spec/deployment.md#definitions
 [dashboards-sql]: ../../spec/schemas/dashboards.sql
+[DAY-2]: ../../spec/notices.md#the-daily-check
 [design-components]: ../design.md#components
 [DISC-1]: ../../spec/notices.md#processing
 [DISC-2]: ../../spec/notices.md#processing
 [event-schema]: ../../spec/schemas/event.schema.json
 [FETCH-18]: ../../spec/snapshots.md#the-fetcher
+[FILE-1]: ../../spec/notices.md#7-a-filings-files
 [FILE-5]: ../../spec/notices.md#7-a-filings-files
 [GAP-3]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [GARAGE-4]: ../../spec/deployment.md#garage

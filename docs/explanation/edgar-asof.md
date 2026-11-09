@@ -207,12 +207,13 @@ So the library never settles which is right:
 
 The pipeline keeps the same rule. It records every time raw and interprets
 time zones in queries, so that the library's "as of T" and the pipeline's
-lag queries agree ([0009], [0010]). Each filing keeps both its acceptance
+lag queries agree ([0009], [0010]). Each filing keeps its acceptance
 times as given ([SEEN-2], [FILE-3]), and the view `lags` reads them only
-when it's queried: `submissions`' time as the instant it states, and the
-header's digits as US Eastern time, with a lag from each, side by side
-([LAG-1]). Where the library leaves the choice to its caller, the view makes
-one for each source and shows both. A finding that settles which is right,
+when it's queried: `submissions`' time, or the latest-filings feed's
+`updated`, as the instant it states, and the header's digits as US Eastern
+time, with a lag from each, side by side ([LAG-1]). Where the library
+leaves the choice to its caller, the view makes one for each source and
+shows both. A finding that settles which is right,
 or the header's zone, changes the view, and nothing stored
 ([notices' open questions][the notices' open questions]).
 
@@ -285,14 +286,17 @@ And the pipeline keeps these for itself:
 
 The Python services import a pinned version of the library to read EDGAR's
 content and to build facts ([0009]). The discoverer reads `submissions` and
-headers through it ([T24]), the parse workers build facts through it
+headers through it, and the latest-filings feed and each day's master index
+in a release that reads them ([T24], [notices, §12][notices-left]), the
+parse workers build facts through it
 ([T25]), and the exporter writes the facts through it ([T27]).
 
 In the cluster, the library never fetches. Only the active fetcher sends
 requests to the SEC, and the services that read EDGAR's content through
 `edgar-asof` give it bodies from the cluster store, and never use its client
 or keep a cache of their own ([FETCH-18]). The discoverer reads each list,
-header, and index page from the bucket ([SEEN-1], [FILE-3]), and an import
+version of the feed, listing, master index, header, and index page from the
+bucket ([SEEN-1], [FEED-1], [DAY-1], [DAY-3], [FILE-3]), and an import
 in the cluster, such as a parse worker's, reads its inputs only from the
 bucket, never from the live source ([IMP-3]).
 
@@ -367,6 +371,7 @@ with what it holds, as the two plans give them:
 | --- | --- | --- | --- |
 | 0.1.0, the first | Reads `companyfacts` and joins each value to the acceptance time of the filing that reported it, through `submissions`, from its cache or from bodies the caller gives; its specifications of facts, fetching, and times, with their interfaces; the client, the cache, the interpreters, and facts; on PyPI, with the library's documentation site ([the first release][asof-plan-first]) | T1 to T9, and T13 | [T24], which reads `submissions` and headers through it. [T17] waits on a release that specifies the fact model, and the library's plan puts its facts specification, T1, and facts, T8, in this release. |
 | Published cases for "as of T" | Cases with their inputs and answers ([later tasks][asof-plan-later]) | T10, split when it's next | [T26], by the library's plan |
+| The latest-filings feed and the master index | Readers of the feed's Atom entries and of a day's master index, which the notices leave to it ([0015], [notices, §12][notices-left]) | To be planned in its own repository ([0015]) | [T24], which waits on a release that reads them |
 | XBRL instances | Every fact a filing reports, read from its XBRL instance with the parser that this repository's T12 chooses ([later tasks][asof-plan-later]): a narrow parser on lxml, which reads each instance alone, as [0016] gives it | T11, split when it's next | [T25], which waits on a release that reads XBRL instances |
 
 The first release's facts rest on this repository's investigation: decision
@@ -449,7 +454,11 @@ Its state, as its plan and specifications gave it on October 14, 2026:
 [0006]: ../decisions/0006-write-the-services-in-go-and-python.md
 [0009]: ../decisions/0009-read-edgar-through-a-public-point-in-time-library.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
+[0015]: ../decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md
 [0016]: ../decisions/0016-read-xbrl-instances-with-a-narrow-parser-on-lxml.md
+[DAY-1]: ../../spec/notices.md#the-daily-check
+[DAY-3]: ../../spec/notices.md#the-daily-check
+[FEED-1]: ../../spec/notices.md#the-latest-filings-feed
 [the design's times]: ../design.md#times
 [the design's testing on kind]: ../design.md#testing-on-kind
 [plan-works]: ../plan.md#how-the-plan-works
@@ -496,3 +505,4 @@ Its state, as its plan and specifications gave it on October 14, 2026:
 [SEEN-2]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [FILE-3]: ../../spec/notices.md#7-a-filings-files
 [LAG-1]: ../../spec/notices.md#10-times-and-lags
+[notices-left]: ../../spec/notices.md#left-to-other-specifications

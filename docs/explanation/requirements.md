@@ -4,8 +4,8 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
-- **Specified:** Scheduler (built in part); Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The drills.
 <!-- end status -->
 
@@ -22,9 +22,10 @@ cited document's, and that document governs.
 | Poll each Source's URL at the cadence the Source holds, while it isn't paused and requests are allowed | [0010], [SOURCE-1], [SOURCE-2] | The scheduler, which queues each poll as a job that expires when the next is due ([JOB-2]) |
 | Send every request to the SEC through one active fetcher | [0005], [FETCH-16], [FETCH-18] | The fetcher replica that holds the Lease `fetcher` ([LEASE-1]) |
 | Store each distinct body once, by its SHA-256, and add one record for each fetch | [OBJ-4], [FETCH-14], [STORE-1] | The fetcher, into Garage's bucket `snapshots` and PostgreSQL's table `records` ([GARAGE-4], [PG-8]) |
-| Find each filing that a company's `submissions` lists, and when each Source first showed it | [SEEN-1], [SEEN-2], [SEEN-3] | The discoverer, in the tables `filings` and `sightings` |
-| Fetch each new filing's header, index page, and XBRL instance | [FILE-1], [FILE-2], [FILE-3] | The discoverer queues the fetches, and the fetcher makes them |
-| Record each Source's coverage and gaps | [GAP-1], [GAP-2], [GAP-3] | The discoverer's table `polls`, and the view `gaps` |
+| Find each filing that the latest-filings feed or a company's `submissions` lists, and when each Source first showed it | [0015], [SEEN-1], [SEEN-2], [SEEN-3], [FEED-1], [FEED-2] | The discoverer, in the tables `filings`, `sightings`, and `entries` |
+| Check each day against its master index, and find each filing it lists that the feed didn't | [0015], [DAY-1] to [DAY-6] | The discoverer, in the tables `listing_days` and `index_filings`, and the views `checks` and `listings` |
+| Fetch each new filing's header, index page, and XBRL instance | [FILE-1], [FILE-2], [FILE-3], [DAY-4] | The discoverer queues the fetches, and the fetcher makes them |
+| Record each Source's coverage and gaps | [GAP-1] to [GAP-4] | The discoverer's tables `polls` and `feed_polls`, and the view `gaps` |
 | Give each lag, from each acceptance time to when each Source first showed the filing, as a query | [0010], [LAG-1] | The view `lags`, and the dashboards' view of it ([VIEW-6]) |
 | Fetch a company's past filings over a range of filing dates, once | [BACKFILL-1], [BACKFILL-3], [ORDER-1], [LIST-1] to [LIST-6] | The scheduler hands each Backfill to the discoverer, which lists its filings and queues their fetches |
 | Pause one Source, pause every request, and stop after a `403` until the owner acknowledges it | [SOURCE-1], [ACCESS-1], [ACCESS-2], [ACCESS-3] | The scheduler and the fetcher, from the `Source` and `SecAccess` resources |
@@ -136,9 +137,13 @@ so it spends no request on a poll whose time has passed.
 
 A filing's public availability lies between its acceptance and its
 first-seen time, and at 10 seconds that bounds it within about 10 seconds
-plus the source's own delay ([0010]). How long `submissions` takes to show a
-filing after its acceptance is the investigation's question Q4, measured
-from the pipeline's own record once it runs ([questions], [method]).
+plus the source's own delay ([0010]). Decision 0015 polls the
+latest-filings feed every 10 seconds for every filer, and checks each day
+against its master index, so a filing the feed misses is found within
+about a day ([0015], [DAY-4]). How long `submissions` and the feed take to
+show a filing after its acceptance is the investigation's question Q4,
+measured from the pipeline's own record once it runs ([questions],
+[method]).
 After a filing is first seen, its header and index page, then its XBRL
 instance, are fetched as jobs of kind `filing`, behind the polls ([FILE-2],
 [FILE-3], [JOB-4]). The documents set no target for the time from
@@ -153,7 +158,10 @@ first-seen time is bounded within a day ([two modes][design-modes]).
 
 A missed poll leaves a gap of about a cadence. A pause, a stop after a
 `403`, or a fetcher's handover that misses a poll leaves one until polling
-resumes ([§5 of the notices][notices-gaps]). The record holds each one:
+resumes. A poll of the feed that names none of the filings the one before
+it named leaves one too, though both succeeded, since the feed lists only
+its latest entries ([§5 of the notices][notices-gaps], [SRC-28]). The
+record holds each one:
 
 - Coverage and gaps follow from each Source's polls by one definition, in
   the view `gaps`, so a record that arrives late changes what the view
@@ -237,8 +245,12 @@ network; a fake EDGAR in the cluster serves stored versions instead
   scope for the investigation, which recorded what it holds (task T5,
   [plan][plan-investigation]; [SRC-26] to [SRC-28]), but no Source polls
   it yet. Decision 0015 makes it the notice source for every filer, so the
-  cluster records every filer's filings once the specifications follow it
-  ([0015]).
+  cluster records every filer's filings once the controls' and the
+  deployment's specifications follow it, as the notices' version 1.0.0 does
+  ([0015], [left to other specifications][notices-left]). The git store's
+  scope covers filings' files only in the three companies' directories, so
+  the transfer copies only those of the discoverer's fetches
+  ([left to other specifications][notices-left], [SRC-27]).
 - **Filing documents in general.** For each filing, the pipeline fetches
   its header, its index page, and the XBRL instance the index page names
   ([FILE-1]). `edgar-asof` leaves filing documents and forms in general to
@@ -283,6 +295,9 @@ network; a fake EDGAR in the cluster serves stored versions instead
 [controls-guarantees]: ../../spec/controls.md#1-guarantees
 [controls-terms]: ../../spec/controls.md#2-terms
 [controls-values]: ../../spec/controls.md#5-the-charts-values
+[DAY-1]: ../../spec/notices.md#the-daily-check
+[DAY-4]: ../../spec/notices.md#the-daily-check
+[DAY-6]: ../../spec/notices.md#the-daily-check
 [deployment-backups]: ../../spec/deployment.md#instances-and-backups
 [deployment-guarantees]: ../../spec/deployment.md#1-guarantees
 [deployment-later]: ../../spec/deployment.md#9-later-versions
@@ -293,6 +308,8 @@ network; a fake EDGAR in the cluster serves stored versions instead
 [design-outages]: ../design.md#outages-and-recovery
 [design-testing]: ../design.md#testing-on-kind
 [design-times]: ../design.md#times
+[FEED-1]: ../../spec/notices.md#the-latest-filings-feed
+[FEED-2]: ../../spec/notices.md#the-latest-filings-feed
 [FETCH-1]: ../../spec/snapshots.md#10-fetching
 [FETCH-2]: ../../spec/snapshots.md#10-fetching
 [FETCH-6]: ../../spec/snapshots.md#10-fetching
@@ -310,6 +327,7 @@ network; a fake EDGAR in the cluster serves stored versions instead
 [GAP-1]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [GAP-2]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [GAP-3]: ../../spec/notices.md#5-polls-coverage-and-gaps
+[GAP-4]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [GARAGE-1]: ../../spec/deployment.md#garage
 [GARAGE-4]: ../../spec/deployment.md#garage
 [ID-1]: ../../spec/snapshots.md#10-fetching
@@ -337,6 +355,7 @@ network; a fake EDGAR in the cluster serves stored versions instead
 [NOTICE-1]: ../../spec/notices.md#8-backfills
 [notices-files]: ../../spec/notices.md#7-a-filings-files
 [notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
+[notices-left]: ../../spec/notices.md#left-to-other-specifications
 [notices-open]: ../../spec/notices.md#12-open-questions
 [notices-seen]: ../../spec/notices.md#6-when-each-source-first-showed-each-filing
 [OBJ-4]: ../../spec/snapshots.md#5-objects

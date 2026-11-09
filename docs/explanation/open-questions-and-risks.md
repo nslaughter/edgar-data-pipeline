@@ -4,8 +4,8 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
-- **Specified:** Scheduler (built in part); Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
+- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The drills.
 <!-- end status -->
 
@@ -124,6 +124,14 @@ whether the header's digits read as Eastern time become its default waits
 on a finding that compares more headers with `submissions` than [SRC-2] and
 [SRC-13] do ([`edgar-asof`'s plan, T12][asof-later]).
 
+The latest-filings feed gives each filing a third time, its `updated`, to
+the second with its offset, which the stored version doesn't show to be
+when the filing was accepted ([SRC-27]). The view of lags reads it as the
+instant it states, beside the header's digits read as Eastern time, so a
+filing's lags from the two show whether they agree, and a finding that
+settles it changes nothing stored ([notices' open question
+5][notices-questions]).
+
 ### Q3: how restatements and amendments appear
 
 `companyfacts` keeps each filing's value for a concept, unit, and period
@@ -158,10 +166,18 @@ filing's CIKs once, they would span about 14 to 31 minutes of a business
 day ([SRC-28]).
 
 Two of the specifications' open questions are parts of Q4: whether a
-filing's files are in EDGAR's archive once its company's `submissions`
-lists it ([notices' open question 1][notices-questions]), and whether
-`companyfacts` can give a new filing's values before `submissions` lists
-the filing ([`facts.md`'s open question 1][asof-facts-questions]).
+filing's files are in EDGAR's archive once its company's `submissions` or
+the feed lists it ([notices' open question 1][notices-questions]), and
+whether `companyfacts` can give a new filing's values before `submissions`
+lists the filing ([`facts.md`'s open question 1][asof-facts-questions]).
+Three more of the notices' rest on Q4's findings about the feed and the
+master indexes: whether they list the same filings, and on which day
+([SRC-35]); whether the feed's `-index.htm` is the index page ([SRC-27]);
+and how far back its 100 entries reach in the busiest hour ([SRC-28]).
+The record answers each: the daily check counts the filings only one of
+them showed, each fetch shows whether the directory holds the index page,
+and the gaps that polls which don't reach back leave show how far the
+entries reach ([notices' open questions 6 to 8][notices-questions]).
 
 ### Q5: sizes and pace
 
@@ -266,7 +282,8 @@ names what would show it.
 | A filing's archived files never change after acceptance (Q1) | The record itself: what was known on a date follows from the filings accepted by then ([what the pipeline keeps][design-keeps]). Each of a filing's files is held by the first record that names a version of it, and a filing already held isn't fetched again ([FILE-2], [FILE-6], [LIST-2]). | [T8], which refetches the baseline's eight filings |
 | A header's acceptance time is US Eastern time | Each lag from the header's time ([§10 of the notices][notices-lags]) | A finding that settles the zone ([notices' open question 2][notices-questions]) |
 | The SEC's `Date` is when it generated each response | The fetcher's check of its own clock, by which every lag is measured ([the fetcher's clock][telemetry-clock]) | A finding from the refetches' records, which keep each `date` beside `requested_at` and `received_at` ([telemetry's open question 1][telemetry-questions]) |
-| A filing's files are in EDGAR's archive once `submissions` lists it | The discoverer's fetches of each new filing's files, which it doesn't queue again when they fail ([FILE-4]) | The record, which shows each fetch that ends without a version ([notices' open question 1][notices-questions]) |
+| A filing's files are in EDGAR's archive once `submissions` or the feed lists it | The discoverer's fetches of each new filing's files, which it doesn't queue again when they fail ([FILE-4]) | The record, which shows each fetch that ends without a version ([notices' open question 1][notices-questions]) |
+| The latest-filings feed and the master indexes between them show every filing | That every filing is found, the feed's within a cadence and the rest within about a day ([0015], [DAY-4]) | The daily check, which counts each filing that only one of them showed ([DAY-5], [notices' open question 6][notices-questions]) |
 | `companyfacts` doesn't give a new filing's values before `submissions` lists the filing | `edgar-asof`'s facts, which would otherwise have no time from `submissions` and stay unplaced until a later read | A finding from the pipeline's record; the owner kept that default on October 14, 2026 ([`facts.md`'s open question 1][asof-facts-questions]) |
 | `submissions` shows a filing within about a second of its dissemination, as the SEC's documentation says, which isn't a finding | How soon the pipeline sees a filing: within about a cadence, 10 seconds at the start, plus the source's own delay ([0010]) | The lags the record shows (Q4), which [T11] weighs |
 | The database's backups to Garage restore | Recovery of the database, whose volumes don't outlive the cluster ([§4 of the deployment][deployment-volumes]) | The restore drill on kind, since the backup plugin was tested against MinIO, not Garage ([0002], [T31]) |
@@ -522,12 +539,12 @@ chart creates or changes them ([0010], owner's decision 5).
 
 ### Notices
 
-[`notices.md`'s §12][notices-questions] has four:
+[`notices.md`'s §12][notices-questions] has eight:
 
-1. **Whether a filing's files are in EDGAR's archive once `submissions`
-   lists it** (Q4). If new filings' fetches end without a version, a later
-   version queues them again after a delay; until then, a Backfill fetches
-   them again.
+1. **Whether a filing's files are in EDGAR's archive once `submissions` or
+   the feed lists it** (Q4). If new filings' fetches end without a
+   version, a later version queues them again after a delay; until then, a
+   Backfill fetches them again.
 2. **Which acceptance time is right, and the header's time zone.** The
    lags read `submissions`' time as the instant it states and the header's
    digits as US Eastern time, and the two differ by the Eastern offset
@@ -546,6 +563,32 @@ chart creates or changes them ([0010], owner's decision 5).
 4. **A version that a later discoverer would read differently.** Each
    version's reading is kept once, by the discoverer that first read it;
    how a corrected reading is recorded is for a later version.
+5. **Whether the feed's `updated` is a filing's acceptance time**
+   ([SRC-27]). The lags read it as the instant it states, beside the
+   header's digits read as Eastern time, and show whether the two agree. A
+   finding that settles it changes nothing stored.
+6. **Whether the feed and the master indexes list the same filings, and on
+   which day** ([SRC-35]). `checks` counts each filing only one of them
+   showed, matching a filing the feed named to the day of the filing date
+   it gives. A finding that they differ can change how `checks` matches a
+   filing to a day.
+7. **Whether the feed's `-index.htm` is the index page** ([SRC-27]). The
+   discoverer fetches `ACCESSION-index.html` under the CIK the feed's
+   entries give, and the record of each fetch shows whether the filing's
+   directory holds it under that CIK.
+8. **How far back the feed's 100 entries reach in the busiest hour**
+   ([SRC-28]). The gaps that polls which don't reach back leave show it,
+   and so whether its cadence, or the `count` its URL asks for, needs to
+   change, which [0015] leaves to the record.
+
+It leaves to the controls' version the two Sources [0015] adds and how the
+listing's follows its quarter; to the deployment's the chart's default
+Sources, and the migration of a database that holds version 0.1.1's
+tables; to the telemetry's each feed's lag, the counts in `checks`, and
+whether a gap that a poll which doesn't reach back leaves is alerted on;
+to `edgar-asof` its readers of the feed and the master index; and to the
+owner the scope, which covers filings' files only in the three companies'
+directories ([left to other specifications][notices-left]).
 
 ### Telemetry
 
@@ -630,12 +673,13 @@ version of the telemetry for them ([T32]). A version of the deployment
 specification that states how the parse workers scale, as [0014] decides
 ([T10]): the owner decided that a task of its own specifies it, [T51],
 after the facts and before the parse workers are built. And the versions
-of four specifications that [0015] calls for, the notices', the
-controls', the deployment's, and the telemetry's, of which the plan holds
-the notices' ([T52]). And a version of the snapshot store's specification
-that states what the fetcher does while a write can't be made, as the
-owner decided with [T23]: it holds the fetch and tries the write again,
-sending nothing else meanwhile. The owner decided that the same version
+of three of the four specifications that [0015] calls for, the controls',
+the deployment's, and the telemetry's; the notices' is version 1.0.0,
+written by [T52], and the plan holds no task for the other three yet
+([`notices.md`'s §12][notices-left]). And a version of the snapshot
+store's specification that states what the fetcher does while a write
+can't be made, as the owner decided with [T23]: it holds the fetch and
+tries the write again, sending nothing else meanwhile. The owner decided that the same version
 states that a fetch between attempts waits while requests aren't allowed,
 and that a fetch in progress when its replica stops is abandoned without a
 record, and that a decision record proposed with it supersedes [0003]'s
@@ -656,7 +700,14 @@ consequence that fetching continues while PostgreSQL fails over.
 - **A filing a Source already shows at its first poll isn't fetched for
   it.** The record doesn't say how long the Source had shown it, so a
   Backfill fetches it, when the owner asks for one ([FILE-2],
-  [§6 of the notices][notices-seen]).
+  [§6 of the notices][notices-seen]). So are the days before the first day
+  checked, which the feed didn't cover whole ([the daily
+  check][notices-day]).
+- **The feed lists only its latest entries.** A poll that names none of
+  the filings the one before it named leaves a gap, though both
+  succeeded, and a filing the feed showed only between them has no
+  sighting of it; a master index lists it, and its files are fetched
+  within about a day ([GAP-2], [DAY-4], [0015]).
 - **The git store's budget.** At the starting cadence, a log of every poll
   would pass GitHub's warning at 50 MiB within four days, so the transfer
   copies only the ranges the owner names ([records the cluster
@@ -669,9 +720,12 @@ consequence that fetching continues while PostgreSQL fails over.
   companies' filings, not only Apple's, are later than their headers'
   digits read as Eastern time, by the Eastern offset on each date
   ([SRC-2], [SRC-25]). `submissions` can also change a filing's time after
-  it lists it ([SRC-24]). The lags read the time from the list a filing was
-  first added from, so a filing's two lags differ by that offset until a
-  finding settles which is right ([§10 of the notices][notices-lags]).
+  it lists it ([SRC-24]). The lags read the time from the version a filing
+  was first added from, so a filing's two lags differ by that offset until
+  a finding settles which is right ([§10 of the notices][notices-lags]).
+  The feed's `updated`, which a filing the feed showed first has as its
+  listed time, isn't shown to be its acceptance time either
+  ([notices' open question 5][notices-questions]).
 - **A lag is only as good as its clocks.** The fetcher checks its clock
   against each response's `Date` ([0010], [METRIC-4]), which rests on an
   assumption ([above](#assumptions-not-yet-shown)).
@@ -679,7 +733,8 @@ consequence that fetching continues while PostgreSQL fails over.
   can hide or show a gap for one window
   ([notices' open question 3][notices-questions]), and a poll's event that
   arrives after a later one's loosens a sighting's bounds
-  ([§6 of the notices][notices-seen]).
+  ([§6 of the notices][notices-seen]), and can leave a gap after a poll of
+  the feed that the polls didn't ([§5 of the notices][notices-gaps]).
 - **The earliest records' times.** A record that `snapshot.py` wrote
   before commit `8de33cd` can give a `requested_at` up to 0.2 seconds
   early; no finding relies on a record's time to within a second
@@ -883,6 +938,7 @@ consequence that fetching continues while PostgreSQL fails over.
 [SRC-26]: ../../investigation/edgar.md#findings-so-far
 [SRC-27]: ../../investigation/edgar.md#findings-so-far
 [SRC-28]: ../../investigation/edgar.md#findings-so-far
+[SRC-35]: ../../investigation/edgar.md#findings-so-far
 [STORE-3]: ../../spec/snapshots.md#the-cluster-store
 [SCOPE-4]: ../../spec/snapshots.md#9-scope
 [SCOPE-5]: ../../spec/snapshots.md#9-scope
@@ -944,6 +1000,7 @@ consequence that fetching continues while PostgreSQL fails over.
 [FILE-2]: ../../spec/notices.md#7-a-filings-files
 [FILE-4]: ../../spec/notices.md#7-a-filings-files
 [FILE-6]: ../../spec/notices.md#7-a-filings-files
+[GAP-2]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [GAP-3]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [LIST-2]: ../../spec/notices.md#8-backfills
 [LAG-1]: ../../spec/notices.md#10-times-and-lags
@@ -959,12 +1016,16 @@ consequence that fetching continues while PostgreSQL fails over.
 [REQ-2]: ../../spec/fake-edgar.md#6-the-request-log
 [ADMIN-1]: ../../spec/fake-edgar.md#7-the-admin-port
 [CHECK-1]: ../../spec/fake-edgar.md#8-the-checks
+[DAY-4]: ../../spec/notices.md#the-daily-check
+[DAY-5]: ../../spec/notices.md#the-daily-check
 [T22]: ../plan.md#observing-filings
 [T23]: ../plan.md#observing-filings
 [T45]: ../plan.md#observing-filings
 [T52]: ../plan.md#observing-filings
 [JOB-6]: ../../spec/snapshots.md#jobs-and-events
 [JOB-4]: ../../spec/snapshots.md#jobs-and-events
+[notices-day]: ../../spec/notices.md#the-daily-check
+[notices-left]: ../../spec/notices.md#left-to-other-specifications
 [ORDER-1]: ../../spec/notices.md#8-backfills
 [RBAC-1]: ../../spec/controls.md#9-who-may-change-what
 [RBAC-2]: ../../spec/controls.md#9-who-may-change-what
