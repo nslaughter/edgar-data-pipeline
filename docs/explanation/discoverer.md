@@ -266,9 +266,13 @@ number of filings its master index lists, the number of those no version
 of the feed named, and the number of filings the feed named with that
 filing date that no master index of a day checked lists ([DAY-5]).
 `listings` gives each quarter's listing a Source fetched, and when it was
-read through: when a poll of it requested after the next quarter's first
-day ended, and the master index of each day it shows from the first day
+read through: when a poll of it requested after the next quarter's listing
+showed a day, and the master index of each day it shows from the first day
 checked, had been read, after which polling it can end ([DAY-6], [0015]).
+It waits on the next quarter's listing rather than the calendar, since no
+stored listing shows whether the listing changes on a weekend or a holiday,
+as across January 1, 2027 ([SRC-23], [the daily check][notices-day]).
+Until there's a first day checked, no listing is read through.
 Filings are matched by accession number, and to a day by the filing date
 the feed gives. Since a master index lists some filings filed on earlier
 days, such a filing counts in `feed_only` for its filing date only until

@@ -497,7 +497,7 @@ The view `listings` has these columns:
 | --- | --- |
 | `url` | A quarter's listing that a Source's polls fetched. |
 | `quarter_ends` | The last day of its quarter. |
-| `read_through_at` | When the record first held a successful poll of it, requested after the next quarter's first day ended, in US Eastern time, whose version is read as a listing, with each day it shows from the first day checked a day checked: the latest of that poll's `received_at` and those days' records' `received_at`, for the earliest such poll. Null until there's one. Polling the listing can then end ([0015]). |
+| `read_through_at` | When the record first held a successful poll of it whose version is read as a listing, requested after the `received_at` of a successful poll of the next quarter's listing whose version is read as a listing and shows a day, with each day it shows from the first day checked a day checked: the latest of that poll's `received_at` and those days' records' `received_at`, for the earliest such poll. Null until there's one, and while there's no first day checked. Polling the listing can then end ([0015]). |
 
 - **DAY-1** (rule) For each event of a successful poll of a quarter's daily
   index listing, `https://www.sec.gov/Archives/edgar/daily-index/YYYY/QTRn/index.json`,
@@ -559,6 +559,19 @@ counts in `feed_only` for that earlier day, if it's a day checked, only
 until the master index that lists it is read. A filing that only the master
 index lists has no time but its header's, and no sighting, so no lag
 ([§10](#10-times-and-lags)).
+
+A quarter's listing is read through by a poll of it made once the next
+quarter's listing shows a day, rather than at a time of the calendar, when
+each day that poll shows is checked ([0015], detail 13). The stored
+listings show a new day at about 1:45 a.m. US Eastern time the next
+morning, on two weekday mornings ([SRC-23]), and none shows when the
+listing changes on a weekend or a holiday. If it doesn't change then, a
+poll on January 2, 2027 wouldn't show Thursday, December 31, 2026, since
+January 1 is a holiday and January 2 and 3 a weekend; read through then,
+the listing would stop being polled before it shows that day
+([open question 9](#12-open-questions)). Until there's a first day
+checked, no listing is read through, since which of its days are to be
+checked isn't known yet.
 
 ## 7. A filing's files
 
@@ -1030,6 +1043,15 @@ The view `lags` has these columns:
    ([SRC-28]). The gaps that polls which don't reach back leave show it,
    and so whether its cadence, or the `count` its URL asks for, needs to
    change, which [0015] leaves to the record.
+9. **When the quarter's listing shows a day across a weekend, a holiday,
+   or a quarter's end** ([SRC-23], [SRC-34]). The stored listings show a
+   new day at about 1:45 a.m. US Eastern time the next morning, on two
+   weekday mornings, and none was fetched on a weekend or a holiday, or
+   across a quarter's end. So `listings` reads a quarter's listing through
+   only from a poll made after the next quarter's listing shows a day
+   ([the daily check](#the-daily-check)). That assumes the listing shows a
+   quarter's last day by the time the next quarter's shows its first, which
+   the record of the first quarter's end the pipeline polls across shows.
 
 ### Left to other specifications
 
@@ -1124,7 +1146,7 @@ specifies ([§12](#left-to-other-specifications)).
 - **Times and lags:** the feed's `updated` is read as the instant it
   states, and `listed_instant`'s comment says so; the function doesn't
   change.
-- **Open questions** 5 to 8, and what's left to the controls', the
+- **Open questions** 5 to 9, and what's left to the controls', the
   deployment's, and the telemetry's specifications, `edgar-asof`, and the
   scope.
 - **Guarantees** 1, 2, and 4 say so, and guarantee 8 is new.

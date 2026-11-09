@@ -539,7 +539,7 @@ chart creates or changes them ([0010], owner's decision 5).
 
 ### Notices
 
-[`notices.md`'s §12][notices-questions] has eight:
+[`notices.md`'s §12][notices-questions] has nine:
 
 1. **Whether a filing's files are in EDGAR's archive once `submissions` or
    the feed lists it** (Q4). If new filings' fetches end without a
@@ -580,6 +580,12 @@ chart creates or changes them ([0010], owner's decision 5).
    ([SRC-28]). The gaps that polls which don't reach back leave show it,
    and so whether its cadence, or the `count` its URL asks for, needs to
    change, which [0015] leaves to the record.
+9. **When the quarter's listing shows a day across a weekend, a holiday,
+   or a quarter's end** ([SRC-23]). The stored listings show a new day the
+   next morning on two weekdays only, so a quarter's listing is read
+   through only from a poll made after the next quarter's listing shows a
+   day. That assumes the listing shows a quarter's last day by then, which
+   the record of the first quarter's end the pipeline polls across shows.
 
 It leaves to the controls' version the two Sources [0015] adds and how the
 listing's follows its quarter; to the deployment's the chart's default

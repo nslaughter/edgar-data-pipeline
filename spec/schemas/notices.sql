@@ -363,11 +363,15 @@ SELECT m.day, m.url, m.record,
 FROM masters m;
 
 -- DAY-6: each quarter's listing that a Source's polls fetched, with the last
--- day of its quarter, and when the record first held a successful poll of it,
--- requested after the next quarter's first day ended in US Eastern time, whose
--- version is read as a listing, with each day it shows from the first day
--- checked a day checked: the latest of that poll's received_at and those days'
--- records', for the earliest such poll.
+-- day of its quarter, and when the record first held a successful poll of it
+-- whose version is read as a listing, requested after the received_at of a
+-- successful poll of the next quarter's listing whose version is read as one
+-- and shows a day, with each day it shows from the first day checked a day
+-- checked: the latest of that poll's received_at and those days' records',
+-- for the earliest such poll. Null while there's no first day checked. No
+-- stored listing shows when it changes on a weekend or a holiday (SRC-23), so
+-- the next quarter's listing, not the calendar, says when the quarter's last
+-- day can have been shown.
 CREATE VIEW listings (url, quarter_ends, read_through_at) AS
 WITH quarters AS (
     SELECT DISTINCT r.url,
@@ -378,23 +382,34 @@ WITH quarters AS (
     JOIN records r ON r.id = p.record
     WHERE r.url ~ '^https://www\.sec\.gov/Archives/edgar/daily-index/[0-9]{4}/QTR[1-4]/index\.json$'
 ),
+readable AS (
+    SELECT r.url, r.sha256, r.requested_at, r.received_at
+    FROM polls p
+    JOIN records r ON r.id = p.record
+    JOIN readings g ON g.sha256 = r.sha256
+    WHERE g.kind = 'listing' AND g.error IS NULL
+),
 through AS (
     SELECT q.url,
-           greatest(r.received_at,
+           greatest(l.received_at,
                     (SELECT max(k.received_at)
                      FROM listing_days d
                      JOIN checks c ON c.day = d.day
                      JOIN records k ON k.id = c.record
-                     WHERE d.sha256 = r.sha256 AND d.day >= first_day_checked())) AS at
+                     WHERE d.sha256 = l.sha256 AND d.day >= first_day_checked())) AS at
     FROM quarters q
-    JOIN records r ON r.url = q.url
-    JOIN polls p ON p.record = r.id
-    JOIN readings g ON g.sha256 = r.sha256
-    WHERE g.kind = 'listing' AND g.error IS NULL
-      AND r.requested_at >= (q.quarter_ends + 2)::timestamp AT TIME ZONE 'America/New_York'
+    JOIN readable l ON l.url = q.url
+    WHERE first_day_checked() IS NOT NULL
+      AND EXISTS (
+          SELECT FROM readable n
+          JOIN listing_days d ON d.sha256 = n.sha256
+          WHERE n.url = format('https://www.sec.gov/Archives/edgar/daily-index/%s/QTR%s/index.json',
+                               extract(year FROM q.quarter_ends + 1),
+                               extract(quarter FROM q.quarter_ends + 1))
+            AND n.received_at < l.requested_at)
       AND NOT EXISTS (
           SELECT FROM listing_days d
-          WHERE d.sha256 = r.sha256 AND d.day >= first_day_checked()
+          WHERE d.sha256 = l.sha256 AND d.day >= first_day_checked()
             AND NOT EXISTS (SELECT FROM checks c WHERE c.day = d.day))
 )
 SELECT q.url, q.quarter_ends, (SELECT min(x.at) FROM through x WHERE x.url = q.url)
