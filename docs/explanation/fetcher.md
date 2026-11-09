@@ -123,8 +123,15 @@ header and index page in its directory under
 `https://www.sec.gov/Archives/edgar/data/`, under the CIK of what led to the
 fetch: the company's, the one the latest-filings feed's entries give, or a
 master index's ([FILE-1], [LIST-1]). Each day's master index is fetched
-from the quarter's daily index directory ([DAY-2], [SRC-34]). Each of
-these URLs returned a `200` in the investigation ([SRC-21]).
+from the quarter's daily index directory ([DAY-2], [SRC-34]). In the
+investigation, the three companies' `submissions`, and the eight filings'
+headers and index pages under the CIK of the company whose `submissions`
+lists each filing, returned a `200` ([SRC-21]), as did ten days' master
+indexes ([SRC-35]). None of the filings in the feed's stored version has
+a file stored ([SRC-27]), so whether a filing's directory is there under
+the CIK its entries give, or a master index's, is for the record to show:
+a fetch that finds nothing records no version ([REC-6], [notices' open
+question 7][notices-questions]).
 `data/scope.json` limits what the git store holds, not what the cluster
 fetches, which is what the owner's values ask for through the controls
 ([the scope and the cluster][snapshots-scope-cluster]).
@@ -579,7 +586,9 @@ telemetry][telemetry-ids]).
 [SRC-18]: ../../investigation/edgar.md#findings-so-far
 [SRC-20]: ../../investigation/edgar.md#findings-so-far
 [SRC-21]: ../../investigation/edgar.md#findings-so-far
+[SRC-27]: ../../investigation/edgar.md#findings-so-far
 [SRC-34]: ../../investigation/edgar.md#findings-so-far
+[SRC-35]: ../../investigation/edgar.md#findings-so-far
 [job.schema.json]: ../../spec/schemas/job.schema.json
 [event.schema.json]: ../../spec/schemas/event.schema.json
 [snapshots-guarantees]: ../../spec/snapshots.md#1-guarantees
@@ -641,6 +650,7 @@ telemetry][telemetry-ids]).
 [RBAC-2]: ../../spec/controls.md#9-who-may-change-what
 [notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
 [notices-files]: ../../spec/notices.md#7-a-filings-files
+[notices-questions]: ../../spec/notices.md#12-open-questions
 [FILE-1]: ../../spec/notices.md#7-a-filings-files
 [FILE-4]: ../../spec/notices.md#7-a-filings-files
 [LIST-1]: ../../spec/notices.md#8-backfills
