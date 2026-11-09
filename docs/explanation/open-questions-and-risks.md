@@ -633,13 +633,15 @@ after the facts and before the parse workers are built. And the versions
 of four specifications that [0015] calls for, the notices', the
 controls', the deployment's, and the telemetry's: the notices' is [T52],
 and the owner decided that the other three each have a task of their
-own before the discoverer, [T53] to [T55]. A task after the notices',
-[T56], counts their new rows in the estimates. And a version of the snapshot store's specification
-that states what the fetcher does while a write can't be made, as the
-owner decided with [T23]: it holds the fetch and tries the write again,
-sending nothing else meanwhile. The owner decided that the same version
-states that a fetch between attempts waits while requests aren't allowed,
-and that a fetch in progress when its replica stops is abandoned without a
+own before the discoverer, [T53] to [T55]. A task after the deployment's,
+[T56], counts the polls of the feed and of the listing, and the notices'
+new rows, in the estimates, at the scope the deployment's version makes
+the default. And a version of the snapshot store's specification that
+states what the fetcher does while a write can't be made, as the owner
+decided with [T23]: it holds the fetch and tries the write again, sending
+nothing else meanwhile. The owner decided that the same version states
+that a fetch between attempts waits while requests aren't allowed, and
+that a fetch in progress when its replica stops is abandoned without a
 record, and that a decision record proposed with it supersedes [0003]'s
 consequence that fetching continues while PostgreSQL fails over.
 

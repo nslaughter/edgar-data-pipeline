@@ -4,9 +4,9 @@
 T36, T38, T39 to T42, T44, and T47 to T50 are done, and T37 is split into
 T39 to T43. The next ready is T52, the notices' version for the
 latest-filings feed and the daily check. T53 to T55, the controls', the
-deployment's, and the telemetry's versions for them, and T56, the
-estimates' new rows, wait for T52. T24, the discoverer, waits for T52 to
-T55 and for releases of `edgar-asof`, and T17, the facts specification,
+deployment's, and the telemetry's versions for them, wait for T52, and
+T56, the estimates for them, for T54. T24, the discoverer, waits for T52
+to T55 and for releases of `edgar-asof`, and T17, the facts specification,
 for a release of it that specifies the fact model. T6, T7, and T9 wait
 for each company's next report, and a run the owner asks for; the
 investigation's daily refetches can run when the owner asks.
@@ -83,7 +83,7 @@ waits for the export.
 | T41 | **The explanation pages and the glossary.** [PAGE-4](../spec/site.md#7-the-pages-written-for-the-site)'s topics, but for the estimates and scale and limits, with their diagrams, `edgar-asof`'s page among them; and the glossary ([PAGE-8](../spec/site.md#7-the-pages-written-for-the-site)). Each fact is cited as [PAGE-2](../spec/site.md#7-the-pages-written-for-the-site) gives, `edgar-asof`'s at a named commit. | T40 | October 14, 2026: 24 pages in `docs/explanation/`, the ten components' among them, and the glossary, `docs/glossary.md`. |
 | T42 | **The estimates, and scale and limits.** [PAGE-5 and PAGE-6](../spec/site.md#7-the-pages-written-for-the-site): the requests a second and bytes fetched; the growth of storage in Garage, PostgreSQL, the queue's streams, the export, and Prometheus; and the CPU, memory, and storage each component needs; at the chart's default scope and wider ones, each input cited or marked an assumption; then the first limit as the scope grows. With these, every topic has its page, so it also writes [PAGE-4](../spec/site.md#7-the-pages-written-for-the-site)'s test. | T40, T41 | October 15, 2026: `docs/explanation/estimates.md` and `docs/explanation/scale-and-limits.md`, and PAGE-4's tests in `tests/test_site.py`. The owner confirmed the details it settled the same day, and decided, from its estimates, that a new version of [`spec/deployment.md`](../spec/deployment.md) sets how long the database's backups are kept; that version's task is still to be added. |
 | T43 | **The export's format, on the site.** A page for people who read the export, `docs/export.md` ([PAGE-1](../spec/site.md#7-the-pages-written-for-the-site)), from T18's specification. | T18, T40 | |
-| T56 | **The estimates, for the latest-filings feed and the daily check.** [PAGE-5 and PAGE-6](../spec/site.md#7-the-pages-written-for-the-site): the rows the notices' version 1.0.0 adds, in `estimates.md` and `scale-and-limits.md`: a filing's `entries` and `index_filings`, a poll of the feed's `feed_polls`, a listing's `listing_days`, one for each day each version of it shows, and each master index's record, job, and reading. The owner decided on November 9, 2026 to count them in a task of its own, after T52 rather than with it. | T42, T52 | |
+| T56 | **The estimates, for the latest-filings feed and the daily check.** [PAGE-5 and PAGE-6](../spec/site.md#7-the-pages-written-for-the-site), in `estimates.md` and `scale-and-limits.md`, at the chart's default scope as T54 sets it, the feed's, the quarter's listing's, and the three companies' Sources, and at the wider scopes: the polls of the feed and of the listing, with their requests, the bytes they fetch, their objects in Garage, their records, `polls` rows, and readings in PostgreSQL, and their jobs and events in the queue's streams, as [0015](decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md)'s consequences give the feed's; and the rows the notices' version 1.0.0 adds: a filing's `entries` and `index_filings`, a poll of the feed's `feed_polls`, a listing's `listing_days`, one for each day each version of it shows, and each master index's record, job, and reading. The owner decided on November 9, 2026 to count the notices' new rows in a task of its own, after T52 rather than with it. | T42, T52, T54 | |
 
 ## Observing filings
 
