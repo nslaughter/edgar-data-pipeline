@@ -552,9 +552,11 @@ in both languages ([0006]).
 | [PG-7], [PG-12], [PG-14] | Its own role, `discoverer`, which alone may add to its tables, made after the store's table. |
 | [GARAGE-4] | Its own key, which may only read `snapshots`. |
 
-Task T24 builds the discoverer once `edgar-asof`'s first release is
-published; T16, T23, and T38, which it also waits on, are done
-([plan][plan-observing]). Most of
+Task T24 builds the discoverer once `edgar-asof`'s first release, and a
+release that reads the feed and the master index, are published, and
+T52 to T55, the notices', the controls', the deployment's, and the
+telemetry's versions for the feed, are done; T16, T23, and T38, which it
+also waits on, are done ([plan][plan-observing]). Most of
 these statements' tests await it, and T28 and T29 its metrics' and traces'
 ([§3 of the notices][notices-ids], [§3 of telemetry][telemetry-ids]).
 
