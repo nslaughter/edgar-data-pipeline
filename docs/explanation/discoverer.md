@@ -1,7 +1,7 @@
 # The discoverer
 
 <!-- status: Discoverer -->
-**Status** ([status page](../status.md)): Discoverer: Specified.
+**Status** ([status page](../status.md)): Discoverer: Decided; specified in part.
 <!-- end status -->
 
 The discoverer reads what the fetcher fetched and makes the record of
@@ -492,10 +492,14 @@ record ([0010]):
 | EDGAR's latest-filings feed | One request covers every company, but its URL isn't confirmed, the scope must be widened to it, it changes on nearly every poll, so the store keeps a body each time, and a poll that comes too late can miss filings in a busy burst. |
 | The daily indexes | Complete and kept in the archive, but published around 10 PM ([SRC-5]), so a filing is first seen hours after its acceptance. |
 
-Task T11 revisits the choice from the lags the record shows: whether to
-keep each company's `submissions`, add the latest-filings feed, whose
-first version task T5 recorded ([SRC-26] to [SRC-28]), or change the
-cadence, in a decision record that supersedes 0010 if anything changes ([plan][plan-observing]).
+Task T11 was to revisit the choice from the lags the record shows. The
+owner decided it sooner, from the goal the owner stated: decision 0015,
+accepted on November 2, 2026 as T11, makes the latest-filings feed, whose
+first version task T5 recorded ([SRC-26] to [SRC-28]), the notice source
+for every filer, and checks each day against its master index ([0015]).
+The notices' specification, which this page explains, still says what
+0010 chose until its version for the feed, task T52
+([plan][plan-observing]).
 
 Decision 0006 put the discoverer in Python, with the other services that
 read what EDGAR publishes, so a change in EDGAR's formats touches one
@@ -558,6 +562,7 @@ these statements' tests await it, and T28 and T29 its metrics' and traces'
 [0006]: ../decisions/0006-write-the-services-in-go-and-python.md
 [0009]: ../decisions/0009-read-edgar-through-a-public-point-in-time-library.md
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
+[0015]: ../decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md
 [design-keeps]: ../design.md#what-the-pipeline-keeps
 [design-times]: ../design.md#times
 [design-components]: ../design.md#components

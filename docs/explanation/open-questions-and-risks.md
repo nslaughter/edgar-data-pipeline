@@ -4,8 +4,8 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
-- **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Specified:** Scheduler (built in part); Monitoring: traces; The controls (built in part); The documentation site (built in part).
+- **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The drills.
 <!-- end status -->
 
@@ -38,7 +38,7 @@ owner asks for ([method][inv-method], step 2).
 | **Q1.** What each feed returns and how it changes | Which validators each kind of URL sends ([SRC-4]); the URLs of a company's lists and of a filing's files ([SRC-21]); a `304` for a conditional request whose body hasn't changed ([SRC-22]); `submissions` changing a filing it already lists ([SRC-24]) | How often each feed changes, and whether a URL returns to an earlier body; whether a filing's archived files ever change | [T8] | Which feeds the pipeline reads, and how often |
 | **Q2.** Where each time comes from | The two acceptance times and how they differ ([SRC-1], [SRC-24], [SRC-25]); fiscal years and periods, and how each value joins to its filing ([SRC-3], [SRC-6] to [SRC-12]) | Which acceptance time is right for each company's filings, and the header's time zone | [T6], [T7], [T9] | The time model |
 | **Q3.** How restatements and amendments appear | Every filing's value kept beside the others, restatements, amendments, and frames ([SRC-14] to [SRC-17]) | Whether a frame moves to a later filing's value when that filing appears; how the next reports' values appear | [T6], [T7], [T9] | What a query as of a past date returns |
-| **Q4.** How new filings are announced | When the daily index files are written ([SRC-5]); that a published day's master index didn't change ([SRC-23]); what the latest-filings feed holds, and how far back its latest 100 entries reached on a Sunday ([SRC-26] to [SRC-28]) | How soon each feed shows a new filing; when each day's index appears | [T8], and the pipeline's record | Whether to keep the notice source, and how often to poll ([0010], [T11]) |
+| **Q4.** How new filings are announced | When the daily index files are written ([SRC-5]); that a published day's master index didn't change ([SRC-23]); what the latest-filings feed holds, and how far back its latest 100 entries reached on a Sunday ([SRC-26] to [SRC-28]) | How soon each feed shows a new filing; when each day's index appears | [T8], and the pipeline's record | Whether to keep the notice source, and how often to poll ([0010], [T11]); [0015] decided both from the owner's goal instead, and the record measures each source's lag in [T45]'s study |
 | **Q5.** Sizes and pace | Bytes per URL and per filing, and the pace of a backfill ([SRC-18] to [SRC-20]) | Growth per refetch | [T8] | The store's budget, and whether the pace suits backfills |
 
 The questions and what each decides are the investigation's
@@ -62,14 +62,14 @@ flowchart LR
     T8 --> Q5["Q5: sizes and pace"]
     T6 & T7 & T9 --> Q2["Q2: where times come from"]
     T6 & T7 & T9 --> Q3["Q3: restatements"]
-    Q4 --> T11["T11: revisit the notice source and cadence"]
 ```
 
 An arrow from a task to a task is a dependency; one from a task to a
-question is what the task answers. Each task in the diagram but [T11] sends
+question is what the task answers. Each task in the diagram sends
 requests to the SEC, and [T5] also widened the scope, once the owner had
-confirmed the feed's URL ([investigation][plan-investigation]). [T11] waits
-for the monitoring that shows the lags, [T28], and for the owner.
+confirmed the feed's URL ([investigation][plan-investigation]). [T11] was
+to revisit the notice source once the monitoring showed the lags, [T28];
+the owner decided it sooner, in [0015], from the goal the owner stated.
 
 ### Q1: what each feed returns and how it changes
 
@@ -148,8 +148,8 @@ it ([0010]). The first refetch, [T4], showed that a published day's
 master index didn't change: the four stored on October 7 were unchanged 9
 to 14 days after their `Last-Modified` ([SRC-23]). The daily refetches,
 which [T8] reads, show when each day's index appears. [T5] recorded what
-the latest-filings feed holds, so that [T11] can weigh it as a second
-notice source: one entry for each of a filing's parties, newest first,
+the latest-filings feed holds, which [0015], [T11]'s record, weighed in
+making it the notice source for every filer: one entry for each of a filing's parties, newest first,
 with a time to the second, in a body made for each request that sends no
 validators ([SRC-26], [SRC-27]). Fetched on a Sunday, its latest 100
 entries held 50 filings from the last 2 hours and 48 minutes of Friday
@@ -627,17 +627,18 @@ T3][asof-first-release]).
 
 Two specifications: the facts ([T17]) and the export ([T18]), with a minor
 version of the telemetry for them ([T32]). A version of the deployment
-specification that states how the
-parse workers scale, as [0014] decides ([T10]): the owner decided that a
-task of its own specifies it, [T51], after the facts and before the
-parse workers are built. And one revisit: whether to keep each company's
-`submissions` as the notice source ([T11]). And a version of the snapshot store's specification that states
-what the fetcher does while a write can't be made, as the owner decided
-with [T23]: it holds the fetch and tries the write again, sending nothing
-else meanwhile. The owner decided that the same version states that a
-fetch between attempts waits while requests aren't allowed, and that a
-fetch in progress when its replica stops is abandoned without a record,
-and that a decision record proposed with it supersedes [0003]'s
+specification that states how the parse workers scale, as [0014] decides
+([T10]): the owner decided that a task of its own specifies it, [T51],
+after the facts and before the parse workers are built. And the versions
+of four specifications that [0015] calls for, the notices', the
+controls', the deployment's, and the telemetry's, of which the plan holds
+the notices' ([T52]). And a version of the snapshot store's specification
+that states what the fetcher does while a write can't be made, as the
+owner decided with [T23]: it holds the fetch and tries the write again,
+sending nothing else meanwhile. The owner decided that the same version
+states that a fetch between attempts waits while requests aren't allowed,
+and that a fetch in progress when its replica stops is abandoned without a
+record, and that a decision record proposed with it supersedes [0003]'s
 consequence that fetching continues while PostgreSQL fails over.
 
 ## Risks the documents name
@@ -785,6 +786,7 @@ consequence that fetching continues while PostgreSQL fails over.
 [0010]: ../decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md
 [0011]: ../decisions/0011-install-the-definitions-and-operators-before-the-umbrella-chart.md
 [0012]: ../decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md
+[0015]: ../decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md
 [design-keeps]: ../design.md#what-the-pipeline-keeps
 [design-specs]: ../design.md#what-the-specifications-must-say
 [status-parts]: ../status.md#the-parts
@@ -959,6 +961,8 @@ consequence that fetching continues while PostgreSQL fails over.
 [CHECK-1]: ../../spec/fake-edgar.md#8-the-checks
 [T22]: ../plan.md#observing-filings
 [T23]: ../plan.md#observing-filings
+[T45]: ../plan.md#observing-filings
+[T52]: ../plan.md#observing-filings
 [JOB-6]: ../../spec/snapshots.md#jobs-and-events
 [JOB-4]: ../../spec/snapshots.md#jobs-and-events
 [ORDER-1]: ../../spec/notices.md#8-backfills

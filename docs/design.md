@@ -286,11 +286,15 @@ The normative parts become specifications, one per component or boundary:
 ## What waits on the investigation
 
 - Which acceptance time to trust, and its time zone (SRC-1, SRC-25).
-- Whether to keep each company's `submissions` as the notice source, add
-  EDGAR's latest-filings feed, or change the cadence
-  ([0010](decisions/0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)):
-  how soon each shows a new filing (Q4), which the pipeline's record
-  measures once it runs.
+- How soon each notice source shows a new filing (Q4), which the
+  pipeline's record measures once it runs: EDGAR's latest-filings feed,
+  and each company's `submissions`, which stay through the study
+  ([0013](decisions/0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md)).
+  The owner chose the notice source without waiting for these lags:
+  [0015](decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md)
+  makes the feed the notice source for every filer, from the goal the
+  owner stated, and this design follows it with the notices' version for
+  the feed (T52).
 - How fiscal periods map to facts (Q2, SRC-3), and how restatements appear
   (Q3).
 - Whether archived files ever change (Q1).

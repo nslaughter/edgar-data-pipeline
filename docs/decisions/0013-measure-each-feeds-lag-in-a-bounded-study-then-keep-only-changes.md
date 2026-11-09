@@ -4,6 +4,10 @@
 October 16, 2026, and accepted it on October 17. It supersedes the part of
 [0010](0010-poll-each-companys-submissions-and-measure-lag-from-the-record.md)
 that keeps a record of every poll for as long as the pipeline runs.
+Superseded in part by
+[0015](0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md),
+November 2, 2026, whose study measures the latest-filings feed's lag as
+well as `submissions`'.
 
 ## Context
 

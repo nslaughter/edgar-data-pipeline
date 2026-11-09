@@ -4,16 +4,16 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
-- **Specified:** Scheduler (built in part); Discoverer; Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Specified:** Scheduler (built in part); Monitoring: traces; The controls (built in part); The documentation site (built in part).
+- **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
 - **Planned:** The drills.
 <!-- end status -->
 
-For each decision record, 0001 to 0014, and 0016: what it chose, the
-alternatives it weighed and why they lost, what the choice costs, and what
-would change it. Where a record says what would change it, this page cites
-it. Where it doesn't, what follows is analysis, set apart as such. The
-records themselves hold the full context and their sources; the
+For each decision record, 0001 to 0016: what it chose, the alternatives it
+weighed and why they lost, what the choice costs, and what would change it.
+Where a record says what would change it, this page cites it. Where it
+doesn't, what follows is analysis, set apart as such. The records
+themselves hold the full context and their sources; the
 [index](../decisions/README.md) gives each one's status.
 
 ## Summary
@@ -29,16 +29,18 @@ records themselves hold the full context and their sources; the
 | [0007] | Three custom resources, reconciled by the scheduler; a read-only dashboard | Controls in the dashboard; an admin API; Helm values and scaling; a separate operator | An admission webhook once something other than the chart changes Sources ([0010]); nothing else stated |
 | [0008] | kube-prometheus-stack and a read-only Grafana, then Tempo, then Loki with Alloy | Prometheus without its operator; VictoriaMetrics; `grafana/otel-lgtm`; Jaeger; no logs | A receiver outside the cluster, if the owner asks; a collector, to sample traces if Tempo's volume calls for it |
 | [0009] | A public library, `edgar-asof`, in a repository of its own | A package in this repository; no library | Not stated |
-| [0010] | Each company's `submissions` as the notice source, at its Source's cadence; each lag measured from the record | Waiting for the investigation; the latest-filings feed; the daily indexes | The lags the record shows ([T11]); past about 25 companies at 10 seconds, a feed that covers every company |
+| [0010] | Each company's `submissions` as the notice source, at its Source's cadence; each lag measured from the record | Waiting for the investigation; the latest-filings feed; the daily indexes | The lags the record shows ([T11]); past about 25 companies at 10 seconds, a feed that covers every company; its notice source is already superseded by [0015] |
 | [0011] | Four Helm releases, installed in order | One release with workarounds; one chart as two releases; three releases | Not stated |
 | [0012] | Zensical, from the documents where they are, served by GitHub Pages | GitHub's own rendering; MkDocs with Material; Sphinx with MyST; generators outside Python; another static host | Not stated for the generator; the site's one version is revisited when the pipeline has releases ([§9 of the site][site-questions]) |
-| [0013] | A bounded study of `submissions`' lag, with a record of every poll; then only the lists' changes and coverage | Keeping [0010] as it is; keeping only changes at once; building nightly from the daily index | The study's lags: if no use needs filings within the day, a later record can replace the polls with the nightly index |
+| [0013] | A bounded study of `submissions`' lag, with a record of every poll; then only the lists' changes and coverage | Keeping [0010] as it is; keeping only changes at once; building nightly from the daily index | The study's lags: if no use needs filings within the day, a later record can replace the polls with the nightly index; its study of `submissions` alone is already superseded by [0015] |
 | [0014] | KEDA, in the operators' chart, scaling the parse workers from zero to three by their consumer's backlog | A HorizontalPodAutoscaler on an external metric from Prometheus; the scheduler scaling them; a HorizontalPodAutoscaler on CPU; a fixed number of replicas | The parser [T12] chooses and the workers' measurements, for the ceiling; the lag from acceptance to facts available ([T32]), for the floor |
+| [0015] | The latest-filings feed as the notice source for every filer, every 10 seconds; each day checked against its master index | Keeping [0010] as it is; the feed alone; the daily index alone; the Public Dissemination Service; the XBRL RSS feeds | Not stated |
 | [0016] | A narrow parser on lxml, in `edgar-asof`, that reads each XBRL instance alone, as stored | The same parser on the standard library's ElementTree; Arelle; py-xbrl or edgartools | A need for labels or validation, which takes a record of its own; older instances that use parts of XBRL it doesn't read |
 
-No decision is still to come ([decisions][design-decisions]). One is to
-be revisited: the notice source and its cadence, from the lags the record
-shows ([T11]).
+No decision is still to come ([decisions][design-decisions]). The notice
+source and its cadence, which [0010] left to be revisited from the lags
+the record shows, [0015] settled from the goal the owner stated instead
+([T11]).
 
 ## 0001: Deploy on Kubernetes with Helm, on kind
 
@@ -484,9 +486,11 @@ revisited from the lags the record shows: whether to keep each company's
 this one; a new cadence is only a change to a Source. At 10 seconds, half
 the fetcher's limit covers about 25 companies, and past that a feed that
 covers every company becomes the better source ([0010]). The plan's [T11]
-makes that revisit when the owner asks for it, once the monitoring shows
-the lags ([T28]), and weighs the latest-filings feed, whose first version
-[T5] recorded ([SRC-26] to [SRC-28]).
+was to make that revisit once the monitoring showed the lags ([T28]), and
+weigh the latest-filings feed, whose first version [T5] recorded ([SRC-26]
+to [SRC-28]). The owner made it sooner: [0015], which the owner accepted
+on November 2, 2026 as [T11], makes the feed the notice source for every
+filer, from the goal the owner stated rather than from the lags.
 
 ## 0011: Install the definitions and the operators before the umbrella chart
 
@@ -704,6 +708,82 @@ acceptance to facts available ([T32]) may move the floor to one, if
 starting from zero delays facts more than a running worker is worth
 ([0014]).
 
+## 0015: Poll the latest-filings feed for every filer's filings, and reconcile each day with the daily index
+
+**Accepted.** The owner asked for this record on November 2, 2026, from
+the goal the owner stated that day, and accepted it, with each of its
+details, the same day, as [T11]. Of its thirteen details, the owner
+decided one otherwise than its default proposed: a filing's files are
+fetched under its issuer's CIK. The [index](../decisions/README.md) gives
+its status ([0015]).
+
+**The choice.** One Source polls EDGAR's latest-filings feed, which lists
+the latest filings of every filer and form, every 10 seconds at all hours.
+The discoverer records each filing the feed shows, with its sighting, and
+fetches its header, its index page, and its instance, under its issuer's
+CIK. A second Source polls the quarter's daily index listing every hour,
+and the discoverer reads each new day's master index, from the day after
+the feed's first poll. Each filing the index lists that the feed didn't
+show is recorded as first shown by the index, and its files are fetched.
+A poll that names none of the previous poll's filings leaves a gap in the
+feed's coverage. The three companies' `submissions` Sources stay through
+[0013]'s study, so it measures both feeds' lags ([0015]).
+
+**Why.** The owner's goal is a database over a very large universe of
+companies, at least the S&P 500's historical constituents, with every
+filing, captured as close to real time as possible. Polling each company's
+`submissions` covers 2.5 *c* companies at a cadence of *c* seconds within
+the polls' budget ([VAL-3]), so the S&P 500's members alone would each be
+polled every 200 seconds, and a filer outside the list would go unseen.
+One poll of the feed covers every filer, at 0.1 requests a second. Its 100
+entries span about 14 to 31 minutes on average ([SRC-28]), so a poll that
+comes too late can miss filings; the day's master index finds them within
+about a day, each with its acceptance time from its header, as any
+filing's is ([SRC-1], [0015]).
+
+**Alternatives weighed.**
+
+- **Keeping [0010] as it is,** lengthening every cadence as the universe
+  grows: freshness falls as it grows, filers outside it go unseen, and the
+  polls take half the fetcher's limit.
+- **The feed alone:** a filing missed between polls, or one the feed never
+  shows, stays missed, and nothing in the record would show it.
+- **The daily index alone,** [0013]'s option B: the simplest and cheapest,
+  but a day's filings are first seen only once its master index is
+  published, at about 10 PM Eastern on its date ([SRC-5], [SRC-23]), and
+  no feed's lag within the day is measured.
+- **The Public Dissemination Service,** a paid subscription that pushes
+  each accepted filing to the subscriber: it's outside the fetcher's model
+  of HTTP requests at a limited rate ([0005]).
+- **The XBRL RSS feeds,** of the latest filings with XBRL data: Forms 4,
+  and the many other filings without XBRL, would go unseen.
+
+**What it costs.** Every poll of the feed is a new version, since its body
+names the second it was made ([SRC-26]): at 10 seconds, 486 MB fetched a
+day and about 34.9 MB of gzip stored, 12.7 GB a year, which Garage keeps
+three times ([GARAGE-3]), and 7.9 to 8.5 MB a day in PostgreSQL. Every
+filer's headers, index pages, and instances add 16.8 to 82.9 MB of objects
+and 10.7 to 21.4 MB of rows a day ([estimates](estimates.md)). While the
+study's Sources run, Backfills get less of the fetcher's limit than they
+do now. The record keeps a new kind of gap: a poll that succeeded but
+didn't reach back. The listing's URL names its quarter, so its Source and
+the scope change each quarter. `edgar-asof` gains readers of the feed and
+of the master index, and the notices', the controls', the deployment's,
+and the telemetry's specifications each take a version of their own
+([0015]).
+
+**What would change it.** The record doesn't say. It leaves to the record
+the pipeline keeps whether the feed and the master index list the same
+filings: the daily check counts each filing that only one of them showed
+([0015]).
+
+> **Analysis.** No task, decision record, or specification covers this.
+> That count, and the gaps the feed's polls leave, are what could show
+> whether the feed serves as the notice source. Many filings found only in
+> the master index could argue for a shorter cadence, or for asking for
+> the feed's next page, which a finding would first have to show; few
+> could argue for keeping the cadence the owner set.
+
 ## 0016: Read XBRL instances with a narrow parser on lxml, in `edgar-asof`
 
 **Accepted.** Task T12 proposed this record on November 5, 2026, and the
@@ -780,6 +860,7 @@ which the owner asks for ([0016]).
 [0012]: ../decisions/0012-publish-the-documents-as-a-site-built-with-zensical.md
 [0013]: ../decisions/0013-measure-each-feeds-lag-in-a-bounded-study-then-keep-only-changes.md
 [0014]: ../decisions/0014-scale-the-parse-workers-with-keda-by-their-consumers-backlog.md
+[0015]: ../decisions/0015-poll-the-latest-filings-feed-and-reconcile-each-day-with-the-daily-index.md
 [0016]: ../decisions/0016-read-xbrl-instances-with-a-narrow-parser-on-lxml.md
 [design-decisions]: ../design.md#decisions
 [notices-gaps]: ../../spec/notices.md#5-polls-coverage-and-gaps
@@ -858,6 +939,7 @@ which the owner asks for ([0016]).
 [NATS-3]: ../../spec/deployment.md#nats
 [GARAGE-1]: ../../spec/deployment.md#garage
 [GARAGE-2]: ../../spec/deployment.md#garage
+[GARAGE-3]: ../../spec/deployment.md#garage
 [MON-2]: ../../spec/deployment.md#monitoring
 [MON-3]: ../../spec/deployment.md#monitoring
 [LEASE-1]: ../../spec/deployment.md#the-fetchers-lease
