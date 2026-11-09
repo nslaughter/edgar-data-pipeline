@@ -4,8 +4,8 @@
 **What's built,** as the [status page](../status.md) gives it:
 
 - **Built:** Fetcher; NATS JetStream; Garage; PostgreSQL 18; The snapshot store in git; The snapshot store in the cluster; The transfer from the cluster to git; The charts; The fake EDGAR.
-- **Specified:** Scheduler (built in part); Monitoring: traces; The controls (built in part); The documentation site (built in part).
-- **Decided:** Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`.
+- **Specified:** Monitoring: traces; The documentation site (built in part).
+- **Decided:** Scheduler (specified in part; built in part); Discoverer (specified in part); Parse workers; Exporter; Query API; Monitoring: metrics, alerts, and dashboards (specified in part; built in part); Monitoring: logs; `edgar-asof`; The controls (specified in part; built in part).
 - **Planned:** The drills.
 <!-- end status -->
 
@@ -631,8 +631,10 @@ specification that states how the parse workers scale, as [0014] decides
 ([T10]): the owner decided that a task of its own specifies it, [T51],
 after the facts and before the parse workers are built. And the versions
 of four specifications that [0015] calls for, the notices', the
-controls', the deployment's, and the telemetry's, of which the plan holds
-the notices' ([T52]). And a version of the snapshot store's specification
+controls', the deployment's, and the telemetry's: the notices' is [T52],
+and the owner decided that the other three each have a task of their
+own before the discoverer, [T53] to [T55]. A task after the notices',
+[T56], counts their new rows in the estimates. And a version of the snapshot store's specification
 that states what the fetcher does while a write can't be made, as the
 owner decided with [T23]: it holds the fetch and tries the write again,
 sending nothing else meanwhile. The owner decided that the same version
@@ -963,6 +965,10 @@ consequence that fetching continues while PostgreSQL fails over.
 [T23]: ../plan.md#observing-filings
 [T45]: ../plan.md#observing-filings
 [T52]: ../plan.md#observing-filings
+[T53]: ../plan.md#observing-filings
+[T54]: ../plan.md#observing-filings
+[T55]: ../plan.md#observing-filings
+[T56]: ../plan.md#documentation
 [JOB-6]: ../../spec/snapshots.md#jobs-and-events
 [JOB-4]: ../../spec/snapshots.md#jobs-and-events
 [ORDER-1]: ../../spec/notices.md#8-backfills
