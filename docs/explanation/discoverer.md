@@ -406,13 +406,15 @@ list it was first added from was read.
 The stored version of the feed doesn't show its `updated` to be when a
 filing was accepted, so a filing first added from the feed has lags from
 that time and from its header's, which show whether they agree ([SRC-27],
-[0015]). A filing first added from a master index has no listed time and
-no sighting, so `lags` doesn't give it. Since one row of `filings` keeps
-the time from whichever version first named the filing, a sighting by one
-Source can carry the listed time of another's version: a filing of the
-three companies' that the feed showed first has the feed's `updated` in
-the lags of their `submissions` Sources too
-([§10 of the notices][notices-lags]).
+[0015]). A filing first added from a master index has no listed time, and
+no sighting until a Source's polls show it, so until then `lags` doesn't
+give it. A Source can show it later, as the feed can when its polls resume
+after the night's check, and that sighting's lags from the listed time are
+null. Since one row of `filings` keeps the time from whichever version
+first named the filing, a sighting by one Source can carry the listed time
+of another's version: a filing of the three companies' that the feed
+showed first has the feed's `updated` in the lags of their `submissions`
+Sources too ([§10 of the notices][notices-lags]).
 
 For each sighting, `lags` gives each lag, from each acceptance time to
 when the Source first showed the filing, as a low bound and a high bound:

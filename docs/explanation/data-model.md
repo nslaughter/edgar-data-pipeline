@@ -477,7 +477,8 @@ finding settles which is right ([0010]).
 A filing has one listed time, from whichever version first named it, so a
 filing of the three companies' that the feed showed first has the feed's
 `updated` in their `submissions` Sources' lags too. A filing first listed
-by a master index has none, and no sighting, so no lag
+by a master index has none, and no lag until a Source's polls show it; a
+sighting it gets later has no lags from the listed time
 ([§10 of the notices][notices-lags]).
 
 The lags can settle it themselves: a filing is public only once it's

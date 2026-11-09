@@ -888,7 +888,12 @@ A filing the discoverer first added from the feed has the feed's `updated`
 as its listed time, which the stored version doesn't show to be when it was
 accepted ([SRC-27]); its lags from that time and from its header's show
 whether they agree ([0015]). A filing first added from a master index has
-none, and no sighting, so `lags` doesn't give it. Since one row of
+none. It has no sighting until a Source's polls show it, so until then
+`lags` doesn't give it. A Source can show it later: a company's
+`submissions` when its paused Source polls again, or the feed, whose
+entries reached from a Sunday morning back into Friday evening
+([SRC-28]), when its polls resume after the night's check. [SEEN-2] then
+adds a sighting, whose lags from the listed time are null. Since one row of
 `filings` keeps the time from whichever version first named the filing, a
 sighting of one Source can have the listed time of another's version: a
 filing of the three companies' that the feed showed first has the feed's
